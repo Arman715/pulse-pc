@@ -205,4 +205,4 @@ Discord, Steam, античиты и «Безопасность Windows» не з
 - **Кнопки серые, написано «только с правами администратора».** Запускайте программу ярлыком из установки — он сам просит права.
 - **Хочется вернуть всё как было.** В каждом разделе, где программа что-то меняла, есть «Вернуть как было».
 
-Не нашли ответ — напишите в [Issues](https://github.com/Arman715/pulse-pc/issues).
+Не нашли ответ — напишите в [Issues](https://github.com/Arman715/pulse-pc/issues) или в директ Instagram [@pulsepc_official](https://www.instagram.com/pulsepc_official/).

@@ -12,12 +12,15 @@
   <a href="https://github.com/Arman715/pulse-pc/releases"><img src="https://img.shields.io/github/downloads/Arman715/pulse-pc/total?label=%D1%81%D0%BA%D0%B0%D1%87%D0%B0%D0%BB%D0%B8&color=1A1917&style=flat-square" alt="скачали"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%C2%B7%2011-45423C?style=flat-square" alt="Windows 10 и 11">
   <img src="https://img.shields.io/badge/%D1%86%D0%B5%D0%BD%D0%B0-%D0%B1%D0%B5%D1%81%D0%BF%D0%BB%D0%B0%D1%82%D0%BD%D0%BE-6F6A60?style=flat-square" alt="бесплатно">
+  <a href="https://www.instagram.com/pulsepc_official/"><img src="https://img.shields.io/badge/Instagram-%40pulsepc__official-C23B22?style=flat-square&logo=instagram&logoColor=white" alt="Instagram @pulsepc_official"></a>
 </p>
 
 <h3 align="center">
   <a href="https://github.com/Arman715/pulse-pc/releases/latest">⬇&nbsp;Скачать установщик</a>
   &nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="docs/guide.md">📖&nbsp;Инструкция</a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="https://www.instagram.com/pulsepc_official/">📷&nbsp;Instagram</a>
 </h3>
 
 <p align="center">
@@ -139,5 +142,7 @@
 </details>
 
 ---
+
+Новости, разборы «почему тормозит игра» и ответы на вопросы — в Instagram **[@pulsepc_official](https://www.instagram.com/pulsepc_official/)**.
 
 <sub>Встроен <a href="https://github.com/GameTechDev/PresentMon">PresentMon</a> от Intel (лицензия MIT). Требуется Windows 10 или 11, 64 бита.</sub>
