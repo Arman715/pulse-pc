@@ -1,7 +1,7 @@
 <p align="center">
-  <a href="docs/PulsePC-video.mp4"><img src="docs/video-preview.webp" alt="Ролик о программе «Пульс ПК»" width="100%"></a>
+  <a href="https://github.com/Arman715/pulse-pc/raw/main/docs/PulsePC-video.mp4"><img src="docs/video-preview.webp" alt="Ролик о программе «Пульс ПК»" width="100%"></a>
   <br>
-  <sub><a href="docs/PulsePC-video.mp4">▶&nbsp;Смотреть ролик со звуком</a> · 24&nbsp;секунды</sub>
+  <sub><a href="https://github.com/Arman715/pulse-pc/raw/main/docs/PulsePC-video.mp4">▶&nbsp;Ролик со звуком</a> · MP4, 24&nbsp;секунды, 19,6&nbsp;МБ</sub>
 </p>
 <p align="center">
   <img src="docs/banner.png" alt="Пульс ПК — игровой ПК: измерить, понять, исправить" width="100%">
