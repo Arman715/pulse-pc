@@ -8,20 +8,40 @@
 </p>
 
 <p align="center">
-  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/Arman715/pulse-pc?label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=C23B22&style=flat-square" alt="версия"></a>
-  <a href="../../releases"><img src="https://img.shields.io/github/downloads/Arman715/pulse-pc/total?label=%D1%81%D0%BA%D0%B0%D1%87%D0%B0%D0%BB%D0%B8&color=1A1917&style=flat-square" alt="скачали"></a>
+  <a href="https://github.com/Arman715/pulse-pc/releases/latest"><img src="https://img.shields.io/github/v/release/Arman715/pulse-pc?label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=C23B22&style=flat-square" alt="версия"></a>
+  <a href="https://github.com/Arman715/pulse-pc/releases"><img src="https://img.shields.io/github/downloads/Arman715/pulse-pc/total?label=%D1%81%D0%BA%D0%B0%D1%87%D0%B0%D0%BB%D0%B8&color=1A1917&style=flat-square" alt="скачали"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%C2%B7%2011-45423C?style=flat-square" alt="Windows 10 и 11">
   <img src="https://img.shields.io/badge/%D1%86%D0%B5%D0%BD%D0%B0-%D0%B1%D0%B5%D1%81%D0%BF%D0%BB%D0%B0%D1%82%D0%BD%D0%BE-6F6A60?style=flat-square" alt="бесплатно">
 </p>
 
 <h3 align="center">
-  <a href="../../releases/latest">⬇&nbsp;Скачать установщик</a>
+  <a href="https://github.com/Arman715/pulse-pc/releases/latest">⬇&nbsp;Скачать установщик</a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="docs/guide.md">📖&nbsp;Инструкция</a>
 </h3>
 
 <p align="center">
   Программа следит за компьютером, пока вы играете, и после игры объясняет простыми словами:<br>
   что ограничивало FPS, откуда взялись рывки и что с этим сделать. Каждое изменение можно отменить.
 </p>
+
+---
+
+## Начать за три шага
+
+| | | |
+|:-:|---|---|
+| **1** | **Скачайте и установите** | [PulsePC-Setup.exe](https://github.com/Arman715/pulse-pc/releases/latest) → «Установить». Отметьте «Запускать вместе с Windows» — тогда ни одна игра не пропадёт. |
+| **2** | **Просто играйте** | Программа сама заметит игру и начнёт запись. Окно можно закрыть — она работает у часов. |
+| **3** | **Откройте отчёт** | После игры придёт уведомление «Сессия записана». Вкладка «Сессии» покажет FPS, рывки и их причины — и что с этим сделать. |
+
+Подробно, с картинками и словарём терминов, — в **[инструкции](docs/guide.md)**.
+
+### Кому пригодится
+
+- **Игра лагает, а почему — непонятно.** Программа покажет, что упирается: видеокарта, процессор, память, диск или сеть.
+- **Хотите выжать FPS, но боитесь «сломать Windows».** Каждая настройка объяснена, у каждой есть «Вернуть как было».
+- **Думаете об апгрейде.** Совет строится по вашим играм: что купить, а что менять незачем.
 
 ---
 
@@ -78,9 +98,11 @@
 
 ## Установка
 
-1. Скачайте `PulsePC-Setup-<версия>.exe` из [последнего выпуска](../../releases/latest).
+1. Скачайте `PulsePC-Setup-<версия>.exe` из [последнего выпуска](https://github.com/Arman715/pulse-pc/releases/latest).
 2. Запустите и нажмите «Установить». Программе нужны права администратора: без них Windows не даёт читать датчики и менять настройки.
 3. Дальше «Пульс ПК» обновляется сам: «Система» → «Новые версии» → «Обновить».
+
+Что делать дальше — в **[инструкции](docs/guide.md)**: первый запуск, как читать отчёт, подготовка к игре, очистка, все разделы «Системы».
 
 > [!NOTE]
 > Установщик не подписан сертификатом, поэтому SmartScreen может показать «Windows защитила ваш компьютер».
