@@ -12,6 +12,7 @@
   <img src="https://img.shields.io/badge/Windows-10%20%C2%B7%2011-45423C?style=flat-square" alt="Windows 10 and 11">
   <img src="https://img.shields.io/badge/price-free-6F6A60?style=flat-square" alt="free">
   <a href="LICENSE"><img src="https://img.shields.io/badge/code-open%20%C2%B7%20GPL--3.0-1A1917?style=flat-square" alt="open source, GPL-3.0"></a>
+  <a href="https://www.virustotal.com/gui/file/af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2"><img src="https://img.shields.io/badge/VirusTotal-0%2F69%20%C2%B7%201.4.3-3D6B3A?style=flat-square&logo=virustotal&logoColor=white" alt="VirusTotal: 0 of 69"></a>
   <a href="https://www.instagram.com/pulsepc_official/"><img src="https://img.shields.io/badge/Instagram-%40pulsepc__official-C23B22?style=flat-square&logo=instagram&logoColor=white" alt="Instagram @pulsepc_official"></a>
 </p>
 
@@ -121,6 +122,25 @@ What to do next is in the **[user guide](docs/guide.en.md)**: the first launch, 
 > The installer is not signed with a paid certificate, so SmartScreen may say "Windows protected your PC".
 > Click **More info** → **Run anyway**. The SHA-256 checksum sits next to the installer in a `.sha256` file;
 > when updating, the app checks it by itself.
+
+## Scanned by antivirus engines
+
+The 1.4.3 installer was scanned on VirusTotal: **none of the 69 antivirus engines found a threat** — [open the report](https://www.virustotal.com/gui/file/af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2).
+
+You can check that you have exactly the same file in a second. In PowerShell, in the folder with the downloaded installer:
+
+```powershell
+Get-FileHash .\PulsePC-Setup-1.4.3.exe
+```
+
+The hash must match the VirusTotal report and the `.sha256` file in the release: `af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2`.
+
+What else speaks for the app:
+
+- **All the code is open** — the [`src`](src) folder. Anyone can read what the app does to the system and build it themselves.
+- **Updates are signed with the author's key.** The app installs a new version only if the signature is valid, so an update can't be swapped.
+- **The app doesn't touch Windows Security:** Defender, the firewall, SmartScreen and User Account Control stay as they were.
+- **Nothing about you is sent anywhere.** The app only goes online to ask for the latest NVIDIA driver version and to check this repository for new versions.
 
 ## FAQ
 

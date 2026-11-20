@@ -17,6 +17,7 @@
   <img src="https://img.shields.io/badge/Windows-10%20%C2%B7%2011-45423C?style=flat-square" alt="Windows 10 и 11">
   <img src="https://img.shields.io/badge/%D1%86%D0%B5%D0%BD%D0%B0-%D0%B1%D0%B5%D1%81%D0%BF%D0%BB%D0%B0%D1%82%D0%BD%D0%BE-6F6A60?style=flat-square" alt="бесплатно">
   <a href="LICENSE"><img src="https://img.shields.io/badge/%D0%BA%D0%BE%D0%B4-%D0%BE%D1%82%D0%BA%D1%80%D1%8B%D1%82%20%C2%B7%20GPL--3.0-1A1917?style=flat-square" alt="открытый код, GPL-3.0"></a>
+  <a href="https://www.virustotal.com/gui/file/af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2"><img src="https://img.shields.io/badge/VirusTotal-0%2F69%20%C2%B7%201.4.3-3D6B3A?style=flat-square&logo=virustotal&logoColor=white" alt="VirusTotal: 0 из 69"></a>
   <a href="https://www.instagram.com/pulsepc_official/"><img src="https://img.shields.io/badge/Instagram-%40pulsepc__official-C23B22?style=flat-square&logo=instagram&logoColor=white" alt="Instagram @pulsepc_official"></a>
 </p>
 
@@ -126,6 +127,25 @@
 > Установщик не подписан сертификатом, поэтому SmartScreen может показать «Windows защитила ваш компьютер».
 > Нажмите «Подробнее» → «Выполнить в любом случае». Контрольная сумма SHA-256 лежит рядом с установщиком в файле `.sha256`;
 > при обновлении программа сверяет её сама.
+
+## Проверено антивирусами
+
+Установщик версии 1.4.3 проверен на VirusTotal: **ни один из 69 антивирусов не нашёл угроз** — [открыть отчёт](https://www.virustotal.com/gui/file/af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2).
+
+Убедиться, что у вас тот же самый файл, можно за секунду. В PowerShell, в папке со скачанным установщиком:
+
+```powershell
+Get-FileHash .\PulsePC-Setup-1.4.3.exe
+```
+
+Сумма должна совпасть с отчётом VirusTotal и с файлом `.sha256` в выпуске: `af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2`.
+
+Что ещё говорит в пользу программы:
+
+- **Весь код открыт** — папка [`src`](src). Любой может прочитать, что программа делает с системой, и собрать её сам.
+- **Обновления подписаны ключом автора.** Программа ставит новую версию, только если подпись верна, — подменить обновление нельзя.
+- **«Безопасность Windows» программа не трогает:** защитник, брандмауэр, SmartScreen и контроль учётных записей остаются как были.
+- **О вас ничего не отправляется.** В интернет программа обращается только за номером свежего драйвера NVIDIA и за новыми версиями в этом репозитории.
 
 ## Частые вопросы
 
