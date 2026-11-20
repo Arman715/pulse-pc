@@ -1,0 +1,1470 @@
+﻿<Window x:Class="PulsePC.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:PulsePC"
+        xmlns:bp="clr-namespace:PulsePC.Blueprint"
+        xmlns:svc="clr-namespace:PulsePC.Services"
+        Title="Пульс ПК" Width="1180" Height="840" MinWidth="1040" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Base}" Foreground="{StaticResource Ink1}"
+        FontFamily="{StaticResource TextFont}" FontSize="13.5"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="48" ResizeBorderThickness="6" GlassFrameThickness="1" CornerRadius="0" UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <!-- Строка находки: слева цветная планка (только у проблем), справа вынесенное число. -->
+        <DataTemplate x:Key="DiagRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <local:StateMarker Level="{Binding Level}" VerticalAlignment="Top" Margin="0,16,14,0"/>
+                    <StackPanel Grid.Column="1" Margin="0,12">
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Detail}" Style="{StaticResource Body}" Margin="0,2,0,0"/>
+                        <!-- Ссылка на раздел, где это разобрано подробно, и «скрыть» для записей журнала -->
+                        <WrapPanel Margin="0,3,0,0" Visibility="{Binding HasActions, Converter={StaticResource BoolToVis}}">
+                            <Button Style="{StaticResource Link}" Foreground="{StaticResource Ink1}" Content="{Binding LinkText}" Margin="0,0,18,0"
+                                    Visibility="{Binding HasLink, Converter={StaticResource BoolToVis}}" Click="DiagLink_Click"/>
+                            <Button Style="{StaticResource Link}" Content="скрыть" Click="DiagHide_Click"
+                                    Visibility="{Binding CanHide, Converter={StaticResource BoolToVis}}"
+                                    ToolTip="Не показывать эти записи, пока не появятся новые. Журнал Windows не очищается."/>
+                        </WrapPanel>
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding Count}" Style="{StaticResource Reading}" Foreground="{Binding CountBrush}" VerticalAlignment="Center" Margin="20,0,2,0"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+        <DataTemplate x:Key="DiagOkRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,9,2,9">
+                <DockPanel>
+                    <local:StateMarker DockPanel.Dock="Left" Level="Ok" Margin="0,0,14,0"/>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Detail}" Style="{StaticResource Caption}" TextWrapping="NoWrap" Margin="16,0,0,0"/>
+                    <TextBlock Text="{Binding Title}" Foreground="{StaticResource Ink2}" TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- Строка очистки: пока размер считается, строка приглушена. -->
+        <DataTemplate x:Key="CleanRow">
+            <Border x:Name="row" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Top" Margin="0,2,14,0">
+                        <CheckBox IsChecked="{Binding Selected}"/>
+                        <Border Width="22" Height="14" BorderBrush="{StaticResource Ink2}" BorderThickness="1" Background="{Binding Swatch}" Margin="12,0,0,0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Hint}" Style="{StaticResource Body}" Margin="0,2,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Visibility="{Binding Irreversible, Converter={StaticResource BoolToVis}}">
+                            <local:StateMarker Level="Warn" Margin="0,0,8,0"/>
+                            <TextBlock Text="Восстановить будет нельзя" Style="{StaticResource Caption}" Foreground="{StaticResource Warn}"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding SizeText}" Style="{StaticResource MonoNum}" VerticalAlignment="Top" Margin="20,2,2,0" MinWidth="110"/>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Pending}" Value="True">
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="row" Storyboard.TargetProperty="Opacity" To="0.5" Duration="0:0:0.12"/></Storyboard></BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="row" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.22"/></Storyboard></BeginStoryboard>
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+        <DataTemplate x:Key="CleanEmptyRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="30,8,2,8">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="пусто" Style="{StaticResource Caption}" Margin="16,0,0,0"/>
+                    <TextBlock Text="{Binding Title}" Foreground="{StaticResource Ink3}"/>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- Строка настройки: переключатель справа, поверх - накладка для вспышки после изменения. -->
+        <DataTemplate x:Key="TweakRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid>
+                    <Border x:Name="Flash" Background="{StaticResource RedTint}" Opacity="0" IsHitTestVisible="False"/>
+                    <Grid Margin="0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                            <TextBlock Text="{Binding Hint}" Style="{StaticResource Body}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding Desired}" VerticalAlignment="Top" Margin="24,3,2,0"/>
+                    </Grid>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- Строка автозагрузки -->
+        <DataTemplate x:Key="StartupRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,11">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Caption}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding Advice}" Style="{StaticResource Caption}" VerticalAlignment="Center" TextAlignment="Right" MaxWidth="320" Margin="20,0,0,0"/>
+                    <CheckBox Grid.Column="2" Style="{StaticResource Toggle}" IsChecked="{Binding Enabled}" IsEnabled="{Binding CanToggle}" Margin="24,0,2,0"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- Списки сессий и игр: как список «Компоненты» -->
+        <Style x:Key="SessionItem" TargetType="ListBoxItem" BasedOn="{StaticResource CompItem}"/>
+        <DataTemplate x:Key="SessionRow">
+            <StackPanel>
+                <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding Caption}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="AppRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,10">
+                <DockPanel>
+                    <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Selected}" Margin="0,0,14,0"/>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Mem}" Style="{StaticResource MonoNum}" Margin="16,0,2,0"/>
+                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- Строка-шкала: подпись, тонкая полоса доли и число справа -->
+        <DataTemplate x:Key="BarRow">
+            <Grid Margin="0,5">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="250"/>
+                    <ColumnDefinition Width="*" MaxWidth="320"/>
+                    <ColumnDefinition Width="64"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding Label}" Style="{StaticResource Caption}" Foreground="{StaticResource Ink2}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <local:ThinBar Grid.Column="1" Height="4" Target="{Binding Fraction}" Fill="{Binding Ink}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="{Binding Text}" Style="{StaticResource MonoNum}" Foreground="{Binding Ink}"/>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Игра в сводке за неделю -->
+        <DataTemplate x:Key="WeekGameRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Game}" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Ink1}"/>
+                    <TextBlock Grid.Column="1" Text="{Binding Hours}" Style="{StaticResource MonoNum}"/>
+                    <TextBlock Grid.Column="2" Text="{Binding Sessions}" Style="{StaticResource MonoNum}"/>
+                    <TextBlock Grid.Column="3" Text="{Binding Fps}" Style="{StaticResource MonoNum}"/>
+                    <TextBlock Grid.Column="4" Text="{Binding Change}" Style="{StaticResource MonoNum}" Foreground="{Binding ChangeInk}"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="NoteRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,10">
+                <TextBlock Text="{Binding}" Style="{StaticResource Body}" Foreground="{StaticResource Ink1}"/>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Border x:Name="Root" Background="{StaticResource Base}" BorderBrush="#BDB5A6" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48"/>
+                <RowDefinition Height="2"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- ===================== ЗАГОЛОВОК ОКНА С ВКЛАДКАМИ ===================== -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Логотип: линия пульса, прочерчивается на каждом показании -->
+                <StackPanel Orientation="Horizontal" Margin="20,0,6,0" VerticalAlignment="Center">
+                    <Path x:Name="LiveDot" Style="{StaticResource Icon}" Data="{StaticResource IcoLogo}" Stroke="{StaticResource Accent}" StrokeThickness="1.6"
+                          Width="24" Height="20" Margin="0,0,10,0"/>
+                    <TextBlock Text="Пульс ПК" Style="{StaticResource Brand}" VerticalAlignment="Center"/>
+                    <Rectangle Width="1" Height="22" Fill="{StaticResource LineStrong}" Margin="22,0,0,0"/>
+                </StackPanel>
+
+                <Grid x:Name="TabBar" Grid.Column="1">
+                    <StackPanel x:Name="Tabs" Orientation="Horizontal">
+                        <RadioButton Style="{StaticResource Tab}" Content="Обзор" Tag="{StaticResource IcoOverview}" IsChecked="True" Checked="Tab_Checked"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="Сессии" Tag="{StaticResource IcoSessions}" Checked="Tab_Checked"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="История" Tag="{StaticResource IcoHistory}" Checked="Tab_Checked"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="Сеть" Tag="{StaticResource IcoNet}" Checked="Tab_Checked"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="Диагностика" Tag="{StaticResource IcoDiag}" Checked="Tab_Checked"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="Очистка" Tag="{StaticResource IcoClean}" Checked="Tab_Checked"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="Оптимизация" Tag="{StaticResource IcoTune}" Checked="Tab_Checked"/>
+                        <RadioButton Style="{StaticResource Tab}" Content="Система" Tag="{StaticResource IcoSystem}" Checked="Tab_Checked"/>
+                    </StackPanel>
+                    <Rectangle x:Name="TabLine" Height="2" Width="0" Fill="{StaticResource Accent}" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                        <Rectangle.RenderTransform><TranslateTransform/></Rectangle.RenderTransform>
+                    </Rectangle>
+                </Grid>
+
+
+
+                <!-- Справка: отдельный лист, кнопка «?» перед кнопками окна -->
+                <Button x:Name="BtnHelp" Grid.Column="3" Style="{StaticResource CaptionButton}" Content="&#xE897;" Click="Help_Click"
+                        ToolTip="Справка: как пользоваться программой" AutomationProperties.Name="Справка" FontSize="15" Margin="0,0,8,0"/>
+
+                <StackPanel Grid.Column="4" Orientation="Horizontal">
+                    <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="Minimize_Click" ToolTip="Свернуть"/>
+                    <Button x:Name="MaxButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" Click="Maximize_Click" ToolTip="Развернуть"/>
+                    <Button Style="{StaticResource CloseButton}" Content="&#xE8BB;" Click="Close_Click" ToolTip="Закрыть"/>
+                </StackPanel>
+
+                <Rectangle Grid.ColumnSpan="5" Height="1" Fill="{StaticResource LineStrong}" VerticalAlignment="Bottom" Panel.ZIndex="-1"/>
+            </Grid>
+
+            <!-- Линия занятости: единственный индикатор работы, виден с любой страницы -->
+            <Grid x:Name="ActivityHost" Grid.Row="1" ClipToBounds="True">
+                <Rectangle x:Name="ActivityBar" Fill="{StaticResource Accent}" HorizontalAlignment="Left" Opacity="0">
+                    <Rectangle.RenderTransform><TranslateTransform/></Rectangle.RenderTransform>
+                </Rectangle>
+            </Grid>
+
+            <!-- ===================== ОБЗОР: системный блок и подробный вид детали ===================== -->
+            <Grid x:Name="PageOverview" Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="1"/>
+                    <ColumnDefinition Width="372"/>
+                </Grid.ColumnDefinitions>
+
+                <Grid Margin="32,20,28,18">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <local:SheetHeader x:Name="OvHeader" Title="ЧЕРТЁЖ" Line1="СИСТЕМНЫЙ БЛОК" Line2="ОБЩИЙ ВИД, БОКОВАЯ КРЫШКА СНЯТА"/>
+
+                    <Grid Grid.Row="1" Margin="0,8,0,0" Height="30">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button x:Name="BtnBack" Style="{StaticResource Link}" Click="BtnBack_Click" Visibility="Collapsed" ToolTip="Назад к общему виду (Esc)">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource Icon}" Data="{StaticResource IcoBack}" Width="10" Height="10" Margin="0,0,6,0"/>
+                                    <TextBlock Text="Общий вид"/>
+                                </StackPanel>
+                            </Button>
+                            <TextBlock x:Name="CrumbHome" Text="Общий вид" FontSize="13" Foreground="{StaticResource Ink1}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="CrumbSep" Text="/" FontSize="13" Foreground="{StaticResource Ink3}" Margin="10,0" VerticalAlignment="Center" Visibility="Collapsed"/>
+                            <TextBlock x:Name="CrumbCurrent" FontSize="13" Foreground="{StaticResource Ink1}" VerticalAlignment="Center" Visibility="Collapsed"/>
+                        </StackPanel>
+                        <TextBlock x:Name="OvHint" Style="{StaticResource Caption}" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   Text="Наведите на деталь — нажмите, чтобы разобрать её"/>
+                    </Grid>
+
+                    <!-- Поле чертежа: пометки листа и сам чертёж -->
+                    <Grid Grid.Row="2" ClipToBounds="True">
+                        <local:AngleMark x:Name="AngleMarkEl" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,30" IsHitTestVisible="False" Visibility="Collapsed"/>
+                        <local:PlusGrid HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="4,0,0,34" Rows="6" Cols="4" Step="30" Opacity="0.7"
+                                        Mask="x...|xxx.|xxxx|xxxx|xxx.|xx.." IsHitTestVisible="False"/>
+                        <local:Ruler x:Name="RulerEl" HorizontalAlignment="Right" VerticalAlignment="Bottom" Width="272" Margin="0,0,10,4" IsHitTestVisible="False" Visibility="Collapsed"/>
+                        <bp:BlueprintView x:Name="Drawing" Margin="24,8,0,22"/>
+                    </Grid>
+
+                    <!-- Нижняя полоса: четыре главных показания, нажатие открывает деталь -->
+                    <UniformGrid x:Name="Strip" Grid.Row="3" Columns="4" Margin="0,10,0,0">
+                        <Button x:Name="StripCpu" Style="{StaticResource StripCell}" Tag="Cpu" Click="Strip_Click">
+                            <Grid>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Style="{StaticResource Icon}" Data="{StaticResource IcoCpu}"/>
+                                        <TextBlock Text="Процессор" Style="{StaticResource StripLabel}"/>
+                                    </StackPanel>
+                                    <local:NumberText x:Name="StripCpuVal" Style="{StaticResource StripValue}" Unit="%" UnitSize="13"/>
+                                </StackPanel>
+                                <local:LoadChart x:Name="SparkCpu" Bare="True" Width="78" Height="24" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,6"/>
+                            </Grid>
+                        </Button>
+                        <Button x:Name="StripGpu" Style="{StaticResource StripCell}" Tag="Gpu" Click="Strip_Click">
+                            <Grid>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Style="{StaticResource Icon}" Data="{StaticResource IcoGpu}"/>
+                                        <TextBlock Text="Видеокарта" Style="{StaticResource StripLabel}"/>
+                                    </StackPanel>
+                                    <local:NumberText x:Name="StripGpuVal" Style="{StaticResource StripValue}" Unit="°C" UnitSize="13"/>
+                                </StackPanel>
+                                <local:LoadChart x:Name="SparkGpu" Bare="True" Accent="True" Min="25" Max="90" Width="78" Height="24" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,6"/>
+                            </Grid>
+                        </Button>
+                        <Button x:Name="StripRam" Style="{StaticResource StripCell}" Tag="Ram" Click="Strip_Click">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource Icon}" Data="{StaticResource IcoRam}"/>
+                                    <TextBlock Text="Память" Style="{StaticResource StripLabel}"/>
+                                </StackPanel>
+                                <local:NumberText x:Name="StripRamVal" Style="{StaticResource StripValue}" Format="0.0" Step="0.1" UnitSize="13"/>
+                                <local:ThinBar x:Name="StripRamBar" Height="3" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="StripDisk" Style="{StaticResource StripCell}" Tag="Storage" Click="Strip_Click">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource Icon}" Data="{StaticResource IcoDrive}"/>
+                                    <TextBlock Text="Свободно на C:" Style="{StaticResource StripLabel}"/>
+                                </StackPanel>
+                                <local:NumberText x:Name="StripDiskVal" Style="{StaticResource StripValue}" Unit="ГБ" UnitSize="13"/>
+                                <local:ThinBar x:Name="StripDiskBar" Height="3" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Button>
+                    </UniformGrid>
+                </Grid>
+
+                <Rectangle Grid.Column="1" Fill="{StaticResource LineStrong}" Margin="0,20"/>
+
+                <!-- Правая панель: показания выбранной детали и список комплектующих -->
+                <ScrollViewer x:Name="PanelScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="26,20,30,20">
+                        <StackPanel x:Name="PanelBody">
+                            <StackPanel Orientation="Horizontal">
+                                <Path x:Name="CompGlyph" Style="{StaticResource Icon}" Width="30" Height="30" StrokeThickness="1.2" Margin="0,0,14,0"/>
+                                <TextBlock x:Name="CompName" Style="{StaticResource PanelTitle}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Rectangle Style="{StaticResource Hairline}" Margin="0,14,0,14"/>
+                            <TextBlock x:Name="CompModel" Style="{StaticResource PanelModel}"/>
+                            <local:NumberText x:Name="CompHero" Style="{StaticResource HeroXL}" UnitSize="40" Margin="0,6,0,0"/>
+                            <local:TickScale x:Name="CompScale" Height="40" Margin="0,4,0,0" Min="30" Max="90" WarnFrom="80"/>
+                            <local:CellBar x:Name="CompCells" Cells="16" LayoutCells="16" Height="10" Margin="0,8,0,4"/>
+
+                            <ItemsControl x:Name="CompRows" Margin="0,10,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="44"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Path Style="{StaticResource Icon}" Data="{Binding Icon}" Width="24" Height="24" HorizontalAlignment="Left"/>
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock Text="{Binding Label}" Style="{StaticResource Caption}"/>
+                                                    <TextBlock Text="{Binding Value}" Style="{StaticResource Reading}" Foreground="{Binding Ink}" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock x:Name="CompNote" Style="{StaticResource Caption}" Margin="0,4,0,0" Visibility="Collapsed"/>
+
+                            <!-- Процессор: нагрузка за минуту -->
+                            <StackPanel x:Name="BlockChart" Margin="0,16,0,0" Visibility="Collapsed">
+                                <StackPanel.Resources>
+                                    <!-- Живой график: при увеличении показывает последние N секунд и продолжает идти -->
+                                    <local:ChartZoom x:Key="LiveZoom" Live="True" Full="00:01:00"/>
+                                </StackPanel.Resources>
+                                <local:ChartZoomBar Title="НАГРУЗКА" TitleStyle="{StaticResource Tracked}" Zoom="{StaticResource LiveZoom}"/>
+                                <local:LoadChart x:Name="Chart" Height="90" Margin="0,8,0,0" Zoom="{StaticResource LiveZoom}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Rectangle Width="14" Height="2" Fill="{StaticResource Ink1}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="процессор" Style="{StaticResource Caption}" Margin="0,0,16,0"/>
+                                    <Rectangle Width="14" Height="2" Fill="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="видеокарта" Style="{StaticResource Caption}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Память: кто её занимает -->
+                            <StackPanel x:Name="BlockProcs" Margin="0,16,0,0" Visibility="Collapsed">
+                                <local:TrackedText Source="ЧТО ЗАНИМАЕТ ПАМЯТЬ" Style="{StaticResource Tracked}" Margin="0,0,0,4"/>
+                                <ItemsControl x:Name="ProcList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,7">
+                                                <DockPanel>
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Mem}" Style="{StaticResource MonoNum}" Margin="12,0,2,0"/>
+                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                                                </DockPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- Накопители: разделы и состояние -->
+                            <StackPanel x:Name="BlockDisks" Margin="0,16,0,0" Visibility="Collapsed">
+                                <local:TrackedText Source="РАЗДЕЛЫ" Style="{StaticResource Tracked}"/>
+                                <ItemsControl x:Name="DriveList" Margin="0,4,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,7">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="30"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Letter}" Style="{StaticResource RowTitle}" VerticalAlignment="Center"/>
+                                                <local:ThinBar Grid.Column="1" Height="4" Target="{Binding Fraction}" Fill="{Binding BarBrush}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding FreeText}" Style="{StaticResource MonoNum}" Margin="12,0,0,0" MinWidth="120"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="DiskHealth" Style="{StaticResource Caption}" Margin="0,8,0,0"/>
+                                <TextBlock x:Name="DiskWarn" Style="{StaticResource Caption}" Foreground="{StaticResource Warn}" Margin="0,4,0,0" Visibility="Collapsed"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Rectangle Style="{StaticResource Hairline}" Margin="0,22,0,14"/>
+                        <TextBlock Text="Компоненты" Style="{StaticResource PanelSection}"/>
+                        <ListBox x:Name="CompList" Margin="0,8,0,0" Background="Transparent" BorderThickness="0" Padding="0"
+                                 ItemContainerStyle="{StaticResource CompItem}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 SelectionChanged="CompList_SelectionChanged"
+                                 PreviewMouseLeftButtonDown="CompList_MouseDown" PreviewMouseLeftButtonUp="CompList_MouseUp">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel>
+                                        <Path DockPanel.Dock="Right" Style="{StaticResource Icon}" Data="{StaticResource IcoChevron}" Width="14" Height="14"/>
+                                        <Path Style="{StaticResource Icon}" Data="{Binding Icon}" Width="24" Height="24" Margin="0,0,16,0"/>
+                                        <TextBlock Text="{Binding Title}" Style="{StaticResource CompItemText}" VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- ===================== ИГРОВЫЕ СЕССИИ ===================== -->
+            <Grid x:Name="PageSessions" Grid.Row="2" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <local:SheetHeader x:Name="HdrSessions" Title="ПРОТОКОЛ" Line1="ИГРОВЫЕ СЕССИИ" Line2="ОТЧЁТ О ЗАПИСИ" Margin="32,20,32,6"/>
+                <Grid x:Name="SessionsBody" Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="312"/>
+                        <ColumnDefinition Width="1"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <DockPanel Margin="32,24,0,24">
+                        <StackPanel DockPanel.Dock="Top" Margin="0,0,28,0">
+                            <bp:BlueprintView x:Name="PadDrawing" Scene="Gamepad" Height="110" Margin="0,0,0,14"/>
+                        <local:TrackedText Source="ИГРОВЫЕ СЕССИИ" Style="{StaticResource Label}"/>
+                            <StackPanel x:Name="LivePanel" Visibility="Collapsed" Margin="0,12,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse x:Name="RecDot" Width="6" Height="6" Fill="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Text="идёт запись" Style="{StaticResource Caption}" Foreground="{StaticResource RedHover}"/>
+                                </StackPanel>
+                                <TextBlock x:Name="LiveGame" Style="{StaticResource RowTitle}" Margin="0,4,0,0"/>
+                                <TextBlock x:Name="LiveTime" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <TextBlock x:Name="SessionsHint" Style="{StaticResource Body}" Margin="0,10,0,0"
+                                       Text="Оставьте программу запущенной — её можно свернуть к часам — и играйте. Запись начнётся и закончится сама."/>
+                            <Button x:Name="BtnWeek" Style="{StaticResource Link}" HorizontalAlignment="Left" Margin="0,12,0,0" Click="BtnWeek_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource Icon}" Data="{StaticResource IcoHistory}" Width="14" Height="14" Margin="0,0,8,0"/>
+                                    <TextBlock Text="Сводка за неделю"/>
+                                </StackPanel>
+                            </Button>
+                            <Rectangle Style="{StaticResource Hairline}" Margin="0,16,0,0"/>
+                        </StackPanel>
+                        <ListBox x:Name="SessionList" Background="Transparent" BorderThickness="0" Padding="0" Margin="0,0,16,0"
+                                 ItemContainerStyle="{StaticResource SessionItem}" ItemTemplate="{StaticResource SessionRow}"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="SessionList_SelectionChanged"/>
+                    </DockPanel>
+
+                    <Rectangle Grid.Column="1" Fill="{StaticResource Line}" Margin="0,24"/>
+
+                    <ScrollViewer x:Name="SessionScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <Grid Margin="28,24,32,24">
+                            <StackPanel x:Name="SessionEmpty">
+                                <TextBlock Style="{StaticResource Verdict}" Foreground="{StaticResource Ink2}" Text="Сессий пока нет"/>
+                                <TextBlock Style="{StaticResource Body}" Margin="0,10,0,0" MaxWidth="520" HorizontalAlignment="Left"
+                                           Text="После первой игры здесь появится отчёт: FPS, загрузка процессора и видеокарты, температура видеокарты, память, сеть и график за всю сессию."/>
+                            </StackPanel>
+
+                            <StackPanel x:Name="SessionReport" Visibility="Collapsed">
+                                <StackPanel.Resources>
+                                    <!-- Один масштаб на графики кадров, нагрузки и температуры: у них общая ось времени сессии -->
+                                    <local:ChartZoom x:Key="SessZoom"/>
+                                </StackPanel.Resources>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock x:Name="SessGame" Style="{StaticResource Verdict}"/>
+                                        <TextBlock x:Name="SessWhen" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                    <!-- Карточка сессии: картинка 1080×1350 в «Изображения\Пульс ПК» и в буфер обмена -->
+                                    <Button x:Name="BtnShare" Grid.Column="1" VerticalAlignment="Top" Margin="24,0,0,0" Click="BtnShare_Click"
+                                            ToolTip="Картинка с итогами этой сессии: FPS, что его ограничивало и главные причины просадок. Сохраняется в «Изображения\Пульс ПК» и копируется, чтобы вставить в чат.">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Style="{StaticResource Icon}" Data="M8.5,3.5 H2.5 V17.5 H16.5 V11.5 M10.5,9.5 L18,2 M12.5,2 H18 V7.5" Width="14" Height="14" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Поделиться отчётом"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                                <!-- Итог «Поделиться отчётом»: где лежит картинка и «Открыть папку» -->
+                                <WrapPanel x:Name="ShareDone" Margin="0,12,0,0" Visibility="Collapsed">
+                                    <local:StateMarker x:Name="ShareMark" Level="Ok" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <TextBlock x:Name="ShareResult" Style="{StaticResource Caption}" Foreground="{StaticResource Ink2}" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                    <Button x:Name="BtnShareFolder" Style="{StaticResource Link}" Foreground="{StaticResource Ink1}" Content="Открыть папку" VerticalAlignment="Center" Click="BtnShareFolder_Click"/>
+                                </WrapPanel>
+
+                                <!-- Кадры: главное число отчёта, если их удалось записать -->
+                                <Grid x:Name="SessFpsBlock" Margin="0,18,0,0" HorizontalAlignment="Left" Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" MinWidth="190"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="170"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <!-- Числа стоят на одной линии, подписи начинаются на одной высоте - сколько бы строк в них ни было -->
+                                    <local:NumberText x:Name="SessFps" Style="{StaticResource Hero}" Unit="FPS" UnitSize="18" VerticalAlignment="Bottom" Margin="0,0,24,0"/>
+                                    <local:NumberText x:Name="SessLow1" Grid.Column="1" Style="{StaticResource Secondary}" Unit="FPS" UnitSize="14" VerticalAlignment="Bottom" Margin="0,0,24,4"/>
+                                    <local:NumberText x:Name="SessLow01" Grid.Column="2" Style="{StaticResource Secondary}" Unit="FPS" UnitSize="14" VerticalAlignment="Bottom" Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="SessFpsCap" Grid.Row="1" Text="в среднем" Style="{StaticResource Caption}" Margin="0,0,24,0"/>
+                                    <TextBlock x:Name="SessLow1Cap" Grid.Row="1" Grid.Column="1" Text="в худшем 1 % кадров" Style="{StaticResource Caption}" Margin="0,0,24,0"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="в худшем 0,1 %" Style="{StaticResource Caption}"/>
+                                </Grid>
+                                <TextBlock x:Name="SessNoFps" Style="{StaticResource Caption}" Margin="0,14,0,0" Visibility="Collapsed"/>
+
+                                <UniformGrid Columns="5" Margin="0,22,0,0">
+                                    <StackPanel>
+                                        <local:NumberText x:Name="SessMaxTemp" Style="{StaticResource Secondary}" Unit="°C" UnitSize="14"/>
+                                        <TextBlock x:Name="SessMaxTempCap" Text="макс. температура видеокарты" Style="{StaticResource Caption}"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <local:NumberText x:Name="SessAvgGpu" Style="{StaticResource Secondary}" Unit="%" UnitSize="14"/>
+                                        <TextBlock x:Name="SessAvgGpuCap" Text="видеокарта в среднем" Style="{StaticResource Caption}"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <local:NumberText x:Name="SessAvgCpu" Style="{StaticResource Secondary}" Unit="%" UnitSize="14"/>
+                                        <TextBlock x:Name="SessAvgCpuCap" Text="процессор в среднем" Style="{StaticResource Caption}"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <local:NumberText x:Name="SessMinRam" Style="{StaticResource Secondary}" Format="0.0" Unit="ГБ" UnitSize="14"/>
+                                        <TextBlock x:Name="SessMinRamCap" Text="минимум свободной памяти" Style="{StaticResource Caption}"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <local:NumberText x:Name="SessMaxVram" Style="{StaticResource Secondary}" Format="0.0" Unit="ГБ" UnitSize="14"/>
+                                        <TextBlock Text="макс. видеопамять" Style="{StaticResource Caption}"/>
+                                    </StackPanel>
+                                </UniformGrid>
+
+                                <UniformGrid x:Name="SessNetRow" Columns="5" Margin="0,18,0,0">
+                                    <StackPanel>
+                                        <local:NumberText x:Name="SessPing" Style="{StaticResource Reading}" Unit="мс" UnitSize="12"/>
+                                        <TextBlock Text="пинг в среднем" Style="{StaticResource Caption}"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <local:NumberText x:Name="SessJitter" Style="{StaticResource Reading}" Format="0.0" Unit="мс" UnitSize="12"/>
+                                        <TextBlock Text="разброс" Style="{StaticResource Caption}"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <local:NumberText x:Name="SessLoss" Style="{StaticResource Reading}" Format="0.0" Unit="%" UnitSize="12"/>
+                                        <TextBlock Text="потери пакетов" Style="{StaticResource Caption}"/>
+                                    </StackPanel>
+                                </UniformGrid>
+
+                                <StackPanel x:Name="SessFpsChartBlock" Visibility="Collapsed">
+                                    <local:ChartZoomBar Title="КАДРЫ В СЕКУНДУ" TitleStyle="{StaticResource Label}" Zoom="{StaticResource SessZoom}" Margin="0,26,0,0"/>
+                                    <local:LoadChart x:Name="SessFpsChart" Height="96" AutoScale="True" Unit="FPS" Margin="0,8,0,0" Zoom="{StaticResource SessZoom}"/>
+                                </StackPanel>
+
+                                <!-- Просадки FPS: номер совпадает с отметкой на графике кадров -->
+                                <StackPanel x:Name="SessDipsBlock" Visibility="Collapsed">
+                                    <local:TrackedText Source="ПРОСАДКИ" Style="{StaticResource Label}" Margin="0,22,0,4"/>
+                                    <TextBlock x:Name="SessDipsNone" Style="{StaticResource Caption}" Visibility="Collapsed"
+                                               Text="Резких просадок не было: FPS держался ровно."/>
+                                    <ItemsControl x:Name="SessDips">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,9">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="30"/>
+                                                            <ColumnDefinition Width="84"/>
+                                                            <ColumnDefinition Width="132"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding No}" Style="{StaticResource MonoNum}" Foreground="{StaticResource Accent}" TextAlignment="Left" VerticalAlignment="Top"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Time}" Style="{StaticResource MonoNum}" TextAlignment="Left" VerticalAlignment="Top"/>
+                                                        <StackPanel Grid.Column="2">
+                                                            <TextBlock Text="{Binding Fps}" Style="{StaticResource MonoNum}" TextAlignment="Left"/>
+                                                            <TextBlock Text="{Binding Length}" Style="{StaticResource Caption}"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="3">
+                                                            <TextBlock Text="{Binding Cause}" Style="{StaticResource RowTitle}" Foreground="{Binding CauseInk}"/>
+                                                            <TextBlock Text="{Binding Detail}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <!-- Что ограничивало FPS: доля времени, когда упором была видеокарта, процессор или ни то ни другое -->
+                                <StackPanel x:Name="SessBoundBlock" Visibility="Collapsed">
+                                    <local:TrackedText Source="ЧТО ОГРАНИЧИВАЛО FPS" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+                                    <TextBlock x:Name="SessBoundVerdict" Style="{StaticResource RowTitle}" FontSize="16"/>
+                                    <TextBlock x:Name="SessBoundAdvice" Style="{StaticResource Body}" Margin="0,4,0,8" MaxWidth="660" HorizontalAlignment="Left"/>
+                                    <ItemsControl x:Name="SessBoundBars" ItemTemplate="{StaticResource BarRow}"/>
+                                </StackPanel>
+
+                                <!-- Частоты под нагрузкой: сбрасывали ли их видеокарта и процессор -->
+                                <StackPanel x:Name="SessClockBlock" Visibility="Collapsed">
+                                    <local:TrackedText Source="ЧАСТОТЫ ПОД НАГРУЗКОЙ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+                                    <TextBlock x:Name="SessClockSummary" Style="{StaticResource Body}" Margin="0,0,0,8" MaxWidth="660" HorizontalAlignment="Left"/>
+                                    <ItemsControl x:Name="SessClockBars" ItemTemplate="{StaticResource BarRow}"/>
+                                </StackPanel>
+
+                                <!-- Сервер игры: найден по сетевым событиям самой игры -->
+                                <StackPanel x:Name="SessServerBlock" Visibility="Collapsed">
+                                    <local:TrackedText Source="СЕРВЕР ИГРЫ" Style="{StaticResource Label}" Margin="0,24,0,2"/>
+                                    <TextBlock x:Name="SessServerAddr" Style="{StaticResource Caption}"/>
+                                    <UniformGrid Columns="5" Margin="0,10,0,0">
+                                        <StackPanel>
+                                            <local:NumberText x:Name="SessSrvPing" Style="{StaticResource Reading}" Unit="мс" UnitSize="12"/>
+                                            <TextBlock Text="пинг до сервера" Style="{StaticResource Caption}"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <local:NumberText x:Name="SessSrvJitter" Style="{StaticResource Reading}" Format="0.0" Unit="мс" UnitSize="12"/>
+                                            <TextBlock Text="разброс" Style="{StaticResource Caption}"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <local:NumberText x:Name="SessSrvLoss" Style="{StaticResource Reading}" Format="0.0" Unit="%" UnitSize="12"/>
+                                            <TextBlock Text="потери" Style="{StaticResource Caption}"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <local:NumberText x:Name="SessSrvGaps" Style="{StaticResource Reading}"/>
+                                            <TextBlock Text="обрывов связи" Style="{StaticResource Caption}"/>
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <local:NumberText x:Name="SessSrvMaxGap" Style="{StaticResource Reading}" Format="0.0" Unit="с" UnitSize="12"/>
+                                            <TextBlock Text="самый долгий" Style="{StaticResource Caption}"/>
+                                        </StackPanel>
+                                    </UniformGrid>
+                                    <TextBlock x:Name="SessServerNote" Style="{StaticResource Body}" Margin="0,10,0,0" MaxWidth="660" HorizontalAlignment="Left"/>
+                                </StackPanel>
+
+                                <local:ChartZoomBar Title="НАГРУЗКА ЗА СЕССИЮ" TitleStyle="{StaticResource Label}" Zoom="{StaticResource SessZoom}" Margin="0,26,0,0"/>
+                                <local:LoadChart x:Name="SessChart" Height="110" Margin="0,8,0,0" Zoom="{StaticResource SessZoom}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Rectangle Width="14" Height="2" Fill="{StaticResource Ink1}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="процессор" Style="{StaticResource Caption}" Margin="0,0,16,0"/>
+                                    <Rectangle Width="14" Height="2" Fill="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="видеокарта" Style="{StaticResource Caption}"/>
+                                </StackPanel>
+
+                                <local:TrackedText Source="ТЕМПЕРАТУРА ВИДЕОКАРТЫ, 0–100 °C" Style="{StaticResource Label}" Margin="0,22,0,0"/>
+                                <local:LoadChart x:Name="SessTempChart" Height="64" Threshold="80" Margin="0,8,0,0" Zoom="{StaticResource SessZoom}"/>
+
+                                <local:TrackedText Source="ВЫВОДЫ" Style="{StaticResource Label}" Margin="0,24,0,2"/>
+                                <ItemsControl x:Name="SessNotes">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,10">
+                                                <TextBlock Text="{Binding}" Style="{StaticResource Body}" Foreground="{StaticResource Ink1}"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- Сравнение: та же игра от сессии к сессии -->
+                                <StackPanel x:Name="SessCompareBlock" Visibility="Collapsed">
+                                    <local:TrackedText Source="ЭТА ИГРА ОТ СЕССИИ К СЕССИИ" Style="{StaticResource Label}" Margin="0,26,0,6"/>
+                                    <Grid Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="когда" Style="{StaticResource Caption}"/>
+                                        <TextBlock Grid.Column="1" Text="длилась" Style="{StaticResource Caption}" TextAlignment="Right"/>
+                                        <TextBlock Grid.Column="2" Text="FPS" Style="{StaticResource Caption}" TextAlignment="Right"/>
+                                        <TextBlock Grid.Column="3" Text="худший 1 %" Style="{StaticResource Caption}" TextAlignment="Right"/>
+                                        <TextBlock Grid.Column="4" Text="макс. °C" Style="{StaticResource Caption}" TextAlignment="Right"/>
+                                        <TextBlock Grid.Column="5" Text="видеокарта" Style="{StaticResource Caption}" TextAlignment="Right"/>
+                                        <TextBlock Grid.Column="6" Text="мин. память" Style="{StaticResource Caption}" TextAlignment="Right"/>
+                                    </Grid>
+                                    <ItemsControl x:Name="SessCompare">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,8">
+                                                    <Grid TextElement.Foreground="{Binding Ink}">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding When}" FontWeight="{Binding Weight}"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Length}" Style="{StaticResource MonoNum}" Foreground="{Binding Ink}"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding Fps}" Style="{StaticResource MonoNum}" Foreground="{Binding Ink}"/>
+                                                        <TextBlock Grid.Column="3" Text="{Binding Low}" Style="{StaticResource MonoNum}" Foreground="{Binding Ink}"/>
+                                                        <TextBlock Grid.Column="4" Text="{Binding Temp}" Style="{StaticResource MonoNum}" Foreground="{Binding Ink}"/>
+                                                        <TextBlock Grid.Column="5" Text="{Binding Gpu}" Style="{StaticResource MonoNum}" Foreground="{Binding Ink}"/>
+                                                        <TextBlock Grid.Column="6" Text="{Binding Ram}" Style="{StaticResource MonoNum}" Foreground="{Binding Ink}"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Сводка за неделю: часы в играх, FPS по играм, выводы -->
+                            <StackPanel x:Name="WeekReport" Visibility="Collapsed">
+                                <TextBlock x:Name="WeekTitle" Style="{StaticResource Verdict}"/>
+                                <TextBlock x:Name="WeekRange" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+                                <UniformGrid x:Name="WeekNumbers" Columns="4" Margin="0,20,0,0">
+                                    <StackPanel>
+                                        <local:NumberText x:Name="WeekHours" Style="{StaticResource Hero}" Format="0.#" Step="0.1" Unit="ч" UnitSize="18"/>
+                                        <TextBlock x:Name="WeekHoursCap" Text="в играх" Style="{StaticResource Caption}"/>
+                                    </StackPanel>
+                                    <StackPanel VerticalAlignment="Bottom">
+                                        <local:NumberText x:Name="WeekSessions" Style="{StaticResource Secondary}"/>
+                                        <TextBlock Text="сессий" Style="{StaticResource Caption}"/>
+                                    </StackPanel>
+                                    <StackPanel VerticalAlignment="Bottom">
+                                        <local:NumberText x:Name="WeekDips" Style="{StaticResource Secondary}"/>
+                                        <TextBlock Text="просадок FPS" Style="{StaticResource Caption}"/>
+                                    </StackPanel>
+                                    <StackPanel VerticalAlignment="Bottom">
+                                        <local:NumberText x:Name="WeekTemp" Style="{StaticResource Secondary}" Unit="°C" UnitSize="14"/>
+                                        <TextBlock Text="макс. температура видеокарты" Style="{StaticResource Caption}"/>
+                                    </StackPanel>
+                                </UniformGrid>
+
+                                <StackPanel x:Name="WeekGamesBlock">
+                                    <local:TrackedText Source="ИГРЫ" Style="{StaticResource Label}" Margin="0,26,0,6"/>
+                                    <Grid Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="игра" Style="{StaticResource Caption}"/>
+                                        <TextBlock Grid.Column="1" Text="время" Style="{StaticResource Caption}" TextAlignment="Right"/>
+                                        <TextBlock Grid.Column="2" Text="сессий" Style="{StaticResource Caption}" TextAlignment="Right"/>
+                                        <TextBlock Grid.Column="3" Text="FPS" Style="{StaticResource Caption}" TextAlignment="Right"/>
+                                        <TextBlock Grid.Column="4" Text="к прошлой неделе" Style="{StaticResource Caption}" TextAlignment="Right"/>
+                                    </Grid>
+                                    <ItemsControl x:Name="WeekGames" ItemTemplate="{StaticResource WeekGameRow}"/>
+                                </StackPanel>
+
+                                <local:TrackedText x:Name="WeekNotesLabel" Source="ВЫВОДЫ" Style="{StaticResource Label}" Margin="0,24,0,2"/>
+                                <ItemsControl x:Name="WeekNotes" ItemTemplate="{StaticResource NoteRow}"/>
+                            </StackPanel>
+                        </Grid>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+
+            <!-- ===================== ИСТОРИЯ ===================== -->
+            <Grid x:Name="PageHistory" Grid.Row="2" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <local:SheetHeader x:Name="HdrHistory" Title="ЖУРНАЛ" Line1="ПОКАЗАТЕЛИ" Line2="ЗА 6 ЧАСОВ" Margin="32,20,32,6"/>
+                <ScrollViewer x:Name="HistScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,24,32,24">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                <RadioButton x:Name="RangeHour" Style="{StaticResource Range}" GroupName="HistRange" Content="час" Tag="60" Checked="HistRange_Checked"/>
+                                <RadioButton x:Name="RangeSix" Style="{StaticResource Range}" GroupName="HistRange" Content="6 часов" Tag="360" IsChecked="True" Checked="HistRange_Checked"/>
+                                <RadioButton Style="{StaticResource Range}" GroupName="HistRange" Content="сутки" Tag="1440" Checked="HistRange_Checked"/>
+                                <RadioButton Style="{StaticResource Range}" GroupName="HistRange" Content="двое суток" Tag="2880" Checked="HistRange_Checked"/>
+                            </StackPanel>
+                            <TextBlock x:Name="HistRangeNote" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                        </DockPanel>
+
+                        <StackPanel x:Name="HistEmpty" Margin="0,20,0,0" Visibility="Collapsed">
+                            <TextBlock Style="{StaticResource Verdict}" Foreground="{StaticResource Ink2}" Text="За это время записей нет"/>
+                            <TextBlock Style="{StaticResource Body}" Margin="0,10,0,0" MaxWidth="560" HorizontalAlignment="Left"
+                                       Text="История копится, пока программа запущена — в том числе свёрнутая к часам. Первая точка появится через минуту, хранится двое суток."/>
+                        </StackPanel>
+
+                        <StackPanel x:Name="HistBody">
+                            <StackPanel.Resources>
+                                <!-- Один масштаб на три графика: у них общая ось времени внизу -->
+                                <local:ChartZoom x:Key="HistZoom" Full="06:00:00" PreferEnd="True"/>
+                            </StackPanel.Resources>
+                            <UniformGrid Columns="4" Margin="0,14,0,0">
+                                <StackPanel>
+                                    <local:NumberText x:Name="HistMaxTemp" Style="{StaticResource Secondary}" Unit="°C" UnitSize="14"/>
+                                    <TextBlock x:Name="HistMaxTempCap" Text="макс. температура видеокарты" Style="{StaticResource Caption}"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <local:NumberText x:Name="HistAvgCpu" Style="{StaticResource Secondary}" Unit="%" UnitSize="14"/>
+                                    <TextBlock Text="процессор в среднем" Style="{StaticResource Caption}"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <local:NumberText x:Name="HistAvgGpu" Style="{StaticResource Secondary}" Unit="%" UnitSize="14"/>
+                                    <TextBlock Text="видеокарта в среднем" Style="{StaticResource Caption}"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <local:NumberText x:Name="HistMaxRam" Style="{StaticResource Secondary}" Format="0.0" Unit="ГБ" UnitSize="14"/>
+                                    <TextBlock x:Name="HistMaxRamCap" Text="пик занятой памяти" Style="{StaticResource Caption}"/>
+                                </StackPanel>
+                            </UniformGrid>
+
+                            <local:ChartZoomBar Title="ТЕМПЕРАТУРА ВИДЕОКАРТЫ, 0–100 °C" TitleStyle="{StaticResource Label}" Zoom="{StaticResource HistZoom}" Margin="0,26,0,0"/>
+                            <local:LoadChart x:Name="HistTempChart" Height="96" HatchGaps="True" Threshold="80" Margin="0,8,0,0" Zoom="{StaticResource HistZoom}"/>
+
+                            <local:TrackedText Source="НАГРУЗКА, %" Style="{StaticResource Label}" Margin="0,22,0,0"/>
+                            <local:LoadChart x:Name="HistLoadChart" Height="110" HatchGaps="True" Margin="0,8,0,0" Zoom="{StaticResource HistZoom}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Rectangle Width="14" Height="2" Fill="{StaticResource Ink1}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBlock Text="процессор" Style="{StaticResource Caption}" Margin="0,0,16,0"/>
+                                <Rectangle Width="14" Height="2" Fill="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBlock Text="видеокарта" Style="{StaticResource Caption}"/>
+                            </StackPanel>
+
+                            <local:TrackedText x:Name="HistRamLabel" Source="ЗАНЯТАЯ ПАМЯТЬ" Style="{StaticResource Label}" Margin="0,22,0,0"/>
+                            <local:LoadChart x:Name="HistRamChart" Height="80" HatchGaps="True" Margin="0,8,0,0" Zoom="{StaticResource HistZoom}"/>
+
+                            <!-- Общая ось времени для всех трёх графиков (следует за масштабом) -->
+                            <Grid Margin="0,8,0,0">
+                                <TextBlock x:Name="HistFrom" FontFamily="{StaticResource Mono}" FontSize="12" Foreground="{StaticResource Ink3}" HorizontalAlignment="Left"/>
+                                <TextBlock x:Name="HistMid" FontFamily="{StaticResource Mono}" FontSize="12" Foreground="{StaticResource Ink3}" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="HistTo" Text="сейчас" FontFamily="{StaticResource Mono}" FontSize="12" Foreground="{StaticResource Ink3}" HorizontalAlignment="Right"/>
+                            </Grid>
+                            <TextBlock Style="{StaticResource Caption}" Margin="0,16,0,0"
+                                       Text="Разрыв линии — программа в это время не была запущена. Температура — наибольшая за отрезок, остальное — среднее. Колесо мыши над графиком — крупнее или мельче, перетаскивание — сдвиг, двойной щелчок — весь график."/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- ===================== СЕТЬ ===================== -->
+            <Grid x:Name="PageNet" Grid.Row="2" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <local:SheetHeader x:Name="HdrNet" Title="ТРАССА" Line1="СЕТЬ" Line2="ПК → РОУТЕР → 1.1.1.1" Margin="32,20,32,6"/>
+                <ScrollViewer x:Name="NetScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,14,32,24">
+                        <!-- Схема трассы: этот компьютер — роутер — интернет; над участками размерные линии с пингом -->
+                        <Grid Height="150" Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="110"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="230"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="110"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Path Style="{StaticResource Icon}" Data="{StaticResource IcoCpu}" Width="40" Height="40" HorizontalAlignment="Center"/>
+                                <TextBlock Text="этот компьютер" Style="{StaticResource Caption}" HorizontalAlignment="Center" Margin="0,10,0,0"/>
+                            </StackPanel>
+                            <local:DimensionLine x:Name="RouteRouter" Grid.Column="1" VerticalAlignment="Center" Margin="8,0,8,22"/>
+                            <Grid Grid.Column="2">
+                                <bp:BlueprintView x:Name="RouterDrawing" Scene="Router" DrawingPadding="4" Margin="0,0,0,22"/>
+                                <TextBlock x:Name="RouteRouterName" Text="роутер" Style="{StaticResource Caption}" HorizontalAlignment="Center" VerticalAlignment="Bottom"/>
+                            </Grid>
+                            <local:DimensionLine x:Name="RouteInet" Grid.Column="3" VerticalAlignment="Center" Margin="8,0,8,22"/>
+                            <StackPanel Grid.Column="4" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Ellipse Width="34" Height="34" Stroke="{StaticResource Ink1}" StrokeThickness="1.25" HorizontalAlignment="Center"/>
+                                <TextBlock Text="интернет · 1.1.1.1" Style="{StaticResource Caption}" HorizontalAlignment="Center" Margin="0,10,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                        <Rectangle Height="1" Fill="{StaticResource LineStrong}" Margin="0,0,0,20"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="57"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Rectangle Grid.Column="1" Width="1" Fill="{StaticResource LineStrong}" HorizontalAlignment="Center"/>
+
+                            <StackPanel>
+                                <local:TrackedText Source="ИНТЕРНЕТ · 1.1.1.1" Style="{StaticResource Label}"/>
+                                <local:NumberText x:Name="NetInetPing" Style="{StaticResource Hero}" Unit="мс" UnitSize="18" Margin="0,4,0,0"/>
+                                <UniformGrid Columns="3" Margin="0,12,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="в среднем" Style="{StaticResource Caption}"/>
+                                        <local:NumberText x:Name="NetInetAvg" Style="{StaticResource Reading}" Unit="мс" UnitSize="12" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="разброс" Style="{StaticResource Caption}"/>
+                                        <local:NumberText x:Name="NetInetJitter" Style="{StaticResource Reading}" Format="0.0" Unit="мс" UnitSize="12" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="потери" Style="{StaticResource Caption}"/>
+                                        <local:NumberText x:Name="NetInetLoss" Style="{StaticResource Reading}" Format="0.0" Unit="%" UnitSize="12" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </UniformGrid>
+                                <local:LoadChart x:Name="NetInetChart" Height="120" AutoScale="True" Unit="мс" ShowGaps="True" Capacity="60" Margin="0,18,0,0"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <local:TrackedText x:Name="NetRouterLabel" Source="РОУТЕР" Style="{StaticResource Label}"/>
+                                <local:NumberText x:Name="NetRouterPing" Style="{StaticResource Hero}" Format="0.#" Unit="мс" UnitSize="18" Margin="0,4,0,0"/>
+                                <UniformGrid Columns="3" Margin="0,12,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="в среднем" Style="{StaticResource Caption}"/>
+                                        <local:NumberText x:Name="NetRouterAvg" Style="{StaticResource Reading}" Format="0.#" Unit="мс" UnitSize="12" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="разброс" Style="{StaticResource Caption}"/>
+                                        <local:NumberText x:Name="NetRouterJitter" Style="{StaticResource Reading}" Format="0.0" Unit="мс" UnitSize="12" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="потери" Style="{StaticResource Caption}"/>
+                                        <local:NumberText x:Name="NetRouterLoss" Style="{StaticResource Reading}" Format="0.0" Unit="%" UnitSize="12" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </UniformGrid>
+                                <local:LoadChart x:Name="NetRouterChart" Height="120" AutoScale="True" Unit="мс" ShowGaps="True" Capacity="60" Margin="0,18,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="последние две минуты, замер раз в две секунды · красная отметка — потерянный пакет" Style="{StaticResource Caption}" Margin="0,10,0,0"/>
+
+                        <Rectangle Style="{StaticResource Hairline}" Margin="0,24,0,22"/>
+                        <TextBlock x:Name="NetVerdict" Style="{StaticResource Verdict}" Text="Измеряю пинг…"/>
+                        <TextBlock x:Name="NetDetail" Style="{StaticResource Body}" Margin="0,8,0,0" MaxWidth="760" HorizontalAlignment="Left"
+                                   Text="Первые замеры появятся секунд через десять."/>
+                        <TextBlock x:Name="NetAdapter" FontFamily="{StaticResource Mono}" FontSize="12" Foreground="{StaticResource Ink3}" Margin="0,16,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- ===================== ДИАГНОСТИКА ===================== -->
+            <Grid x:Name="PageDiag" Grid.Row="2" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <local:SheetHeader x:Name="HdrDiag" Title="ОСМОТР" Line1="СИСТЕМА" Line2="ЖУРНАЛЫ, ДИСКИ, ПАМЯТЬ · 7 ДНЕЙ" Margin="32,20,32,6"/>
+                <Grid x:Name="DiagBody" Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="312"/>
+                        <ColumnDefinition Width="1"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,24,28,24">
+                        <TextBlock x:Name="DiagVerdict" Style="{StaticResource Verdict}" Text="Проверка ещё не запускалась"/>
+                        <TextBlock x:Name="DiagNote" Style="{StaticResource Body}" Margin="0,10,0,0"
+                                   Text="Проверка читает журналы Windows за 7 дней и смотрит состояние дисков, памяти и видеокарты. Ничего не меняет."/>
+                        <UniformGrid x:Name="DiagTally" Columns="3" Margin="0,24,0,0" Visibility="Collapsed">
+                            <StackPanel>
+                                <local:NumberText x:Name="TallyAttention" Style="{StaticResource Secondary}"/>
+                                <TextBlock Text="замечания" Style="{StaticResource Caption}"/>
+                            </StackPanel>
+                            <StackPanel>
+                                <local:NumberText x:Name="TallyInfo" Style="{StaticResource Secondary}"/>
+                                <TextBlock Text="сведения" Style="{StaticResource Caption}"/>
+                            </StackPanel>
+                            <StackPanel>
+                                <local:NumberText x:Name="TallyOk" Style="{StaticResource Secondary}"/>
+                                <TextBlock Text="в норме" Style="{StaticResource Caption}"/>
+                            </StackPanel>
+                        </UniformGrid>
+                        <WrapPanel Margin="0,26,0,0">
+                            <Button x:Name="BtnDiag" Style="{StaticResource Primary}" Content="Запустить проверку" Margin="0,0,10,8" Click="BtnDiag_Click"/>
+                            <Button x:Name="BtnFullScan" Content="Осмотр всей системы" Margin="0,0,10,8" Click="BtnFullScan_Click"
+                                    ToolTip="Комплектующие, монитор, память, диски, игры, программы и сеть — с советами, что поправить"/>
+                        </WrapPanel>
+                        <TextBlock x:Name="DiagTime" Style="{StaticResource Caption}" Margin="0,10,0,0"/>
+
+                        <!-- Отметка «просмотрено»: старые записи журнала больше не считаются; журналы Windows не меняются -->
+                        <StackPanel x:Name="DiagSeenBlock" Margin="0,18,0,0" Visibility="Collapsed">
+                            <Button x:Name="BtnDiagSeen" Content="Отметить как просмотренные" HorizontalAlignment="Left" Click="BtnDiagSeen_Click"
+                                    ToolTip="Записи, которые сейчас в списке, больше не будут учитываться — только новые"/>
+                            <TextBlock Style="{StaticResource Caption}" Margin="0,8,0,0"
+                                       Text="Журналы Windows остаются как есть: программа только перестаёт показывать то, что вы уже видели."/>
+                            <WrapPanel x:Name="DiagUnseenRow" Margin="0,8,0,0">
+                                <TextBlock x:Name="DiagSeenWhen" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <Button x:Name="BtnDiagUnseen" Style="{StaticResource Link}" Foreground="{StaticResource Ink1}" Content="Показать всё снова" Click="BtnDiagUnseen_Click"/>
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <Border BorderBrush="{StaticResource Ink2}" BorderThickness="1" Margin="0,30,0,0" SnapsToDevicePixels="True">
+                            <StackPanel>
+                                <Border BorderBrush="{StaticResource Ink2}" BorderThickness="0,0,0,1" Padding="10,6">
+                                    <local:TrackedText Source="СТОРОЖ" Style="{StaticResource Label}" Foreground="{StaticResource Ink2}"/>
+                                </Border>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Border BorderBrush="{StaticResource Ink2}" BorderThickness="0,0,1,0" Padding="10,8">
+                                        <TextBlock Text="раз в сутки" Style="{StaticResource Caption}" Foreground="{StaticResource Ink2}"/>
+                                    </Border>
+                                    <TextBlock x:Name="WatchLast" Grid.Column="1" Style="{StaticResource Caption}" Margin="10,8"/>
+                                </Grid>
+                                <Border BorderBrush="{StaticResource Ink2}" BorderThickness="0,1,0,0" Padding="10,8,10,10">
+                                    <TextBlock Style="{StaticResource Body}"
+                                               Text="Проверяет, не сбросило ли обновление Windows игровые настройки, не появилось ли новых сбоев и не стало ли хуже дискам. Если что-то изменилось, покажет уведомление у часов."/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Загрузка Windows: Windows сама замеряет каждую загрузку и записывает, кто её затянул -->
+                        <StackPanel x:Name="BootBlock" Margin="0,30,0,0">
+                            <local:TrackedText Source="ЗАГРУЗКА WINDOWS" Style="{StaticResource Label}"/>
+                            <local:NumberText x:Name="BootSeconds" Style="{StaticResource Secondary}" Unit="с" UnitSize="14" Margin="0,8,0,0"/>
+                            <TextBlock x:Name="BootCaption" Style="{StaticResource Caption}" Text="читаю журнал…"/>
+                            <local:LoadChart x:Name="BootChart" Height="56" Columns="12" AutoScale="True" Unit="с" Margin="0,12,0,0" Visibility="Collapsed"/>
+                            <ItemsControl x:Name="BootSlow" Margin="0,8,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,6">
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding Text}" Style="{StaticResource MonoNum}" Margin="10,0,0,0"/>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource Ink1}" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Kind}" Style="{StaticResource Caption}"/>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock x:Name="BootNote" Style="{StaticResource Caption}" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+                    </ScrollViewer>
+
+                    <Rectangle Grid.Column="1" Fill="{StaticResource Line}" Margin="0,24"/>
+
+                    <ScrollViewer x:Name="DiagScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="28,24,32,24">
+                            <local:ConstructionLines x:Name="DiagPlaceholder"/>
+                            <local:TrackedText x:Name="DiagHdrAttention" Source="ТРЕБУЕТ ВНИМАНИЯ" Style="{StaticResource Label}" Margin="0,0,0,2" Visibility="Collapsed"/>
+                            <ItemsControl x:Name="DiagAttention" ItemTemplate="{StaticResource DiagRow}"/>
+                            <local:TrackedText x:Name="DiagHdrInfo" Source="СВЕДЕНИЯ" Style="{StaticResource Label}" Margin="0,26,0,2" Visibility="Collapsed"/>
+                            <ItemsControl x:Name="DiagInfo" ItemTemplate="{StaticResource DiagRow}"/>
+                            <local:TrackedText x:Name="DiagHdrOk" Source="В НОРМЕ" Style="{StaticResource Label}" Margin="0,26,0,4" Visibility="Collapsed"/>
+                            <ItemsControl x:Name="DiagOk" ItemTemplate="{StaticResource DiagOkRow}"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+
+            <!-- ===================== ОЧИСТКА ===================== -->
+            <Grid x:Name="PageClean" Grid.Row="2" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <local:SheetHeader x:Name="HdrClean" Title="ВЕДОМОСТЬ" Line1="ОЧИСТКА" Line2="ВРЕМЕННЫЕ ФАЙЛЫ И КЭШ" Margin="32,20,32,6"/>
+                <Grid x:Name="CleanBody" Grid.Row="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Margin="32,24,32,0">
+                        <local:TrackedText x:Name="CleanLabel" Source="МУСОР НА ДИСКЕ" Style="{StaticResource Label}"/>
+                        <DockPanel Margin="0,4,0,0">
+                            <local:NumberText x:Name="CleanHero" Style="{StaticResource Hero}" Format="0.0" Step="0.1" Unit="ГБ" UnitSize="18" MinWidth="170" VerticalAlignment="Bottom"/>
+                            <TextBlock x:Name="CleanSummary" Style="{StaticResource Body}" VerticalAlignment="Bottom" Margin="20,0,0,10" MaxWidth="560" HorizontalAlignment="Left"
+                                       Text="Найдите мусор — программа покажет, сколько занимает каждая категория. Сам поиск ничего не удаляет."/>
+                        </DockPanel>
+                        <local:SegmentBar x:Name="CleanBar" Height="8" Margin="0,10,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,20,0,20">
+                            <Button x:Name="BtnScan" Style="{StaticResource Primary}" Content="Найти мусор" Click="BtnScan_Click"/>
+                            <Button x:Name="BtnClean" Style="{StaticResource Destructive}" Content="Очистить" Click="BtnClean_Click" Visibility="Collapsed"/>
+                        </StackPanel>
+                        <DockPanel Margin="0,0,0,18">
+                            <CheckBox x:Name="AutoCleanCheck" DockPanel.Dock="Left" Margin="0,0,12,0" VerticalAlignment="Top" Click="AutoCleanCheck_Click"/>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Body}" MaxWidth="760" HorizontalAlignment="Left"
+                                           Text="Раз в неделю удалять то, что безопасно: временные файлы, дампы сбоев, старые журналы, установщики драйверов NVIDIA. Корзину, кэш шейдеров и кэши разработки программа не трогает. Во время игры очистка не запускается."/>
+                                <TextBlock x:Name="AutoCleanLast" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </DockPanel>
+                        <Rectangle Style="{StaticResource Hairline}"/>
+                    </StackPanel>
+
+                    <ScrollViewer x:Name="CleanScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="32,0,32,24">
+                            <ItemsControl x:Name="CleanList" ItemTemplate="{StaticResource CleanRow}"/>
+                            <TextBlock x:Name="CleanEmptyHdr" Style="{StaticResource Label}" Margin="0,24,0,2" Visibility="Collapsed"/>
+                            <ItemsControl x:Name="CleanEmptyList" ItemTemplate="{StaticResource CleanEmptyRow}"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+
+            <!-- ===================== ОПТИМИЗАЦИЯ ===================== -->
+            <Grid x:Name="PageTweaks" Grid.Row="2" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <local:SheetHeader x:Name="HdrTweaks" Title="НАЛАДКА" Line1="ИГРОВЫЕ НАСТРОЙКИ" Line2="ПОДГОТОВКА К ИГРЕ" Margin="32,20,32,6"/>
+                <Grid x:Name="TweaksBody" Grid.Row="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <ScrollViewer x:Name="TweakScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <Grid Margin="32,24,32,24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="7*"/>
+                                <ColumnDefinition Width="57"/>
+                                <ColumnDefinition Width="5*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel>
+                                <local:TrackedText Source="ИГРОВЫЕ НАСТРОЙКИ" Style="{StaticResource Label}"/>
+                                <DockPanel Margin="0,4,0,0">
+                                    <local:NumberText x:Name="TweakCount" Style="{StaticResource Hero}" UnitSize="18" MinWidth="120" VerticalAlignment="Bottom"/>
+                                    <TextBlock x:Name="TweakNote" Style="{StaticResource Body}" VerticalAlignment="Bottom" Margin="20,0,0,10"/>
+                                </DockPanel>
+                                <local:CellBar x:Name="TweakCells" Cells="8" LayoutCells="8" Height="12" Width="116" HorizontalAlignment="Left" Margin="0,10,0,14"/>
+
+                                <!-- Сброшенное обновлением Windows: вернуть одной кнопкой -->
+                                <Border x:Name="RevertedBar" BorderBrush="{StaticResource Warn}" BorderThickness="1" Background="{StaticResource WarnTint}" Padding="12,10" Margin="0,0,0,14" Visibility="Collapsed">
+                                    <DockPanel>
+                                        <Button x:Name="BtnRestoreTweaks" DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="Вернуть" Margin="12,0,0,0" VerticalAlignment="Center" Click="BtnRestoreTweaks_Click"/>
+                                        <TextBlock x:Name="RevertedText" Style="{StaticResource Body}" Foreground="{StaticResource Ink1}" VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                </Border>
+
+                                <Rectangle Style="{StaticResource Hairline}"/>
+                                <ItemsControl x:Name="TweakList" ItemTemplate="{StaticResource TweakRow}"/>
+                                <DockPanel Margin="0,14,0,0">
+                                    <CheckBox x:Name="AutoRestoreCheck" DockPanel.Dock="Left" Margin="0,0,12,0" VerticalAlignment="Top" Click="AutoRestoreCheck_Click"/>
+                                    <TextBlock Style="{StaticResource Body}" Text="Возвращать настройки, если их сбросит обновление Windows. Сторож проверяет раз в сутки; сетевые настройки во время игры не меняются."/>
+                                </DockPanel>
+                                <!-- Два переключателя переехали в разделы «Системы»; здесь — куда именно -->
+                                <WrapPanel Margin="0,14,0,0">
+                                    <TextBlock Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,10,0" Text="Схема питания и ускорение мыши — на вкладке «Система»:"/>
+                                    <Button Style="{StaticResource Link}" Foreground="{StaticResource Ink1}" Content="Питание" Tag="sys:Питание" Margin="0,0,14,0" Click="OpenLink_Click"/>
+                                    <Button Style="{StaticResource Link}" Foreground="{StaticResource Ink1}" Content="Клавиатура и мышь" Tag="sys:Клавиатура и мышь" Click="OpenLink_Click"/>
+                                </WrapPanel>
+                            </StackPanel>
+
+                            <Rectangle Grid.Column="1" Width="1" Fill="{StaticResource Line}" HorizontalAlignment="Center"/>
+
+                            <StackPanel Grid.Column="2">
+                                <local:TrackedText Source="ПЕРЕД ИГРОЙ" Style="{StaticResource Label}"/>
+                                <TextBlock Style="{StaticResource Body}" Margin="0,8,0,10"
+                                           Text="Отметьте, что закрыть, и выберите игру: «Играть» освободит память и запустит её. Discord, Steam, античиты и «Безопасность Windows» не закрываются никогда."/>
+                                <Rectangle Style="{StaticResource Hairline}"/>
+                                <ItemsControl x:Name="AppList" ItemTemplate="{StaticResource AppRow}"/>
+                                <TextBlock x:Name="AppsEmpty" Style="{StaticResource Body}" Foreground="{StaticResource Ink3}" Margin="0,12,0,0"
+                                           Text="Тяжёлых программ из списка сейчас не запущено." Visibility="Collapsed"/>
+
+                                <local:TrackedText Source="ИГРА" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+                                <Rectangle Style="{StaticResource Hairline}"/>
+                                <ListBox x:Name="GameList" MaxHeight="224" Background="Transparent" BorderThickness="0" Padding="0"
+                                         ItemContainerStyle="{StaticResource SessionItem}" ItemTemplate="{StaticResource SessionRow}"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="GameList_SelectionChanged"/>
+                                <TextBlock x:Name="GamesEmpty" Style="{StaticResource Body}" Foreground="{StaticResource Ink3}" Margin="0,12,0,0"
+                                           Text="Установленных игр не найдено. Программа ищет в Steam, Riot Client и Astrum Play." Visibility="Collapsed"/>
+
+                                <DockPanel Margin="0,16,0,0">
+                                    <CheckBox x:Name="RestoreCheck" DockPanel.Dock="Left" Margin="0,0,12,0" Click="RestoreCheck_Click"/>
+                                    <TextBlock Text="после игры снова открыть закрытые программы" Style="{StaticResource Body}" VerticalAlignment="Center"/>
+                                </DockPanel>
+                                <WrapPanel Margin="0,16,0,0">
+                                    <Button x:Name="BtnPlay" Style="{StaticResource Primary}" Content="Играть" Margin="0,0,10,8" Click="BtnPlay_Click"/>
+                                    <Button x:Name="BtnCloseApps" Content="Только закрыть" Margin="0,0,10,8" Click="BtnCloseApps_Click"/>
+                                    <Button x:Name="BtnRefreshApps" Content="Обновить" Margin="0,0,10,8" Click="BtnRefreshApps_Click"/>
+                                </WrapPanel>
+                                <TextBlock x:Name="AppsSummary" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+                                <Button x:Name="BtnRestoreApps" Content="Открыть закрытые программы" HorizontalAlignment="Left" Margin="0,12,0,0"
+                                        Visibility="Collapsed" Click="BtnRestoreApps_Click"/>
+                            </StackPanel>
+
+                            <!-- Настройки графики игр: для всех установленных, в том числе установленных позже -->
+                            <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,36,0,0">
+                                <Rectangle Style="{StaticResource Hairline}" Margin="0,0,0,22"/>
+                                <DockPanel>
+                                    <Button x:Name="BtnTuneRescan" DockPanel.Dock="Right" Content="Проверить заново" VerticalAlignment="Top" Click="BtnTuneRescan_Click"/>
+                                    <StackPanel>
+                                        <local:TrackedText Source="НАСТРОЙКИ ГРАФИКИ ИГР" Style="{StaticResource Label}"/>
+                                        <TextBlock x:Name="TuneIntro" Style="{StaticResource Body}" Margin="0,8,24,0" MaxWidth="780" HorizontalAlignment="Left"
+                                                   Text="Программа читает файлы настроек установленных игр — и тех, что вы установите позже, — и предлагает изменения под этот компьютер. Меняется только отмеченное; перед записью сохраняется копия файла."/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <Grid Margin="0,18,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="300"/>
+                                        <ColumnDefinition Width="40"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <Rectangle Style="{StaticResource Hairline}"/>
+                                        <ListBox x:Name="TuneList" Background="Transparent" BorderThickness="0" Padding="0"
+                                                 ItemContainerStyle="{StaticResource SessionItem}" ItemTemplate="{StaticResource SessionRow}"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="TuneList_SelectionChanged"/>
+                                        <TextBlock x:Name="TuneEmpty" Style="{StaticResource Caption}" Margin="0,10,0,0" Text="Ищу игры и их настройки…"/>
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="TuneDetail" Grid.Column="2" Visibility="Collapsed">
+                                        <TextBlock x:Name="TuneGame" Style="{StaticResource Verdict}"/>
+                                        <TextBlock x:Name="TunePath" Style="{StaticResource Caption}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                        <TextBlock x:Name="TuneBasis" Style="{StaticResource Body}" Margin="0,12,0,0" MaxWidth="720" HorizontalAlignment="Left"/>
+                                        <ItemsControl x:Name="TuneChanges" Margin="0,12,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,10">
+                                                        <DockPanel>
+                                                            <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Selected}" Margin="0,2,14,0" VerticalAlignment="Top"/>
+                                                            <StackPanel>
+                                                                <DockPanel>
+                                                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Line}" Style="{StaticResource MonoNum}" Margin="16,0,0,0" VerticalAlignment="Top"/>
+                                                                    <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                                                                </DockPanel>
+                                                                <TextBlock Text="{Binding Why}" Style="{StaticResource Caption}" Margin="0,3,0,0"/>
+                                                            </StackPanel>
+                                                        </DockPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock x:Name="TuneNote" Style="{StaticResource Body}" Margin="0,10,0,0" MaxWidth="720" HorizontalAlignment="Left"/>
+                                        <WrapPanel x:Name="TuneButtons" Margin="0,16,0,0">
+                                            <Button x:Name="BtnTuneApply" Style="{StaticResource Primary}" Content="Применить отмеченные" Margin="0,0,10,8" Click="BtnTuneApply_Click"/>
+                                            <Button x:Name="BtnTuneRestore" Content="Вернуть как было" Margin="0,0,10,8" Click="BtnTuneRestore_Click"/>
+                                        </WrapPanel>
+                                        <TextBlock x:Name="TuneResult" Style="{StaticResource Caption}" Margin="0,2,0,0" MaxWidth="720" HorizontalAlignment="Left"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </ScrollViewer>
+
+                    <!-- (панель изменений ниже относится к странице «Оптимизация») -->
+                    <!-- Панель несохранённых изменений: выезжает снизу, когда переключатели расходятся с системой -->
+                    <Border x:Name="PendingBar" Grid.Row="1" Height="52" Background="{StaticResource Raised}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Visibility="Collapsed">
+                        <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
+                        <DockPanel Margin="32,0">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button x:Name="BtnApply" Style="{StaticResource Primary}" Content="Применить" Click="BtnApply_Click"/>
+                                <Button x:Name="BtnCancel" Content="Отменить" Click="BtnCancel_Click" Margin="0"/>
+                            </StackPanel>
+                            <TextBlock x:Name="PendingText" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- ===================== АВТОЗАГРУЗКА: раздел вкладки «Система» (переносится туда при запуске) ===================== -->
+            <Grid x:Name="StartupHolder" Grid.Row="2" Visibility="Collapsed">
+                <StackPanel x:Name="StartupBody" MaxWidth="780" HorizontalAlignment="Left">
+                    <DockPanel>
+                        <local:NumberText x:Name="StartupCount" Style="{StaticResource Hero}" UnitSize="18" MinWidth="130" VerticalAlignment="Bottom"/>
+                        <TextBlock x:Name="StartupNote" Style="{StaticResource Body}" VerticalAlignment="Bottom" Margin="20,0,0,10"
+                                   Text="Чем меньше программ запускается вместе с Windows, тем быстрее включается компьютер и тем больше остаётся свободной памяти. Переключатель действует сразу, как в диспетчере задач; сама программа не удаляется."/>
+                    </DockPanel>
+                    <Rectangle Style="{StaticResource Hairline}" Margin="0,16,0,0"/>
+                    <ItemsControl x:Name="StartupList" ItemTemplate="{StaticResource StartupRow}"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- ===================== СИСТЕМА: разделы слева, открытый раздел справа ===================== -->
+            <Grid x:Name="PageSystem" Grid.Row="2" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <local:SheetHeader x:Name="HdrSystem" Title="ПУЛЬТ" Line1="СИСТЕМА" Line2="УПРАВЛЕНИЕ ПК" Margin="32,20,32,6"/>
+                <Grid x:Name="SystemBody" Grid.Row="1" Margin="32,18,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="268"/>
+                        <ColumnDefinition Width="49"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <ListBox x:Name="SysList" Background="Transparent" BorderThickness="0" Padding="0" Margin="0,0,0,16"
+                             ItemContainerStyle="{StaticResource SessionItem}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             SelectionChanged="SysList_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel>
+                                    <!-- «Состояние программы»: часть программы не работает дольше 10 минут. Метка только здесь, без уведомлений. -->
+                                    <local:StateMarker x:Name="HealthMark" DockPanel.Dock="Right" Level="Bad" VerticalAlignment="Center" Margin="10,0,4,0"
+                                                       Visibility="Collapsed" ToolTip="Часть программы не работает больше 10 минут"/>
+                                    <TextBlock Text="{Binding Title}" Style="{StaticResource CompItemText}" TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
+                                <DataTemplate.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding Title}" Value="Состояние программы"/>
+                                            <Condition Binding="{Binding Alarm, Source={x:Static svc:HealthWatch.Current}}" Value="True"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter TargetName="HealthMark" Property="Visibility" Value="Visible"/>
+                                    </MultiDataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                        <ListBox.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,6,0,0">
+                                            <local:TrackedText Source="{Binding Name}" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                                            <Rectangle Style="{StaticResource Hairline}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                                <GroupStyle.ContainerStyle>
+                                    <Style TargetType="GroupItem">
+                                        <Setter Property="Margin" Value="0,0,0,14"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="GroupItem">
+                                                    <StackPanel>
+                                                        <ContentPresenter/>
+                                                        <ItemsPresenter/>
+                                                    </StackPanel>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </GroupStyle.ContainerStyle>
+                            </GroupStyle>
+                        </ListBox.GroupStyle>
+                    </ListBox>
+
+                    <Rectangle Grid.Column="1" Width="1" Fill="{StaticResource Line}" HorizontalAlignment="Center" Margin="0,6,0,24"/>
+
+                    <ScrollViewer x:Name="SysScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="0,6,32,32">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <local:TrackedText x:Name="SysKicker" Style="{StaticResource Label}"/>
+                                <!-- Красная метка у заголовка «Состояния программы» (сторож запускается здесь, при загрузке окна) -->
+                                <local:StateMarker Level="Bad" VerticalAlignment="Center" Margin="10,0,0,0" DataContext="{x:Static svc:HealthWatch.Current}"
+                                                   ToolTip="Часть программы не работает больше 10 минут">
+                                    <local:StateMarker.Style>
+                                        <Style TargetType="local:StateMarker">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding SelectedItem.Title, ElementName=SysList}" Value="Состояние программы"/>
+                                                        <Condition Binding="{Binding Alarm}" Value="True"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </local:StateMarker.Style>
+                                </local:StateMarker>
+                            </StackPanel>
+                            <Rectangle Style="{StaticResource Hairline}" Margin="0,0,0,18"/>
+                            <ContentControl x:Name="SysHost" Focusable="False"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+
+            <!-- ===================== СПРАВКА: разделы слева, текст справа ===================== -->
+            <Grid x:Name="PageHelp" Grid.Row="2" Visibility="Collapsed">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <local:SheetHeader x:Name="HdrHelp" Title="СПРАВКА" Line1="КАК ПОЛЬЗОВАТЬСЯ" Line2="ПУЛЬС ПК" Margin="32,20,32,6"/>
+                <Grid Grid.Row="1" Margin="32,18,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="268"/>
+                        <ColumnDefinition Width="49"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <ListBox x:Name="HelpList" Background="Transparent" BorderThickness="0" Padding="0" Margin="0,0,0,16"
+                             ItemContainerStyle="{StaticResource SessionItem}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             SelectionChanged="HelpList_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Title}" Style="{StaticResource CompItemText}" TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                        <ListBox.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,6,0,0">
+                                            <local:TrackedText Source="{Binding Name}" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                                            <Rectangle Style="{StaticResource Hairline}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                                <GroupStyle.ContainerStyle>
+                                    <Style TargetType="GroupItem">
+                                        <Setter Property="Margin" Value="0,0,0,14"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="GroupItem">
+                                                    <StackPanel>
+                                                        <ContentPresenter/>
+                                                        <ItemsPresenter/>
+                                                    </StackPanel>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </GroupStyle.ContainerStyle>
+                            </GroupStyle>
+                        </ListBox.GroupStyle>
+                    </ListBox>
+
+                    <Rectangle Grid.Column="1" Width="1" Fill="{StaticResource Line}" HorizontalAlignment="Center" Margin="0,6,0,24"/>
+
+                    <ScrollViewer x:Name="HelpScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="0,6,32,32">
+                            <local:TrackedText x:Name="HelpKicker" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                            <Rectangle Style="{StaticResource Hairline}" Margin="0,0,0,18"/>
+                            <StackPanel x:Name="HelpBody" MaxWidth="780" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+
+            <!-- ===================== ПОДВАЛ: строка состояния листа ===================== -->
+            <Grid Grid.Row="3" Height="34" Margin="20,0,20,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Rectangle Grid.ColumnSpan="5" Height="1" Fill="{StaticResource LineStrong}" VerticalAlignment="Top"/>
+                <Path Style="{StaticResource Icon}" Data="{StaticResource IcoInfo}" Width="18" Height="18" Margin="4,0,12,0"/>
+                <TextBlock x:Name="FooterText" Grid.Column="1" Style="{StaticResource Footer}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                <Rectangle Grid.Column="2" Height="1" Fill="{StaticResource LineStrong}" VerticalAlignment="Center" Margin="18,0,12,0"/>
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <Grid x:Name="AdminBadge" Margin="0,0,14,0" VerticalAlignment="Center" Visibility="Collapsed">
+                        <Rectangle Stroke="{StaticResource Ink3}" StrokeThickness="1" StrokeDashArray="2 2" SnapsToDevicePixels="True"/>
+                        <TextBlock x:Name="AdminText" Style="{StaticResource Caption}" Foreground="{StaticResource Ink2}" TextWrapping="NoWrap" Margin="7,2"/>
+                    </Grid>
+                    <TextBlock x:Name="FooterRec" Style="{StaticResource Caption}" Foreground="{StaticResource RedHover}" VerticalAlignment="Center" Margin="0,0,14,0" Visibility="Collapsed"/>
+                    <Border BorderBrush="{StaticResource Ink2}" BorderThickness="1" Height="20" SnapsToDevicePixels="True">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="SheetNo" Style="{StaticResource Stamp}" Margin="7,0"/>
+                            <Border x:Name="StampViewCell" BorderBrush="{StaticResource Ink2}" BorderThickness="1,0,0,0" Visibility="Collapsed">
+                                <TextBlock x:Name="StampView" Style="{StaticResource Stamp}" Margin="7,0"/>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+                <local:Crosshair Grid.Column="4" Width="20" Height="20"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

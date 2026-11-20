@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- Windows Forms нужен только ради значка у часов (NotifyIcon). -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>PulsePC</AssemblyName>
+    <RootNamespace>PulsePC</RootNamespace>
+    <Version>1.4.2</Version>
+    <SatelliteResourceLanguages>ru</SatelliteResourceLanguages>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- Обычная сборка требует прав администратора (нужны для дисков, служб и очистки).
+         Сборка с -p:NoElevate=true запускается без них: только просмотр, для проверки интерфейса. -->
+    <ApplicationManifest Condition="'$(NoElevate)' != 'true'">app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Не подключать автоматически пространства Windows Forms: их типы совпадают по именам с WPF. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Resource Include="app.ico" />
+    <!-- Значок панели на телефоне: «на экран Домой» и профиль для iPhone. -->
+    <EmbeddedResource Include="Assets\apple-touch-icon.png" LogicalName="apple-touch-icon.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Официальный PresentMon от Intel (MIT, v2.6.0, подписан Intel): через него записываются кадры в играх.
+         Встроен в программу, чтобы установщик был одним файлом; при первой записи распаковывается рядом. -->
+    <EmbeddedResource Include="third-party\PresentMon\PresentMon.exe" LogicalName="PresentMon.exe" />
+    <EmbeddedResource Include="third-party\PresentMon\LICENSE.txt" LogicalName="PresentMon.LICENSE.txt" />
+    <None Remove="third-party\**" />
+  </ItemGroup>
+
+  <!-- Только для установщика (build-release.ps1, -p:AppPayload=…): архив установленной программы — PulsePC.exe без распаковки
+       библиотек и библиотеки WPF рядом с ним. Установщик кладёт их в закрытую от записи папку установки (см. Installer). -->
+  <ItemGroup Condition="'$(AppPayload)' != ''">
+    <EmbeddedResource Include="$(AppPayload)" LogicalName="PulsePC.app.zip" />
+  </ItemGroup>
+
+</Project>

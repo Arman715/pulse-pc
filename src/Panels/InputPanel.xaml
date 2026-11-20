@@ -1,0 +1,172 @@
+<UserControl x:Class="PulsePC.Panels.InputPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PulsePC">
+    <UserControl.Resources>
+        <!-- Строка раздела: нижняя волосяная линия. -->
+        <Style x:Key="Row" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+        <!-- Слово состояния справа от строки, рядом с маркером. -->
+        <Style x:Key="StateWord" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+            <Setter Property="Foreground" Value="{StaticResource Ink2}"/>
+            <Setter Property="Margin" Value="8,0,2,0"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+        <TextBlock x:Name="State" Style="{StaticResource Verdict}" Text="Читаю настройки клавиатуры и мыши…"/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,8,0,0"
+                   Text="Что может выбросить из игры при случайном нажатии клавиш и как часто мышь сообщает о своём движении."/>
+
+        <!-- Сочетания специальных возможностей -->
+        <local:TrackedText Source="СОЧЕТАНИЯ, КОТОРЫЕ ВЫБИВАЮТ ИЗ ИГРЫ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <Border Style="{StaticResource Row}">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Залипание клавиш — Shift пять раз подряд"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0" Text="Пять быстрых нажатий Shift открывают окно с вопросом поверх игры."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="24,4,0,0">
+                    <local:StateMarker x:Name="StickyMark" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="StickyWord" Style="{StaticResource StateWord}" Text="—"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <Border Style="{StaticResource Row}">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Фильтрация ввода — правый Shift на 8 секунд"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0" Text="Если держать правый Shift, Windows предлагает игнорировать короткие нажатия — после этого клавиши «не слушаются»."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="24,4,0,0">
+                    <local:StateMarker x:Name="FilterMark" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="FilterWord" Style="{StaticResource StateWord}" Text="—"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <Border Style="{StaticResource Row}">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Озвучивание переключений — Num Lock на 5 секунд"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0" Text="Если держать Num Lock, Windows включает звуковой сигнал при нажатии Caps Lock, Num Lock и Scroll Lock."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="24,4,0,0">
+                    <local:StateMarker x:Name="ToggleMark" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ToggleWord" Style="{StaticResource StateWord}" Text="—"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <TextBlock Style="{StaticResource Caption}" Margin="0,10,0,0"
+                   Text="Отключается только вызов сочетанием клавиш. Сами функции остаются: их можно включить в «Параметрах» → «Специальные возможности» → «Клавиатура»."/>
+        <WrapPanel Margin="0,14,0,0">
+            <Button x:Name="BtnHotOff" Style="{StaticResource Primary}" Content="Отключить сочетания" Margin="0,0,10,8" IsEnabled="False" Click="HotOff_Click"/>
+            <Button x:Name="BtnHotRestore" Content="Вернуть как было" Margin="0,0,10,8" IsEnabled="False" Click="HotRestore_Click"/>
+        </WrapPanel>
+        <TextBlock x:Name="HotResult" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+
+        <!-- Клавиша Win -->
+        <local:TrackedText Source="КЛАВИША WIN В ИГРЕ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <Border Style="{StaticResource Row}">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Блокировать клавишу Win, пока игра на переднем плане"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                               Text="Случайное нажатие Win не свернёт игру и не откроет «Пуск»; сочетания с Win в игре тоже не сработают. Клавишу перехватывает сама программа — в игру и её файлы она не вмешивается. Вне игры и после выхода из программы клавиша работает как всегда."/>
+                </StackPanel>
+                <CheckBox x:Name="WinLock" Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Top" Margin="24,3,2,0" IsEnabled="False"
+                          Click="WinLock_Click" AutomationProperties.Name="Блокировать клавишу Win, пока игра на переднем плане"/>
+            </Grid>
+        </Border>
+        <TextBlock x:Name="WinNote" Style="{StaticResource Caption}" Margin="0,10,0,0"/>
+
+        <!-- Частота опроса мыши -->
+        <local:TrackedText Source="ЧАСТОТА ОПРОСА МЫШИ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <!-- Какие мыши видит Windows: модель и марка по кодам USB -->
+        <ItemsControl x:Name="MiceList" Focusable="False">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Style="{StaticResource Row}">
+                        <Grid Margin="0,10">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                                <TextBlock Text="{Binding Caption}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Text="{Binding Mark}" Style="{StaticResource StateWord}" VerticalAlignment="Top" Margin="24,3,2,0"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock x:Name="MiceNote" Style="{StaticResource Caption}" Margin="0,8,0,4" Visibility="Collapsed"
+                   Text="Клавиатуры и приёмники с дополнительными кнопками Windows тоже считает мышами, поэтому устройств в списке может быть больше одного. Какая мышь двигалась при замере, видно после него."/>
+        <Border Style="{StaticResource Row}">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Сколько раз в секунду мышь сообщает о движении"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                               Text="125 Гц — мало для игр, 500–1000 Гц — хорошо, выше — на любителя: процессор нагружается сильнее. Нажмите «Измерить» и три секунды быстро водите мышью кругами, не останавливаясь."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" VerticalAlignment="Top" Margin="24,0,2,0">
+                    <TextBlock x:Name="RateEmpty" Style="{StaticResource StateWord}" Margin="0,4,0,0" HorizontalAlignment="Right" Text="не измерено"/>
+                    <TextBlock x:Name="RateValue" Style="{StaticResource Reading}" Typography.NumeralAlignment="Tabular" HorizontalAlignment="Right" Visibility="Collapsed"/>
+                    <TextBlock x:Name="RateWhen" Style="{StaticResource Caption}" HorizontalAlignment="Right" TextAlignment="Right" Visibility="Collapsed"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <!-- Где поднять частоту: показывается, если последний замер не выше 250 Гц -->
+        <DockPanel x:Name="RaiseBlock" Margin="0,14,0,0" Visibility="Collapsed">
+            <local:StateMarker Level="Warn" DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,5,10,0"/>
+            <StackPanel>
+                <TextBlock x:Name="RaiseTitle" Style="{StaticResource RowTitle}"/>
+                <TextBlock x:Name="RaiseText" Style="{StaticResource Body}" Margin="0,2,0,0"/>
+                <TextBlock Style="{StaticResource Caption}" Margin="0,6,0,0"
+                           Text="После смены частоты нажмите «Измерить ещё раз» — здесь будет видно, что изменилось."/>
+            </StackPanel>
+        </DockPanel>
+        <WrapPanel Margin="0,14,0,0">
+            <Button x:Name="BtnMeasure" Content="Измерить" Margin="0,0,10,8" Click="Measure_Click"/>
+        </WrapPanel>
+        <TextBlock x:Name="RateCompare" Style="{StaticResource RowTitle}" Margin="0,2,0,4" Visibility="Collapsed"/>
+        <TextBlock x:Name="RateNote" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+
+        <!-- Указатель: ускорение (перенесено сюда с вкладки «Оптимизация») и скорость для справки -->
+        <local:TrackedText Source="УКАЗАТЕЛЬ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <Border Style="{StaticResource Row}">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Ускорение мыши выключено"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                               Text="Движение прицела зависит только от движения руки: быстрый рывок и медленное ведение на одно и то же расстояние поворачивают одинаково. В Windows это галочка «Повышенная точность указателя». Действует сразу."/>
+                </StackPanel>
+                <CheckBox x:Name="AccelOff" Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Top" Margin="24,3,2,0" IsEnabled="False"
+                          Click="AccelOff_Click" AutomationProperties.Name="Ускорение мыши выключено"/>
+            </Grid>
+        </Border>
+        <Border Style="{StaticResource Row}">
+            <DockPanel Margin="0,10">
+                <TextBlock x:Name="SpeedValue" DockPanel.Dock="Right" Style="{StaticResource MonoNum}" Margin="24,0,2,0" Text="—"/>
+                <TextBlock Style="{StaticResource RowTitle}" Text="Скорость указателя (обычная — 10)"/>
+            </DockPanel>
+        </Border>
+        <TextBlock x:Name="PointerNote" Style="{StaticResource Caption}" Margin="0,10,0,0"
+                   Text="Если обновление Windows снова включит ускорение, программа выключит его сама — как и остальные игровые настройки."/>
+
+        <TextBlock x:Name="AdminNote" Style="{StaticResource Caption}" Margin="0,16,0,0" Visibility="Collapsed"
+                   Text="Менять можно только с правами администратора. Замер мыши работает и без них."/>
+    </StackPanel>
+</UserControl>

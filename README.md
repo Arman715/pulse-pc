@@ -12,6 +12,7 @@
   <a href="https://github.com/Arman715/pulse-pc/releases"><img src="https://img.shields.io/github/downloads/Arman715/pulse-pc/total?label=%D1%81%D0%BA%D0%B0%D1%87%D0%B0%D0%BB%D0%B8&color=1A1917&style=flat-square" alt="скачали"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%C2%B7%2011-45423C?style=flat-square" alt="Windows 10 и 11">
   <img src="https://img.shields.io/badge/%D1%86%D0%B5%D0%BD%D0%B0-%D0%B1%D0%B5%D1%81%D0%BF%D0%BB%D0%B0%D1%82%D0%BD%D0%BE-6F6A60?style=flat-square" alt="бесплатно">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/%D0%BA%D0%BE%D0%B4-%D0%BE%D1%82%D0%BA%D1%80%D1%8B%D1%82%20%C2%B7%20GPL--3.0-1A1917?style=flat-square" alt="открытый код, GPL-3.0"></a>
   <a href="https://www.instagram.com/pulsepc_official/"><img src="https://img.shields.io/badge/Instagram-%40pulsepc__official-C23B22?style=flat-square&logo=instagram&logoColor=white" alt="Instagram @pulsepc_official"></a>
 </p>
 
@@ -25,7 +26,8 @@
 
 <p align="center">
   Программа следит за компьютером, пока вы играете, и после игры объясняет простыми словами:<br>
-  что ограничивало FPS, откуда взялись рывки и что с этим сделать. Каждое изменение можно отменить.
+  что ограничивало FPS, откуда взялись рывки и что с этим сделать. Каждое изменение можно отменить.<br>
+  Бесплатно, с <a href="#открытый-исходный-код">открытым исходным кодом</a>.
 </p>
 
 ---
@@ -139,10 +141,37 @@
 <summary><b>Что программа отправляет в интернет?</b></summary>
 
 Ничего о вас. Она спрашивает у NVIDIA номер последнего драйвера для вашей модели видеокарты и проверяет новые версии в этом репозитории. Всё остальное остаётся на компьютере.
+Это можно проверить: весь код программы лежит в папке [`src`](src).
 </details>
+
+## Открытый исходный код
+
+Весь код «Пульс ПК» лежит в папке [`src`](src): программа для Windows (C#, WPF, .NET 10) и панель для iPhone ([`src/ios/PulsePhone`](src/ios/PulsePhone), Swift).
+Можно прочитать, что именно программа делает с системой, собрать её самому и предложить исправление.
+
+**Собрать из исходников.** Нужны Windows 10/11 и [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+
+```powershell
+git clone https://github.com/Arman715/pulse-pc.git
+cd pulse-pc\src
+.uild.ps1 -Preview   # версия для просмотра без прав администратора: ничего не меняет в системе
+.uild.ps1            # полная версия в папку srcpp (запускается с правами администратора)
+```
+
+Самопроверка кода (откат настроек, удаление файлов, разбор данных) запускается без изменений в системе: `PulsePC.exe --selftest`.
+
+**Официальные выпуски** собираются скриптом [`build-release.ps1`](src/build-release.ps1) и подписываются ключом автора.
+Программа устанавливает обновление, только если подпись верна, — поэтому копия, собранная кем-то другим, не сможет выдать себя за обновление «Пульс ПК».
+
+**Нашли ошибку или есть идея?** Напишите в [Issues](https://github.com/Arman715/pulse-pc/issues) — приложите отчёт из «Система» → «Состояние программы» → «Скопировать отчёт».
+Исправления присылайте через pull request: опишите, что меняется и как вы это проверили.
+
+**Лицензия — [GPL-3.0](LICENSE).** Код можно использовать, изменять и распространять, в том числе свои версии,
+при условии что они тоже выходят под GPL-3.0 с открытым кодом и с указанием автора. Закрыть код в своей копии нельзя.
 
 ---
 
 Новости, разборы «почему тормозит игра» и ответы на вопросы — в Instagram **[@pulsepc_official](https://www.instagram.com/pulsepc_official/)**.
 
-<sub>Встроен <a href="https://github.com/GameTechDev/PresentMon">PresentMon</a> от Intel (лицензия MIT). Требуется Windows 10 или 11, 64 бита.</sub>
+<sub>© 2026 Arman715. Код распространяется по лицензии <a href="LICENSE">GPL-3.0</a>.
+Встроен <a href="https://github.com/GameTechDev/PresentMon">PresentMon</a> от Intel (лицензия MIT, текст — в <a href="src/third-party/PresentMon/LICENSE.txt">src/third-party/PresentMon</a>). Требуется Windows 10 или 11, 64 бита.</sub>

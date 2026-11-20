@@ -1,0 +1,84 @@
+<UserControl x:Class="PulsePC.Panels.UpdatesPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PulsePC">
+    <UserControl.Resources>
+        <!-- Строка показаний: название и пояснение слева, состояние справа. -->
+        <DataTemplate x:Key="FactRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Hint}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding Value}" Style="{StaticResource MonoNum}" VerticalAlignment="Top" Margin="24,3,2,0"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+        <TextBlock x:Name="State" Style="{StaticResource Verdict}" Text="Читаю состояние обновлений…"/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,8,0,0"
+                   Text="Пока идёт игра, Windows не будет качать и ставить обновления и не перезагрузит компьютер. Игра закрыта — всё возвращается, и обновления приходят как обычно. Насовсем программа их не отключает."/>
+
+        <local:TrackedText Source="НА ВРЕМЯ ИГРЫ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Останавливать обновления на время игры"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                               Text="При запуске игры программа останавливает работающие службы обновлений, а после игры запускает их снова. Пока вы играете, обновления не отнимают скорость интернета и не нагружают диск. Тип запуска служб не меняется."/>
+                </StackPanel>
+                <CheckBox x:Name="GuardToggle" Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Top" Margin="24,3,2,0" IsEnabled="False" Click="GuardToggle_Click"/>
+            </Grid>
+        </Border>
+
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Не перезагружать, пока я играю"/>
+                    <TextBlock x:Name="NoRebootHint" Style="{StaticResource Body}" Margin="0,2,0,0"
+                               Text="В «период активности» Windows не перезагружает компьютер ради обновлений. При запуске игры программа сдвигает этот период так, чтобы он покрывал ближайшие 12 часов, а после игры возвращает прежние часы."/>
+                </StackPanel>
+                <CheckBox x:Name="NoRebootToggle" Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Top" Margin="24,3,2,0" IsEnabled="False" Click="NoRebootToggle_Click"/>
+            </Grid>
+        </Border>
+
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Последнее срабатывание"/>
+                    <TextBlock x:Name="LastText" Style="{StaticResource Body}" Margin="0,2,0,0" Text="Ещё не было."/>
+                </StackPanel>
+                <TextBlock x:Name="LastWhen" Grid.Column="1" Style="{StaticResource MonoNum}" VerticalAlignment="Top" Margin="24,3,2,0"/>
+            </Grid>
+        </Border>
+
+        <TextBlock x:Name="AdminNote" Style="{StaticResource Caption}" Margin="0,12,0,0" Visibility="Collapsed"
+                   Text="Менять можно только с правами администратора."/>
+        <TextBlock x:Name="Result" Style="{StaticResource Caption}" Margin="0,10,0,0" Visibility="Collapsed"/>
+
+        <local:TrackedText Source="СЕЙЧАС" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <ItemsControl x:Name="NowList" ItemTemplate="{StaticResource FactRow}" Focusable="False"/>
+    </StackPanel>
+</UserControl>

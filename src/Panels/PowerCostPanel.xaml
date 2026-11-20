@@ -1,0 +1,295 @@
+<UserControl x:Class="PulsePC.Panels.PowerCostPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PulsePC"
+             xmlns:panels="clr-namespace:PulsePC.Panels">
+    <UserControl.Resources>
+        <!-- Поле ввода: рамка тушью, без скруглений и теней (как в «Замере до и после»). -->
+        <Style x:Key="Field" TargetType="TextBox">
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Right"/>
+            <Setter Property="FontFamily" Value="{StaticResource Mono}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource Ink1}"/>
+            <Setter Property="SelectionBrush" Value="{StaticResource Accent}"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="frame" Background="{StaticResource Raised}" BorderBrush="{StaticResource Ink2}" BorderThickness="1" SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="frame" Property="BorderBrush" Value="{StaticResource Ink1}"/>
+                                <Setter TargetName="frame" Property="Background" Value="{StaticResource Base}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="frame" Property="BorderBrush" Value="{StaticResource Ink4}"/>
+                                <Setter Property="Foreground" Value="{StaticResource Ink3}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Tip" TargetType="TextBlock" BasedOn="{StaticResource Body}">
+            <Setter Property="Margin" Value="18,0,0,8"/>
+        </Style>
+        <Style x:Key="Num" TargetType="TextBlock" BasedOn="{StaticResource MonoNum}">
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="Margin" Value="0,2,0,0"/>
+        </Style>
+        <Style x:Key="Head" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+        </Style>
+
+        <!-- Часть расхода: образец (сплошной — измерено, штриховка — оценка), название, ватты, откуда число. -->
+        <DataTemplate x:Key="PartRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,9">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="28"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="96"/>
+                        <ColumnDefinition Width="110"/>
+                    </Grid.ColumnDefinitions>
+                    <Rectangle Width="16" Height="10" Fill="{Binding Swatch}" Stroke="{StaticResource Ink2}" StrokeThickness="1" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,6,0,0"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Name}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Note}" Style="{StaticResource Caption}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding Watts}" Style="{StaticResource Num}"/>
+                    <TextBlock Grid.Column="3" Text="{Binding Kind}" Style="{StaticResource Caption}" HorizontalAlignment="Right" Margin="0,3,0,0"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- Строка таблицы «по играм» -->
+        <DataTemplate x:Key="GameRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="104"/>
+                        <ColumnDefinition Width="104"/>
+                        <ColumnDefinition Width="104"/>
+                        <ColumnDefinition Width="104"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Game}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Count}" Style="{StaticResource Caption}"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding Gpu}" Style="{StaticResource Num}"/>
+                    <TextBlock Grid.Column="2" Text="{Binding Total}" Style="{StaticResource Num}"/>
+                    <TextBlock Grid.Column="3" Text="{Binding KwhHour}" Style="{StaticResource Num}"/>
+                    <TextBlock Grid.Column="4" Text="{Binding RubHour}" Style="{StaticResource Num}"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+        <TextBlock x:Name="State" Style="{StaticResource Verdict}" Text="Считаю расход…"/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,8,0,0"
+                   Text="Сколько электричества берёт компьютер и во что это обходится. Видеокарту измеряет её собственный датчик, остальное — оценка по модели процессора и его загрузке. Программа ничего не меняет в системе."/>
+
+        <!-- ======================================================== тариф -->
+        <local:TrackedText Source="ТАРИФ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Цена киловатт-часа"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                               Text="Есть в квитанции за свет и в личном кабинете поставщика. Если тариф делится по времени суток, впишите дневной: играют обычно днём и вечером."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="24,0,0,0">
+                    <TextBox x:Name="TariffBox" Style="{StaticResource Field}" Width="96" MaxLength="8" KeyDown="Box_KeyDown" TextChanged="Box_TextChanged"/>
+                    <TextBlock Style="{StaticResource Caption}" Text="₽ за кВт·ч" Width="74" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Монитор, если хотите его учесть"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                               Text="Монитор программа не измеряет и по умолчанию не считает. Обычно он берёт 20–40&#160;Вт, точное число — на наклейке сзади или в паспорте. Пусто — без монитора."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="24,0,0,0">
+                    <TextBox x:Name="MonitorBox" Style="{StaticResource Field}" Width="96" MaxLength="4" KeyDown="Box_KeyDown" TextChanged="Box_TextChanged"/>
+                    <TextBlock Style="{StaticResource Caption}" Text="Вт" Width="74" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <WrapPanel Margin="0,16,0,0">
+            <Button x:Name="BtnSave" Style="{StaticResource Primary}" Content="Сохранить и пересчитать" Margin="0,0,10,8" Click="Save_Click"/>
+        </WrapPanel>
+        <TextBlock x:Name="AdminNote" Style="{StaticResource Caption}" Margin="0,2,0,0" Visibility="Collapsed"
+                   Text="Менять тариф можно только с правами администратора."/>
+        <TextBlock x:Name="Result" Style="{StaticResource Caption}" Margin="0,2,0,0" Visibility="Collapsed"/>
+
+        <!-- ======================================================== прогноз -->
+        <local:TrackedText Source="ЗА СУТКИ, НЕДЕЛЮ И МЕСЯЦ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <TextBlock x:Name="ForecastEmpty" Style="{StaticResource Body}" Margin="0,12,0,0" Visibility="Collapsed"/>
+        <StackPanel x:Name="ForecastBody">
+            <UniformGrid Columns="3" Margin="0,14,0,0">
+                <StackPanel>
+                    <local:NumberText x:Name="DayMain" Style="{StaticResource Secondary}" Format="0.##" Unit="₽" UnitSize="14"/>
+                    <TextBlock x:Name="DaySub" Style="{StaticResource Caption}"/>
+                </StackPanel>
+                <StackPanel>
+                    <local:NumberText x:Name="WeekMain" Style="{StaticResource Secondary}" Format="0.#" Unit="₽" UnitSize="14"/>
+                    <TextBlock x:Name="WeekSub" Style="{StaticResource Caption}"/>
+                </StackPanel>
+                <StackPanel>
+                    <local:NumberText x:Name="MonthMain" Style="{StaticResource Secondary}" Format="0" Unit="₽" UnitSize="14"/>
+                    <TextBlock x:Name="MonthSub" Style="{StaticResource Caption}"/>
+                </StackPanel>
+            </UniformGrid>
+            <TextBlock x:Name="ForecastNote" Style="{StaticResource Caption}" Margin="0,12,0,0"/>
+
+            <!-- В играх и без игр -->
+            <Grid Margin="0,22,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="104"/>
+                    <ColumnDefinition Width="104"/>
+                    <ColumnDefinition Width="104"/>
+                    <ColumnDefinition Width="104"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Column="1" Style="{StaticResource Head}" Text="часов в сутки"/>
+                <TextBlock Grid.Column="2" Style="{StaticResource Head}" Text="компьютер, из розетки"/>
+                <TextBlock Grid.Column="3" Style="{StaticResource Head}" Text="кВт·ч в сутки"/>
+                <TextBlock x:Name="ModeRubHead" Grid.Column="4" Style="{StaticResource Head}" Text="₽ в месяц"/>
+
+                <Border Grid.Row="1" Grid.ColumnSpan="5" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,1" Margin="0,6,0,0"/>
+                <StackPanel Grid.Row="1" Margin="0,14,0,8">
+                    <TextBlock Style="{StaticResource RowTitle}" Text="В играх"/>
+                    <TextBlock x:Name="GameWhat" Style="{StaticResource Caption}"/>
+                </StackPanel>
+                <TextBlock x:Name="GameHours" Grid.Row="1" Grid.Column="1" Style="{StaticResource Num}" Margin="0,16,0,0"/>
+                <TextBlock x:Name="GameW" Grid.Row="1" Grid.Column="2" Style="{StaticResource Num}" Margin="0,16,0,0"/>
+                <TextBlock x:Name="GameKwh" Grid.Row="1" Grid.Column="3" Style="{StaticResource Num}" Margin="0,16,0,0"/>
+                <TextBlock x:Name="GameRub" Grid.Row="1" Grid.Column="4" Style="{StaticResource Num}" Margin="0,16,0,0"/>
+
+                <Border Grid.Row="2" Grid.ColumnSpan="5" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1"/>
+                <StackPanel Grid.Row="2" Margin="0,10,0,8">
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Без игр"/>
+                    <TextBlock x:Name="IdleWhat" Style="{StaticResource Caption}"/>
+                </StackPanel>
+                <TextBlock x:Name="IdleHours" Grid.Row="2" Grid.Column="1" Style="{StaticResource Num}" Margin="0,12,0,0"/>
+                <TextBlock x:Name="IdleW" Grid.Row="2" Grid.Column="2" Style="{StaticResource Num}" Margin="0,12,0,0"/>
+                <TextBlock x:Name="IdleKwh" Grid.Row="2" Grid.Column="3" Style="{StaticResource Num}" Margin="0,12,0,0"/>
+                <TextBlock x:Name="IdleRub" Grid.Row="2" Grid.Column="4" Style="{StaticResource Num}" Margin="0,12,0,0"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- ======================================================== из чего складывается -->
+        <StackPanel x:Name="PartsBlock">
+            <Grid Margin="0,28,0,6">
+                <local:TrackedText Source="ИЗ ЧЕГО СКЛАДЫВАЕТСЯ В ИГРЕ" Style="{StaticResource Label}" VerticalAlignment="Bottom"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                    <Rectangle Width="16" Height="10" Fill="{StaticResource Ink1}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="измерено" Style="{StaticResource Caption}" Margin="0,0,16,0"/>
+                    <Rectangle x:Name="LegendHatch" Width="16" Height="10" Stroke="{StaticResource Ink2}" StrokeThickness="1" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="оценка" Style="{StaticResource Caption}"/>
+                </StackPanel>
+            </Grid>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <panels:PowerBar x:Name="Bar" Margin="0,18,0,4"/>
+            <ItemsControl x:Name="Parts" ItemTemplate="{StaticResource PartRow}" Focusable="False" Margin="0,8,0,0"/>
+        </StackPanel>
+
+        <!-- ======================================================== сейчас -->
+        <local:TrackedText Source="СЕЙЧАС" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <UniformGrid Columns="4" Margin="0,14,0,0">
+            <StackPanel>
+                <local:NumberText x:Name="NowGpu" Style="{StaticResource Secondary}" Unit="Вт" UnitSize="14"/>
+                <TextBlock Style="{StaticResource Caption}" Text="видеокарта · измерено"/>
+            </StackPanel>
+            <StackPanel>
+                <local:NumberText x:Name="NowCpu" Style="{StaticResource Secondary}" Unit="Вт" UnitSize="14"/>
+                <TextBlock x:Name="NowCpuCaption" Style="{StaticResource Caption}" Text="процессор · оценка"/>
+            </StackPanel>
+            <StackPanel>
+                <local:NumberText x:Name="NowRest" Style="{StaticResource Secondary}" Unit="Вт" UnitSize="14"/>
+                <TextBlock Style="{StaticResource Caption}" Text="остальное и блок питания · оценка" TextWrapping="Wrap"/>
+            </StackPanel>
+            <StackPanel>
+                <local:NumberText x:Name="NowTotal" Style="{StaticResource Secondary}" Unit="Вт" UnitSize="14"/>
+                <TextBlock Style="{StaticResource Caption}" Text="всего из розетки · оценка"/>
+            </StackPanel>
+        </UniformGrid>
+        <TextBlock x:Name="NowNote" Style="{StaticResource Caption}" Margin="0,10,0,0" Visibility="Collapsed"/>
+
+        <!-- ======================================================== по играм -->
+        <StackPanel x:Name="GamesBlock" Visibility="Collapsed">
+            <local:TrackedText Source="ПО ИГРАМ ЗА 30 ДНЕЙ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <Grid Margin="0,8,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="104"/>
+                    <ColumnDefinition Width="104"/>
+                    <ColumnDefinition Width="104"/>
+                    <ColumnDefinition Width="104"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="1" Style="{StaticResource Head}" Text="видеокарта, измерено"/>
+                <TextBlock Grid.Column="2" Style="{StaticResource Head}" Text="компьютер, оценка"/>
+                <TextBlock Grid.Column="3" Style="{StaticResource Head}" Text="кВт·ч за час игры"/>
+                <TextBlock Grid.Column="4" Style="{StaticResource Head}" Text="₽ за час игры"/>
+            </Grid>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <ItemsControl x:Name="GameList" ItemTemplate="{StaticResource GameRow}" Focusable="False"/>
+            <TextBlock x:Name="GamesNote" Style="{StaticResource Caption}" Margin="0,10,0,0"/>
+        </StackPanel>
+
+        <!-- ======================================================== как считается -->
+        <local:TrackedText Source="КАК СЧИТАЕТСЯ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}" Margin="0,0,0,12"/>
+        <Grid>
+            <TextBlock Style="{StaticResource Body}" Text="—"/>
+            <TextBlock Style="{StaticResource Tip}" Text="Видеокарта — по её собственному датчику: среднее за игры и за время без игр. Это измерение."/>
+        </Grid>
+        <Grid>
+            <TextBlock Style="{StaticResource Body}" Text="—"/>
+            <TextBlock x:Name="HowCpu" Style="{StaticResource Tip}"/>
+        </Grid>
+        <Grid>
+            <TextBlock Style="{StaticResource Body}" Text="—"/>
+            <TextBlock Style="{StaticResource Tip}" Text="Материнская плата, память, диски и вентиляторы — около 50&#160;Вт; ещё около 10&#160;% теряется в блоке питания. Это тоже оценка."/>
+        </Grid>
+        <Grid>
+            <TextBlock Style="{StaticResource Body}" Text="—"/>
+            <TextBlock Style="{StaticResource Tip}" Text="Сутки, неделя и месяц — прогноз по средним за последние 7 дней: сколько часов компьютер работал с запущенной программой и сколько из них шла игра."/>
+        </Grid>
+        <Grid>
+            <TextBlock Style="{StaticResource Body}" Text="—"/>
+            <TextBlock Style="{StaticResource Tip}" Margin="18,0,0,0" Text="Точно узнать расход всего компьютера можно только ваттметром в розетке. Если он есть, сверьте: обычно оценка отличается на 10–20&#160;%."/>
+        </Grid>
+    </StackPanel>
+</UserControl>

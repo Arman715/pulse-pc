@@ -1,0 +1,138 @@
+<UserControl x:Class="PulsePC.Panels.PowerPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PulsePC">
+    <UserControl.Resources>
+        <!-- Выбор режима: строка с кружком слева, как пункт ведомости. Выбранный — залитая точка и красная черта слева. -->
+        <Style x:Key="Choice" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusDash}"/>
+            <Setter Property="GroupName" Value="PowerMode"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="row" Background="Transparent" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                            <Grid Margin="0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid Width="14" Height="14" VerticalAlignment="Top" Margin="0,3,14,0">
+                                    <Ellipse x:Name="ring" Stroke="{StaticResource Ink2}" StrokeThickness="1.2"/>
+                                    <Ellipse x:Name="dot" Width="6" Height="6" Fill="{StaticResource Accent}" Opacity="0"/>
+                                </Grid>
+                                <ContentPresenter Grid.Column="1"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="dot" Property="Opacity" Value="1"/>
+                                <Setter TargetName="ring" Property="Stroke" Value="{StaticResource Ink1}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ring" Property="Stroke" Value="{StaticResource Ink1}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Cursor" Value="Arrow"/>
+                                <Setter TargetName="ring" Property="Stroke" Value="{StaticResource Ink4}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- Строка списка схем: название и чем схема отличается, справа — пометка «включена». -->
+        <DataTemplate x:Key="SchemeRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Hint}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding Mark}" Style="{StaticResource MonoNum}" VerticalAlignment="Top" Margin="24,3,2,0"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+        <TextBlock x:Name="State" Style="{StaticResource Verdict}" Text="Читаю схемы питания…"/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,8,0,0"
+                   Text="Схема питания решает, как процессор держит частоту. На сбалансированной схеме он сбавляет её, когда нагрузки нет, — компьютер тише и меньше греется. На схеме максимальной производительности частота полная всё время. Выберите, когда нужна полная скорость, — переключать схему программа будет сама."/>
+
+        <!-- Ноутбук: полная скорость от батареи быстро сажает заряд — играть лучше от зарядки. -->
+        <DockPanel x:Name="BatteryNote" Visibility="Collapsed" Margin="0,16,0,0">
+            <local:StateMarker x:Name="BatteryMarker" Level="Info" DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,5,10,0"/>
+            <TextBlock x:Name="BatteryText" Style="{StaticResource Body}"/>
+        </DockPanel>
+
+        <local:TrackedText Source="МАКСИМАЛЬНАЯ ПРОИЗВОДИТЕЛЬНОСТЬ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+
+        <RadioButton x:Name="ModeGame" Style="{StaticResource Choice}" Click="Mode_Click">
+            <StackPanel>
+                <TextBlock Style="{StaticResource RowTitle}" Text="Только в игре, вне игры — сбалансированная"/>
+                <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                           Text="Игра запущена — включается схема максимальной производительности. Игра закрыта — возвращается схема, которая была до неё. Вне игр компьютер тише и прохладнее."/>
+            </StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="ModeAlways" Style="{StaticResource Choice}" Click="Mode_Click">
+            <StackPanel>
+                <TextBlock Style="{StaticResource RowTitle}" Text="Всегда максимальная"/>
+                <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                           Text="Полная скорость и в играх, и вне их: компьютер сильнее греется и шумит даже без нагрузки. Если обновление Windows сбросит схему, программа вернёт её сама."/>
+            </StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="ModeOff" Style="{StaticResource Choice}" Click="Mode_Click">
+            <StackPanel>
+                <TextBlock Style="{StaticResource RowTitle}" Text="Не менять"/>
+                <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                           Text="Программа схему не трогает: остаётся та, что выбрана в Windows."/>
+            </StackPanel>
+        </RadioButton>
+
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <StackPanel Margin="0,12">
+                <TextBlock Style="{StaticResource RowTitle}" Text="При запуске игры"/>
+                <TextBlock x:Name="OnGame" Style="{StaticResource Body}" Margin="0,2,0,0" Text="—"/>
+            </StackPanel>
+        </Border>
+
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Последнее автопереключение"/>
+                    <TextBlock x:Name="LastText" Style="{StaticResource Body}" Margin="0,2,0,0" Text="Ещё не было."/>
+                </StackPanel>
+                <TextBlock x:Name="LastWhen" Grid.Column="1" Style="{StaticResource MonoNum}" VerticalAlignment="Top" Margin="24,3,2,0"/>
+            </Grid>
+        </Border>
+
+        <!-- Режим включён, а вне игры стоит быстрая схема: предложение, а не действие. -->
+        <StackPanel x:Name="Offer" Visibility="Collapsed" Margin="0,16,0,0">
+            <DockPanel>
+                <local:StateMarker Level="Warn" DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,5,10,0"/>
+                <TextBlock x:Name="OfferText" Style="{StaticResource Body}"/>
+            </DockPanel>
+            <Button x:Name="BtnBalanced" Content="Включить сбалансированную схему" HorizontalAlignment="Left" Margin="20,12,0,0" Click="BtnBalanced_Click"/>
+        </StackPanel>
+
+        <TextBlock x:Name="AdminNote" Style="{StaticResource Caption}" Margin="0,12,0,0" Visibility="Collapsed"
+                   Text="Менять можно только с правами администратора."/>
+        <TextBlock x:Name="Result" Style="{StaticResource Caption}" Margin="0,10,0,0" Visibility="Collapsed"/>
+
+        <local:TrackedText Source="СХЕМЫ НА ЭТОМ КОМПЬЮТЕРЕ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <ItemsControl x:Name="SchemeList" ItemTemplate="{StaticResource SchemeRow}" Focusable="False"/>
+        <TextBlock x:Name="SchemesEmpty" Style="{StaticResource Caption}" Margin="0,10,0,0" Visibility="Collapsed"
+                   Text="Windows не отдала список схем питания. Откройте «Панель управления» → «Электропитание» и проверьте, что схемы там есть."/>
+    </StackPanel>
+</UserControl>

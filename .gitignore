@@ -1,0 +1,20 @@
+# Сборка
+bin/
+obj/
+artifacts/
+src/app/
+src/dist/
+*.user
+*.suo
+.vs/
+.vscode/
+
+# Ключ подписи выпусков никогда не кладётся в репозиторий
+*.key
+*.pfx
+release-signing*
+
+# Система
+Thumbs.db
+desktop.ini
+.DS_Store

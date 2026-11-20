@@ -1,0 +1,6 @@
+<Project>
+  <!-- Промежуточные файлы сборки кладём вне OneDrive, чтобы синхронизация не мешала компиляции. -->
+  <PropertyGroup>
+    <ArtifactsPath>$(LOCALAPPDATA)\PulsePC-build</ArtifactsPath>
+  </PropertyGroup>
+</Project>

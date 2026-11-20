@@ -1,0 +1,257 @@
+<UserControl x:Class="PulsePC.Panels.MemoryPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PulsePC"
+             xmlns:panels="clr-namespace:PulsePC.Panels">
+    <UserControl.Resources>
+        <Style x:Key="Tip" TargetType="TextBlock" BasedOn="{StaticResource Body}">
+            <Setter Property="Margin" Value="18,0,0,8"/>
+        </Style>
+        <!-- Поле ввода: рамка тушью, без скруглений и теней (как в «Замер до и после»). -->
+        <Style x:Key="Field" TargetType="TextBox">
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
+            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource Ink1}"/>
+            <Setter Property="SelectionBrush" Value="{StaticResource Accent}"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="frame" Background="{StaticResource Raised}" BorderBrush="{StaticResource Ink2}" BorderThickness="1" SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="frame" Property="BorderBrush" Value="{StaticResource Ink1}"/>
+                                <Setter TargetName="frame" Property="Background" Value="{StaticResource Base}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="frame" Property="BorderBrush" Value="{StaticResource Ink4}"/>
+                                <Setter Property="Foreground" Value="{StaticResource Ink4}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- Строка «что занимает память» -->
+        <DataTemplate x:Key="ProcRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,7">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="92"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Name}" Style="{StaticResource RowTitle}" FontWeight="Normal" FontSize="13.5"/>
+                        <TextBlock Text="{Binding Count}" Style="{StaticResource MonoNum}" Foreground="{StaticResource Ink3}" Margin="8,0,0,0"/>
+                        <TextBlock Text="{Binding Note}" Style="{StaticResource Caption}" Margin="12,1,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <local:ThinBar Grid.Column="1" Value="{Binding Share}" Height="4" VerticalAlignment="Center" Margin="16,0,16,0"/>
+                    <TextBlock Grid.Column="2" Text="{Binding Size}" Style="{StaticResource MonoNum}" HorizontalAlignment="Right"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+        <!-- Строка таблицы «по играм» -->
+        <DataTemplate x:Key="GameRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="130"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Game}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Count}" Style="{StaticResource Caption}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,0,0">
+                        <local:StateMarker Level="Warn" Visibility="{Binding MarkVisible}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding Short}" Style="{StaticResource MonoNum}"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding Worst}" Style="{StaticResource MonoNum}" Foreground="{Binding WorstInk}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+        <TextBlock x:Name="State" Style="{StaticResource Verdict}" Text="Читаю память…"/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,8,0,0"
+                   Text="Чем занята память сейчас и сколько её оставалось в играх. Перед игрой память можно освободить кнопкой или автоматически. Программы при этом не закрываются и не завершаются."/>
+
+        <!-- ======================================================== сейчас -->
+        <local:TrackedText Source="СЕЙЧАС" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <UniformGrid Columns="4" Margin="0,14,0,0">
+            <StackPanel>
+                <local:NumberText x:Name="NowUsed" Style="{StaticResource Secondary}" Format="0.0" Unit="ГБ" UnitSize="14"/>
+                <TextBlock Style="{StaticResource Caption}" Text="занято программами"/>
+            </StackPanel>
+            <StackPanel>
+                <local:NumberText x:Name="NowStandby" Style="{StaticResource Secondary}" Format="0.0" Unit="ГБ" UnitSize="14"/>
+                <TextBlock Style="{StaticResource Caption}" Text="кэш ожидания"/>
+            </StackPanel>
+            <StackPanel>
+                <local:NumberText x:Name="NowFree" Style="{StaticResource Secondary}" Format="0.0" Unit="ГБ" UnitSize="14"/>
+                <TextBlock Style="{StaticResource Caption}" Text="пустая память"/>
+            </StackPanel>
+            <StackPanel>
+                <local:NumberText x:Name="NowAvail" Style="{StaticResource Secondary}" Format="0.0" Unit="ГБ" UnitSize="14"/>
+                <TextBlock Style="{StaticResource Caption}" Text="доступно программам"/>
+            </StackPanel>
+        </UniformGrid>
+        <panels:MemoryBar x:Name="Bar" Height="16" Margin="0,18,0,0"/>
+        <local:DimensionLine x:Name="TotalDim" Margin="0,2,0,0"/>
+        <WrapPanel Margin="0,2,0,0">
+            <Rectangle Width="20" Height="12" Fill="{StaticResource Ink1}" Stroke="{StaticResource Ink2}" StrokeThickness="1" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBlock Style="{StaticResource Caption}" Text="занято" VerticalAlignment="Center" Margin="0,0,20,0"/>
+            <Rectangle x:Name="SwatchStandby" Width="20" Height="12" Stroke="{StaticResource Ink2}" StrokeThickness="1" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBlock Style="{StaticResource Caption}" Text="кэш ожидания" VerticalAlignment="Center" Margin="0,0,20,0"/>
+            <Rectangle Width="20" Height="12" Stroke="{StaticResource Ink2}" StrokeThickness="1" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBlock Style="{StaticResource Caption}" Text="пусто" VerticalAlignment="Center" Margin="0,0,20,0"/>
+            <StackPanel x:Name="ThresholdKey" Orientation="Horizontal" Visibility="Collapsed">
+                <Line X1="0" Y1="0" X2="0" Y2="14" Stroke="{StaticResource Warn}" StrokeThickness="1.5" StrokeDashArray="2 1.5" VerticalAlignment="Center" Margin="4,0,10,0"/>
+                <TextBlock x:Name="ThresholdKeyText" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </WrapPanel>
+        <TextBlock x:Name="NowNote" Style="{StaticResource Body}" Margin="0,12,0,0"/>
+
+        <!-- ======================================================== что занимает -->
+        <local:TrackedText Source="ЧТО ЗАНИМАЕТ ПАМЯТЬ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <ItemsControl x:Name="ProcList" ItemTemplate="{StaticResource ProcRow}" Focusable="False"/>
+        <TextBlock Style="{StaticResource Caption}" Margin="0,8,0,0"
+                   Text="Все процессы одной программы вместе. Числа с запасом: общие библиотеки посчитаны у каждой программы."/>
+
+        <!-- ======================================================== освободить -->
+        <local:TrackedText Source="ОСВОБОДИТЬ ПАМЯТЬ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Очищать кэш ожидания"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                               Text="Делается всегда. Кэш становится пустой памятью, но доступной памяти от этого не прибавляется: Windows и так отдаёт кэш по первому требованию. Иногда это убирает рывки, когда игра подгружает данные."/>
+                </StackPanel>
+                <TextBlock Grid.Column="1" Style="{StaticResource Caption}" Text="всегда" VerticalAlignment="Top" Margin="24,3,2,0"/>
+            </Grid>
+        </Border>
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Сжимать фоновые программы"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                               Text="Браузер и другие открытые программы отдают свою память, и доступной становится больше. Окно такой программы при возврате к нему откроется на миг медленнее: Windows подгрузит его обратно. Игру, «Пульс ПК», системные процессы и античиты программа не трогает."/>
+                </StackPanel>
+                <CheckBox x:Name="TrimToggle" Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Top" Margin="24,3,2,0" Click="Trim_Click"/>
+            </Grid>
+        </Border>
+        <StackPanel x:Name="ExcludeBlock" Visibility="Collapsed" Margin="0,12,0,0">
+            <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,6"
+                       Text="Не сжимать — имена программ через запятую, как в диспетчере задач (вкладка «Подробности», без .exe):"/>
+            <TextBox x:Name="ExcludeBox" Style="{StaticResource Field}" LostKeyboardFocus="Exclude_Changed" KeyDown="Exclude_KeyDown"/>
+            <TextBlock Style="{StaticResource Caption}" Margin="0,6,0,0"
+                       Text="Discord и OBS в списке по умолчанию: голос и запись идут вместе с игрой, им нельзя запинаться."/>
+        </StackPanel>
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Перед игрой — автоматически"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                               Text="Когда запускается игра, программа смотрит, сколько памяти доступно, и если меньше порога — освобождает её так же, как кнопка ниже. Не чаще раза в 10 минут."/>
+                    <StackPanel Orientation="Horizontal" Margin="-12,10,0,0">
+                        <TextBlock Style="{StaticResource Caption}" Text="если доступно меньше" VerticalAlignment="Center" Margin="12,0,0,4"/>
+                        <StackPanel x:Name="ThresholdChoice" Orientation="Horizontal" Margin="4,0,0,0"/>
+                    </StackPanel>
+                    <TextBlock x:Name="StartNote" Style="{StaticResource Caption}" Margin="0,6,0,0" Visibility="Collapsed"/>
+                </StackPanel>
+                <CheckBox x:Name="AutoToggle" Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Top" Margin="24,3,2,0" Click="Auto_Click"/>
+            </Grid>
+        </Border>
+        <WrapPanel Margin="0,16,0,0">
+            <Button x:Name="BtnBoost" Style="{StaticResource Primary}" Content="Освободить память" Margin="0,0,10,8" Click="Boost_Click"/>
+        </WrapPanel>
+        <TextBlock x:Name="AdminNote" Style="{StaticResource Caption}" Margin="0,2,0,0" Visibility="Collapsed"
+                   Text="Освобождать память можно только с правами администратора."/>
+        <TextBlock x:Name="Result" Style="{StaticResource Caption}" Margin="0,2,0,0" Visibility="Collapsed"/>
+
+        <!-- ======================================================== в играх -->
+        <local:TrackedText Source="ПАМЯТЬ В ИГРАХ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <TextBlock x:Name="GamesEmpty" Style="{StaticResource Body}" Margin="0,12,0,0" Visibility="Collapsed"
+                   Text="Записанных игр с замером памяти пока нет. Программа сама записывает каждую игру, пока запущена, в том числе свёрнутая к часам."/>
+        <StackPanel x:Name="GamesBody">
+            <UniformGrid Columns="3" Margin="0,14,0,0">
+                <StackPanel>
+                    <TextBlock x:Name="ShortCount" Style="{StaticResource Secondary}" Text="—"/>
+                    <TextBlock x:Name="ShortCaption" Style="{StaticResource Caption}" Text="сессий, где оставалось меньше 1&#160;ГБ"/>
+                </StackPanel>
+                <StackPanel>
+                    <local:NumberText x:Name="WorstMin" Style="{StaticResource Secondary}" Format="0.0" Unit="ГБ" UnitSize="14"/>
+                    <TextBlock Style="{StaticResource Caption}" Text="меньше всего за все игры"/>
+                </StackPanel>
+                <StackPanel>
+                    <local:NumberText x:Name="AvgMin" Style="{StaticResource Secondary}" Format="0.0" Unit="ГБ" UnitSize="14"/>
+                    <TextBlock Style="{StaticResource Caption}" Text="обычно в самый тесный момент"/>
+                </StackPanel>
+            </UniformGrid>
+            <local:TrackedText Source="ДОСТУПНО В САМЫЙ ТЕСНЫЙ МОМЕНТ, ГБ" Style="{StaticResource Label}" Margin="0,22,0,8"/>
+            <panels:MinRamStrip x:Name="Strip" Height="110"/>
+            <Grid Margin="0,6,0,0">
+                <TextBlock x:Name="StripFrom" Style="{StaticResource Caption}"/>
+                <TextBlock x:Name="StripTo" Style="{StaticResource Caption}" HorizontalAlignment="Right"/>
+            </Grid>
+            <TextBlock Style="{StaticResource Caption}" Margin="0,4,0,0"
+                       Text="Столбик — одна игровая сессия, справа последние. Заштрихованы сессии, где доступной памяти оставалось меньше 1&#160;ГБ: тогда Windows уносит данные в файл подкачки, и в игре возможны рывки."/>
+
+            <Grid Margin="0,22,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="130"/>
+                    <ColumnDefinition Width="130"/>
+                </Grid.ColumnDefinitions>
+                <local:TrackedText Source="ПО ИГРАМ" Style="{StaticResource Label}" VerticalAlignment="Bottom"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource Caption}" Text="меньше 1&#160;ГБ" HorizontalAlignment="Right" TextAlignment="Right"/>
+                <TextBlock Grid.Column="2" Style="{StaticResource Caption}" Text="меньше всего" HorizontalAlignment="Right" TextAlignment="Right"/>
+            </Grid>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <ItemsControl x:Name="GameList" ItemTemplate="{StaticResource GameRow}" Focusable="False"/>
+            <Button x:Name="UpgradeLink" Style="{StaticResource Link}" Margin="0,12,0,0" HorizontalAlignment="Left" Click="UpgradeLink_Click"
+                    Content="Хватит ли докупить памяти и какой — в разделе «Совет по апгрейду»"/>
+        </StackPanel>
+
+        <!-- ======================================================== честно -->
+        <local:TrackedText Source="ЧЕГО ОЖИДАТЬ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}" Margin="0,0,0,12"/>
+        <Grid>
+            <TextBlock Style="{StaticResource Body}" Text="—"/>
+            <TextBlock Style="{StaticResource Tip}" Text="FPS от очистки не растёт. Она помогает, только когда памяти не хватает: меньше рывков, когда игра подгружает уровень или текстуры."/>
+        </Grid>
+        <Grid>
+            <TextBlock Style="{StaticResource Body}" Text="—"/>
+            <TextBlock Style="{StaticResource Tip}" Text="Больше всего даёт сжатие фоновых программ или их закрытие перед игрой. Если памяти не хватает почти в каждой игре, поможет только докупить её."/>
+        </Grid>
+        <Grid>
+            <TextBlock Style="{StaticResource Body}" Text="—"/>
+            <TextBlock Style="{StaticResource Tip}" Margin="18,0,0,0" Text="Вернуть «как было» здесь нечего: настройки Windows не меняются, а нужные данные программы подгрузят обратно сами."/>
+        </Grid>
+    </StackPanel>
+</UserControl>

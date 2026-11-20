@@ -1,0 +1,194 @@
+<Window x:Class="PulsePC.Setup.SetupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:PulsePC"
+        xmlns:setup="clr-namespace:PulsePC.Setup"
+        xmlns:bp="clr-namespace:PulsePC.Blueprint"
+        Title="Пульс ПК — установка" Width="880" Height="600" ResizeMode="CanMinimize"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Base}" Foreground="{StaticResource Ink1}"
+        FontFamily="{StaticResource TextFont}" FontSize="13.5"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="48" ResizeBorderThickness="0" GlassFrameThickness="1" CornerRadius="0" UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <!-- Строка с флажком: подпись тоже переключает флажок -->
+        <Style x:Key="OptionText" TargetType="TextBlock" BasedOn="{StaticResource Body}">
+            <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </Window.Resources>
+
+    <Border x:Name="Root" Background="{StaticResource Base}" BorderBrush="#BDB5A6" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- ===================== ЗАГОЛОВОК ОКНА ===================== -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Margin="20,0,6,0" VerticalAlignment="Center">
+                    <Path Style="{StaticResource Icon}" Data="{StaticResource IcoLogo}" Stroke="{StaticResource Accent}" StrokeThickness="1.6"
+                          Width="24" Height="20" Margin="0,0,10,0"/>
+                    <TextBlock x:Name="CaptionText" Text="Пульс ПК — установка" Style="{StaticResource Brand}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="Minimize_Click" ToolTip="Свернуть"/>
+                    <Button x:Name="BtnX" Style="{StaticResource CloseButton}" Content="&#xE8BB;" Click="Close_Click" ToolTip="Закрыть"/>
+                </StackPanel>
+                <Rectangle Grid.ColumnSpan="3" Height="1" Fill="{StaticResource LineStrong}" VerticalAlignment="Bottom" Panel.ZIndex="-1"/>
+            </Grid>
+
+            <!-- ===================== ЛИСТ ===================== -->
+            <Grid Grid.Row="1" Margin="32,18,32,14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <local:SheetHeader x:Name="Header" Title="МОНТАЖ" Line2="ЛИСТ ОБЩИХ ДАННЫХ"/>
+
+                <Grid Grid.Row="1" Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="1"/>
+                        <ColumnDefinition Width="356"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Поле чертежа: проект пунктиром, поверх — сплошной рисунок; внизу — основная надпись -->
+                    <Grid ClipToBounds="True" Margin="0,0,24,0">
+                        <local:PlusGrid HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,2,4" Rows="3" Cols="4" Step="26" Opacity="0.7"
+                                        Mask="...x|..xx|.xxx" IsHitTestVisible="False"/>
+                        <bp:BlueprintView x:Name="Ghost" Scene="Pc" GhostOthers="True" DrawingPadding="6" Margin="0,0,0,84" Visibility="Hidden" IsHitTestVisible="False"/>
+                        <bp:BlueprintView x:Name="Drawing" Scene="Pc" DrawingPadding="6" Margin="0,0,0,84" IsHitTestVisible="False"/>
+                        <Border x:Name="TitleBlock" BorderBrush="{StaticResource Ink2}" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                                SnapsToDevicePixels="True" Margin="0,0,0,4"/>
+                    </Grid>
+
+                    <Rectangle Grid.Column="1" Fill="{StaticResource Line}" Margin="0,0,0,4"/>
+
+                    <!-- ===== Правая колонка: данные и действие ===== -->
+                    <Grid Grid.Column="2" Margin="28,0,0,0">
+
+                        <!-- Перед установкой (удалением) -->
+                        <DockPanel x:Name="FormPanel">
+                            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,4">
+                                <Button x:Name="BtnMain" Style="{StaticResource Primary}" Content="Установить" MinWidth="148" Margin="0" IsDefault="True" Click="Main_Click"/>
+                            </StackPanel>
+                            <StackPanel x:Name="FormContent">
+                                <local:TrackedText x:Name="NotesLabel" Source="НАЗНАЧЕНИЕ" Style="{StaticResource Label}"/>
+                                <StackPanel x:Name="Notes" Margin="0,8,0,0"/>
+                                <DockPanel x:Name="WarnNote" Margin="0,8,0,0" Visibility="Collapsed">
+                                    <local:StateMarker DockPanel.Dock="Left" Level="Warn" VerticalAlignment="Top" Margin="0,3,10,0"/>
+                                    <TextBlock x:Name="WarnText" Style="{StaticResource Caption}" Foreground="{StaticResource Warn}"/>
+                                </DockPanel>
+
+                                <Rectangle Style="{StaticResource Hairline}" Margin="0,14,0,12"/>
+
+                                <local:TrackedText x:Name="FolderLabel" Source="ПАПКА УСТАНОВКИ" Style="{StaticResource Label}"/>
+                                <DockPanel Margin="0,6,0,0">
+                                    <Button x:Name="BtnFolder" DockPanel.Dock="Right" Style="{StaticResource Link}" Content="Изменить…" Margin="14,0,0,0" Click="Folder_Click"/>
+                                    <TextBlock x:Name="FolderText" FontFamily="{StaticResource Mono}" FontSize="12.5" Foreground="{StaticResource Ink1}"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
+
+                                <StackPanel x:Name="Options" Margin="0,14,0,0">
+                                    <DockPanel x:Name="OptDesktop" Margin="0,0,0,8">
+                                        <CheckBox x:Name="ChkDesktop" DockPanel.Dock="Left" IsChecked="True" Margin="0,0,12,0"/>
+                                        <TextBlock Text="Ярлык на рабочем столе" Style="{StaticResource OptionText}" Tag="{Binding ElementName=ChkDesktop}" MouseLeftButtonUp="Option_Click"/>
+                                    </DockPanel>
+                                    <DockPanel x:Name="OptLaunch" Margin="0,0,0,8">
+                                        <CheckBox x:Name="ChkLaunch" DockPanel.Dock="Left" IsChecked="True" Margin="0,0,12,0"/>
+                                        <TextBlock Text="Запустить после установки" Style="{StaticResource OptionText}" Tag="{Binding ElementName=ChkLaunch}" MouseLeftButtonUp="Option_Click"/>
+                                    </DockPanel>
+                                    <DockPanel x:Name="OptAutostart" Margin="0,0,0,8">
+                                        <CheckBox x:Name="ChkAutostart" DockPanel.Dock="Left" IsChecked="False" Margin="0,0,12,0"/>
+                                        <TextBlock Text="Запускать вместе с Windows, свёрнутой к часам" Style="{StaticResource OptionText}" Tag="{Binding ElementName=ChkAutostart}" MouseLeftButtonUp="Option_Click"/>
+                                    </DockPanel>
+                                    <DockPanel x:Name="OptPurge" Margin="0,0,0,8" Visibility="Collapsed">
+                                        <CheckBox x:Name="ChkPurge" DockPanel.Dock="Left" IsChecked="False" VerticalAlignment="Top" Margin="0,2,12,0"/>
+                                        <StackPanel>
+                                            <TextBlock Text="Удалить заодно историю сессий, настройки и копии для отката" Style="{StaticResource OptionText}" Tag="{Binding ElementName=ChkPurge}" MouseLeftButtonUp="Option_Click"/>
+                                            <TextBlock x:Name="PurgeText" Style="{StaticResource Caption}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </DockPanel>
+
+                        <!-- Ход работы и итог -->
+                        <Grid x:Name="WorkPanel" Visibility="Collapsed">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <local:TrackedText x:Name="WorkLabel" Source="ХОД МОНТАЖА" Style="{StaticResource Label}"/>
+                            <StackPanel x:Name="Steps" Grid.Row="1" Margin="0,8,0,0"/>
+
+                            <StackPanel x:Name="Verdict" Grid.Row="3" Margin="0,0,0,14" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal">
+                                    <local:StateMarker x:Name="VerdictMark" Level="Ok" VerticalAlignment="Center" Margin="0,3,12,0"/>
+                                    <TextBlock x:Name="VerdictTitle" Text="Готово" Style="{StaticResource Verdict}"/>
+                                </StackPanel>
+                                <TextBlock x:Name="VerdictText" Style="{StaticResource Body}" Margin="0,4,0,0"/>
+                            </StackPanel>
+
+                            <Grid Grid.Row="4" Margin="0,0,0,4">
+                                <StackPanel x:Name="ProgressBlock">
+                                    <Grid Margin="0,0,0,7">
+                                        <TextBlock x:Name="StepCounter" Style="{StaticResource Stamp}"/>
+                                        <TextBlock x:Name="PercentText" Style="{StaticResource Stamp}" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    <Grid Height="3">
+                                        <Rectangle Height="1" Fill="{StaticResource LineStrong}" VerticalAlignment="Center" SnapsToDevicePixels="True"/>
+                                        <Rectangle Fill="{StaticResource Accent}" RenderTransformOrigin="0,0.5">
+                                            <Rectangle.RenderTransform><ScaleTransform x:Name="BarScale" ScaleX="0"/></Rectangle.RenderTransform>
+                                        </Rectangle>
+                                    </Grid>
+                                    <local:Ruler Margin="0,3,0,0" Height="9" Opacity="0.8"/>
+                                </StackPanel>
+                                <StackPanel x:Name="DoneButtons" Orientation="Horizontal" HorizontalAlignment="Right" Visibility="Collapsed">
+                                    <Button x:Name="BtnClose" Content="Закрыть" MinWidth="110" Click="Close_Click"/>
+                                    <Button x:Name="BtnLaunch" Style="{StaticResource Primary}" Content="Запустить" MinWidth="130" Margin="0" Click="Launch_Click"/>
+                                    <Button x:Name="BtnRetry" Style="{StaticResource Primary}" Content="Повторить" MinWidth="130" Margin="0" Click="Main_Click" Visibility="Collapsed"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Grid>
+
+            <!-- ===================== ПОДВАЛ: пояснение и штамп листа ===================== -->
+            <Grid Grid.Row="2" Height="34" Margin="20,0,20,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Rectangle Grid.ColumnSpan="5" Height="1" Fill="{StaticResource LineStrong}" VerticalAlignment="Top"/>
+                <Path Style="{StaticResource Icon}" Data="{StaticResource IcoInfo}" Width="18" Height="18" Margin="4,0,12,0"/>
+                <TextBlock x:Name="FooterText" Grid.Column="1" Style="{StaticResource Footer}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                <Rectangle Grid.Column="2" Height="1" Fill="{StaticResource LineStrong}" VerticalAlignment="Center" Margin="18,0,12,0"/>
+                <Border Grid.Column="3" BorderBrush="{StaticResource Ink2}" BorderThickness="1" Height="20" SnapsToDevicePixels="True" Margin="0,0,10,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="SheetNo" Style="{StaticResource Stamp}" Margin="7,0"/>
+                </Border>
+                <local:Crosshair Grid.Column="4" Width="20" Height="20"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

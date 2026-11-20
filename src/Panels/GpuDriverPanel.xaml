@@ -1,0 +1,206 @@
+<UserControl x:Class="PulsePC.Panels.GpuDriverPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PulsePC">
+    <UserControl.Resources>
+        <!-- Текст, который пропадает вместе со строкой, если он пуст -->
+        <Style x:Key="OptBody" TargetType="TextBlock" BasedOn="{StaticResource Body}">
+            <Style.Triggers>
+                <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="OptMono" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource Mono}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="LineHeight" Value="17"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink3}"/>
+            <Style.Triggers>
+                <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Строка: название и пояснение слева, число справа -->
+        <DataTemplate x:Key="InfoRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,11">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Hint}" Style="{StaticResource OptBody}" Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding Extra}" Style="{StaticResource OptMono}" Margin="0,4,0,0"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding Value}" Style="{StaticResource MonoNum}" VerticalAlignment="Top" Margin="24,2,2,0"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- День: дата, время, полоса доли и число -->
+        <DataTemplate x:Key="DayRow">
+            <Grid Margin="0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="120"/>
+                    <ColumnDefinition Width="230"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="64"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding Title}" Style="{StaticResource Body}" Foreground="{StaticResource Ink1}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding Hint}" Style="{StaticResource Caption}" VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
+                <local:ThinBar Grid.Column="2" Height="4" Target="{Binding Fraction}" Fill="{StaticResource Ink2}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="3" Text="{Binding Value}" Style="{StaticResource MonoNum}" Margin="0,0,2,0"/>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Случай: время слева, что произошло справа -->
+        <DataTemplate x:Key="CaseRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,9">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="190"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Value}" Style="{StaticResource MonoNum}" TextAlignment="Left" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource Body}" Foreground="{StaticResource Ink1}"/>
+                        <TextBlock Text="{Binding Extra}" Style="{StaticResource OptMono}" Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding Hint}" Style="{StaticResource OptBody}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- Шаг: номер слева -->
+        <DataTemplate x:Key="StepRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,11">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Value}" Style="{StaticResource MonoNum}" TextAlignment="Left" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Hint}" Style="{StaticResource OptBody}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+        <TextBlock x:Name="State" Style="{StaticResource Verdict}" Text="Читаю сведения о драйвере…"/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,8,0,0"
+                   Text="Драйвер — программа, через которую игры работают с видеокартой. Здесь видно, насколько он свежий, сколько места занимает кэш шейдеров и были ли у драйвера сбои за месяц."/>
+
+        <!-- ============ Драйвер ============ -->
+        <local:TrackedText Source="ДРАЙВЕР" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="GpuName" Style="{StaticResource RowTitle}" Text="—"/>
+                    <TextBlock x:Name="DriverLine" Style="{StaticResource OptBody}" Margin="0,2,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Margin="24,0,2,0" VerticalAlignment="Top">
+                    <TextBlock x:Name="AgeValue" Style="{StaticResource Reading}" TextAlignment="Right"/>
+                    <TextBlock x:Name="AgeLabel" Style="{StaticResource Caption}" TextAlignment="Right"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <!-- Последняя версия на сайте NVIDIA — по проверке раздела «Новые версии» -->
+        <Border x:Name="LatestBlock" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Visibility="Collapsed">
+            <Grid Margin="0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="24"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <local:StateMarker x:Name="LatestMarker" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,5,0,0"/>
+                <StackPanel Grid.Column="1">
+                    <TextBlock x:Name="LatestLine" Style="{StaticResource Body}" Foreground="{StaticResource Ink1}"/>
+                    <WrapPanel Margin="0,4,0,0">
+                        <Button x:Name="BtnWhatsNew" Style="{StaticResource Link}" Foreground="{StaticResource Ink1}" Content="Что нового" Margin="0,0,20,0" Click="BtnWhatsNew_Click"/>
+                        <Button x:Name="BtnVersions" Style="{StaticResource Link}" Foreground="{StaticResource Ink1}" Content="Раздел «Новые версии»" Click="BtnVersions_Click"/>
+                    </WrapPanel>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Margin="24,0,2,0" VerticalAlignment="Top">
+                    <TextBlock x:Name="LatestValue" Style="{StaticResource MonoNum}" FontSize="14"/>
+                    <TextBlock x:Name="LatestCaption" Style="{StaticResource Caption}" TextAlignment="Right" Text="на сайте NVIDIA"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <TextBlock x:Name="DriverAdvice" Style="{StaticResource OptBody}" Margin="0,12,0,0"/>
+        <TextBlock x:Name="OtherGpus" Style="{StaticResource Caption}" Margin="0,6,0,0" Visibility="Collapsed"/>
+        <WrapPanel Margin="0,14,0,0">
+            <Button x:Name="BtnDownload" Content="Открыть страницу загрузки" Margin="0,0,14,8" Click="BtnDownload_Click" IsEnabled="False"/>
+            <TextBlock x:Name="DownloadNote" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,0,8" MaxWidth="460"
+                       Text="Откроется сайт производителя в вашем браузере. Драйвер программа не скачивает и не ставит."/>
+        </WrapPanel>
+
+        <!-- ============ Кэш шейдеров ============ -->
+        <local:TrackedText Source="КЭШ ШЕЙДЕРОВ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <ItemsControl x:Name="CacheRows" ItemTemplate="{StaticResource InfoRow}"/>
+        <Grid Margin="0,11,2,0">
+            <TextBlock x:Name="CacheSummary" Style="{StaticResource RowTitle}" Text="Считаю размер…"/>
+            <TextBlock x:Name="CacheTotal" Style="{StaticResource MonoNum}" HorizontalAlignment="Right"/>
+        </Grid>
+        <TextBlock Style="{StaticResource Body}" Margin="0,10,0,0"
+                   Text="Шейдеры — небольшие программы, которыми игра рисует кадр. Драйвер собирает их при первом запуске игры и хранит в кэше, чтобы не делать это каждый раз. Чистить кэш полезно после обновления драйвера, при рывках и искажениях картинки."/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,6,0,0"
+                   Text="Кэш чистится на вкладке «Очистка» вместе с другими временными файлами. Это безопасно: драйвер соберёт его заново, только первые запуски игр будут дольше. Кнопка откроет «Очистку», где отмечен только этот пункт."/>
+        <WrapPanel Margin="0,14,0,0">
+            <Button x:Name="BtnClear" Content="Перейти к очистке" Margin="0,0,14,8" Click="BtnClear_Click"/>
+            <TextBlock x:Name="AdminNote" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,0,8" Visibility="Collapsed"
+                       Text="Удалять там можно только с правами администратора."/>
+        </WrapPanel>
+        <TextBlock x:Name="CacheResult" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+
+        <!-- ============ Ошибки драйвера ============ -->
+        <local:TrackedText x:Name="EventsLabel" Source="СБОИ ДРАЙВЕРА ЗА 30 ДНЕЙ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <TextBlock x:Name="EventsHeadline" Style="{StaticResource RowTitle}" Margin="0,12,0,0" Text="Читаю журнал Windows…"/>
+        <ItemsControl x:Name="EventsFacts" Margin="0,2,0,0">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" Style="{StaticResource Body}" Margin="0,4,0,0"/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <!-- Та же отметка «просмотрено», что в «Диагностике»: записи до неё не считаются ни там, ни здесь -->
+        <StackPanel x:Name="SeenBlock" Margin="0,12,0,0" Visibility="Collapsed">
+            <WrapPanel>
+                <Button x:Name="BtnSeen" Style="{StaticResource Link}" Foreground="{StaticResource Ink1}" Content="Отметить как просмотренные" Margin="0,0,18,0" Click="BtnSeen_Click"/>
+                <Button x:Name="BtnUnseen" Style="{StaticResource Link}" Foreground="{StaticResource Ink1}" Content="Показать всё снова" Click="BtnUnseen_Click"/>
+            </WrapPanel>
+            <TextBlock Style="{StaticResource Caption}" Margin="0,4,0,0"
+                       Text="Журнал Windows не очищается: программа лишь перестаёт показывать то, что вы уже видели. Новые записи появятся здесь как обычно."/>
+        </StackPanel>
+
+        <StackPanel x:Name="EventsDetail" Visibility="Collapsed">
+            <local:TrackedText Source="ЧТО ЗАПИСАНО" Style="{StaticResource Label}" Margin="0,20,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <ItemsControl x:Name="KindRows" ItemTemplate="{StaticResource InfoRow}"/>
+
+            <local:TrackedText Source="ПО ДНЯМ" Style="{StaticResource Label}" Margin="0,20,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}" Margin="0,0,0,5"/>
+            <ItemsControl x:Name="DayRows" ItemTemplate="{StaticResource DayRow}"/>
+
+            <local:TrackedText Source="ПОСЛЕДНИЕ СЛУЧАИ" Style="{StaticResource Label}" Margin="0,20,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <ItemsControl x:Name="RecentRows" ItemTemplate="{StaticResource CaseRow}"/>
+
+            <local:TrackedText Source="ЧТО ДЕЛАТЬ ПО ПОРЯДКУ" Style="{StaticResource Label}" Margin="0,20,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <TextBlock x:Name="StepsLead" Style="{StaticResource OptBody}" Margin="0,12,0,2"/>
+            <ItemsControl x:Name="StepRows" ItemTemplate="{StaticResource StepRow}"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

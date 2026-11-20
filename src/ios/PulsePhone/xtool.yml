@@ -1,0 +1,5 @@
+version: 1
+bundleID: ru.pulsepc.phone
+product: PulsePhone
+infoPath: Info.plist
+iconPath: Resources/AppIcon.png

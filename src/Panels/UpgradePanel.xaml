@@ -1,0 +1,146 @@
+<UserControl x:Class="PulsePC.Panels.UpgradePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PulsePC"
+             xmlns:panels="clr-namespace:PulsePC.Panels">
+    <UserControl.Resources>
+        <!-- Вывод: номер как в технических требованиях на чертеже, висячий отступ. -->
+        <DataTemplate x:Key="AdviceRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,14,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="28"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Number}" FontFamily="{StaticResource Din}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource Ink1}" Margin="0,1,0,0"/>
+                    <StackPanel Grid.Column="1">
+                        <DockPanel>
+                            <local:StateMarker Level="{Binding Level}" DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,5,10,0"/>
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding Tag}" Style="{StaticResource Caption}" Foreground="{StaticResource Ink2}" VerticalAlignment="Top" Margin="16,2,0,0"/>
+                            <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                        </DockPanel>
+                        <TextBlock Text="{Binding Why}" Style="{StaticResource Body}" Margin="20,4,0,0"/>
+                        <TextBlock Style="{StaticResource Body}" Foreground="{StaticResource Ink1}" Margin="20,8,0,0" Visibility="{Binding WhatVisible}">
+                            <Run Text="Что сделать." FontWeight="SemiBold"/> <Run Text="{Binding What, Mode=OneWay}"/>
+                        </TextBlock>
+                        <TextBlock Text="{Binding NotIf}" Style="{StaticResource Caption}" Margin="20,8,0,0" Visibility="{Binding NotIfVisible}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+        <DataTemplate x:Key="FineRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="28"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <local:StateMarker Level="Ok" VerticalAlignment="Top" Margin="0,5,0,0"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Why}" Style="{StaticResource Body}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+        <DataTemplate x:Key="FactRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,9">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="120"/>
+                        <ColumnDefinition Width="230"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Name}" Style="{StaticResource Body}" Foreground="{StaticResource Ink1}"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <local:StateMarker Level="Warn" Visibility="{Binding MarkVisible}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding Value}" Style="{StaticResource MonoNum}" Foreground="{Binding Ink}"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding Note}" Style="{StaticResource Caption}" HorizontalAlignment="Right" TextAlignment="Right" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+        <DataTemplate x:Key="DriveRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="44"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Letter}" FontFamily="{StaticResource Din}" FontWeight="SemiBold" FontSize="18" Foreground="{StaticResource Ink1}"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Disk}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Games}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" Margin="16,3,0,0">
+                        <local:StateMarker Level="Warn" Visibility="{Binding MarkVisible}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding Kind}" Style="{StaticResource MonoNum}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+        <TextBlock x:Name="State" Style="{StaticResource Verdict}" Text="Собираю данные о железе и играх…"/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,8,0,0"
+                   Text="Совет собран по записанным играм и по тому, что Windows знает о железе. Сначала — то, что даст больше пользы; бесплатные настройки идут раньше покупок. Цен здесь нет: ищите в магазине по указанным параметрам."/>
+        <TextBlock x:Name="Basis" Style="{StaticResource Caption}" Margin="0,8,0,0"/>
+        <DockPanel x:Name="FewNote" Visibility="Collapsed" Margin="0,16,0,0">
+            <local:StateMarker Level="Info" DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,5,10,0"/>
+            <TextBlock x:Name="FewText" Style="{StaticResource Body}"/>
+        </DockPanel>
+
+        <!-- ======================================================== выводы -->
+        <StackPanel x:Name="AdviceBlock" Visibility="Collapsed">
+            <local:TrackedText Source="ВЫВОДЫ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <ItemsControl x:Name="AdviceList" ItemTemplate="{StaticResource AdviceRow}" Focusable="False"/>
+        </StackPanel>
+        <StackPanel x:Name="FineBlock" Visibility="Collapsed">
+            <local:TrackedText Source="МЕНЯТЬ НЕ НУЖНО" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <ItemsControl x:Name="FineList" ItemTemplate="{StaticResource FineRow}" Focusable="False"/>
+        </StackPanel>
+
+        <!-- ======================================================== память -->
+        <local:TrackedText Source="ПАМЯТЬ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <TextBlock x:Name="RamEmpty" Style="{StaticResource Body}" Margin="0,12,0,0" Text="Читаю планки памяти…"/>
+        <StackPanel x:Name="RamBody" Visibility="Collapsed">
+            <Grid Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,40,0">
+                    <local:NumberText x:Name="RamTotal" Style="{StaticResource Secondary}" Format="0" Unit="ГБ" UnitSize="14"/>
+                    <TextBlock x:Name="RamTotalCaption" Style="{StaticResource Caption}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                    <TextBlock x:Name="SlotsCaption" Style="{StaticResource Label}" Margin="0,4,0,8"/>
+                    <StackPanel x:Name="Slots"/>
+                </StackPanel>
+            </Grid>
+            <TextBlock x:Name="RamNote" Style="{StaticResource Caption}" Margin="0,12,0,0"/>
+        </StackPanel>
+
+        <!-- ======================================================== из сессий -->
+        <local:TrackedText Source="ИЗ ЗАПИСАННЫХ ИГР" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <TextBlock x:Name="FactsEmpty" Style="{StaticResource Body}" Margin="0,12,0,0" Visibility="Collapsed"
+                   Text="Записанных игр пока нет. Программа записывает каждую игру сама, пока запущена, в том числе свёрнутая к часам."/>
+        <StackPanel x:Name="FactsBody">
+            <ItemsControl x:Name="FactList" ItemTemplate="{StaticResource FactRow}" Focusable="False"/>
+            <TextBlock Style="{StaticResource Caption}" Margin="0,8,0,0"
+                       Text="Проценты — средние по времени игры. Сессии, записанные до появления замера, в нём не учитываются."/>
+        </StackPanel>
+
+        <!-- ======================================================== диски -->
+        <local:TrackedText Source="ДИСКИ С ИГРАМИ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <TextBlock x:Name="DrivesEmpty" Style="{StaticResource Body}" Margin="0,12,0,0" Text="Ищу установленные игры…"/>
+        <ItemsControl x:Name="DriveList" ItemTemplate="{StaticResource DriveRow}" Focusable="False"/>
+    </StackPanel>
+</UserControl>

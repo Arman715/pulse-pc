@@ -1,0 +1,239 @@
+<UserControl x:Class="PulsePC.Panels.SoundPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PulsePC">
+    <UserControl.Resources>
+        <!-- Устройство вывода: имя, формат, справа — отметка «основное» или кнопка -->
+        <DataTemplate x:Key="OutputRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding Caption}" Style="{StaticResource Body}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="24,0,0,0">
+                        <local:TrackedText Source="{Binding Mark}" Style="{StaticResource Label}" Foreground="{Binding MarkBrush}" VerticalAlignment="Center" Margin="0,0,2,0"/>
+                        <Button Content="{Binding ButtonText}" Tag="{Binding Id}" Visibility="{Binding ButtonVisibility}" IsEnabled="{Binding CanChange}"
+                                Margin="16,0,0,0" Click="MakeDefault_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- Устройство в круге переключения: флажок и имя -->
+        <DataTemplate x:Key="CycleRow">
+            <Grid Margin="0,7">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <CheckBox x:Name="box" IsChecked="{Binding InCycle, Mode=TwoWay}" IsEnabled="{Binding CanChange}" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource Body}" Foreground="{StaticResource Ink1}" Margin="12,0,0,0" Background="Transparent"
+                           Tag="{Binding ElementName=box}" MouseLeftButtonUp="CycleName_Click">
+                    <Run Text="{Binding Name, Mode=OneWay}"/><Run Text="{Binding Note, Mode=OneWay}" Foreground="{StaticResource Ink3}"/>
+                </TextBlock>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Улучшения устройства: состояние и переключатель «Отключить» -->
+        <DataTemplate x:Key="FxRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding FxText}" Style="{StaticResource Body}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="24,3,2,0" Visibility="{Binding FxToggleVisibility}">
+                        <TextBlock Text="Отключить" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <CheckBox Style="{StaticResource Toggle}" IsChecked="{Binding FxOff, Mode=TwoWay}" IsEnabled="{Binding FxCanToggle}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- Список клавиш: рамка тушью, без теней и скруглений -->
+        <Style x:Key="KeyItem" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+            <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
+            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="b" Background="Transparent" Padding="10,5">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{StaticResource Track}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="KeyList" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+            <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
+            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Width" Value="104"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="MaxDropDownHeight" Value="264"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusDash}"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource KeyItem}"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Grid Background="Transparent">
+                                            <Border x:Name="hover" Background="{StaticResource Track}" Opacity="0"/>
+                                            <Rectangle x:Name="frame" Stroke="{StaticResource Ink1}" StrokeThickness="1"/>
+                                            <Path x:Name="arrow" Data="M 0,0 L 4,4 L 8,0" Stroke="{StaticResource Ink1}" StrokeThickness="1.25"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,1,10,0"/>
+                                        </Grid>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="hover" Property="Opacity" Value="1"/>
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter TargetName="frame" Property="Stroke" Value="{StaticResource Ink4}"/>
+                                                <Setter TargetName="frame" Property="StrokeDashArray" Value="2 2"/>
+                                                <Setter TargetName="arrow" Property="Stroke" Value="{StaticResource Ink4}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                              IsHitTestVisible="False" VerticalAlignment="Center" Margin="10,0,26,1"/>
+                            <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" VerticalOffset="-1"
+                                   AllowsTransparency="False" Focusable="False" PopupAnimation="None">
+                                <Border Background="{StaticResource Raised}" BorderBrush="{StaticResource Ink1}" BorderThickness="1"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <ScrollViewer CanContentScroll="True">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource Ink4}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ModName" TargetType="TextBlock" BasedOn="{StaticResource Body}">
+            <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="7,0,16,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+        <TextBlock x:Name="State" Style="{StaticResource Verdict}" Text="Читаю звуковые устройства…"/>
+        <TextBlock x:Name="Intro" Style="{StaticResource Body}" Margin="0,8,0,0"
+                   Text="Куда Windows выводит звук и как переключаться между устройствами одной клавишей — например, с наушников на колонки, не сворачивая игру."/>
+        <TextBlock x:Name="NoAdmin" Style="{StaticResource Caption}" Margin="0,8,0,0" Visibility="Collapsed"
+                   Text="Менять можно только с правами администратора."/>
+
+        <StackPanel x:Name="Sections" Visibility="Collapsed">
+            <!-- 1. Устройства вывода -->
+            <DockPanel Margin="0,24,0,6">
+                <Button DockPanel.Dock="Right" Style="{StaticResource Link}" Content="Обновить список" Click="Refresh_Click"/>
+                <local:TrackedText Source="УСТРОЙСТВА ВЫВОДА" Style="{StaticResource Label}" VerticalAlignment="Bottom"/>
+            </DockPanel>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <ItemsControl x:Name="OutputList" ItemTemplate="{StaticResource OutputRow}"/>
+            <TextBlock x:Name="SwitchResult" Style="{StaticResource Caption}" Margin="0,8,0,0" Visibility="Collapsed"/>
+
+            <!-- 2. Переключение клавишей -->
+            <local:TrackedText Source="ПЕРЕКЛЮЧЕНИЕ КЛАВИШЕЙ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <TextBlock Style="{StaticResource Body}" Margin="0,10,0,6"
+                       Text="Отметьте два устройства или больше и выберите сочетание. Каждое нажатие переводит звук на следующее отмеченное устройство, а у часов появляется его название. Работает и во время игры."/>
+            <ItemsControl x:Name="CycleList" ItemTemplate="{StaticResource CycleRow}"/>
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,1" Margin="0,8,0,0">
+                <Grid Margin="0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Сочетание клавиш" Style="{StaticResource RowTitle}"/>
+                        <TextBlock x:Name="HotkeyNow" Style="{StaticResource Body}" Margin="0,2,0,0" Text="Клавиша не включена."/>
+                    </StackPanel>
+                    <StackPanel x:Name="HotkeyControls" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="24,0,0,0">
+                        <CheckBox x:Name="ModCtrl" IsChecked="True"/>
+                        <TextBlock Text="Ctrl" Style="{StaticResource ModName}" Tag="{Binding ElementName=ModCtrl}" MouseLeftButtonUp="ModName_Click"/>
+                        <CheckBox x:Name="ModAlt" IsChecked="True"/>
+                        <TextBlock Text="Alt" Style="{StaticResource ModName}" Tag="{Binding ElementName=ModAlt}" MouseLeftButtonUp="ModName_Click"/>
+                        <CheckBox x:Name="ModShift"/>
+                        <TextBlock Text="Shift" Style="{StaticResource ModName}" Tag="{Binding ElementName=ModShift}" MouseLeftButtonUp="ModName_Click"/>
+                        <CheckBox x:Name="ModWin"/>
+                        <TextBlock Text="Win" Style="{StaticResource ModName}" Tag="{Binding ElementName=ModWin}" MouseLeftButtonUp="ModName_Click"/>
+                        <ComboBox x:Name="KeyBox" Style="{StaticResource KeyList}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <TextBlock Style="{StaticResource Caption}" Margin="0,8,0,0"
+                       Text="Num — клавиши цифрового блока. Буквам и цифрам нужен Ctrl, Alt или Win, иначе они перестанут печататься."/>
+            <WrapPanel Margin="0,16,0,0">
+                <Button x:Name="BtnHotkeyOn" Style="{StaticResource Primary}" Content="Включить клавишу" Margin="0,0,10,8" Click="HotkeyOn_Click"/>
+                <Button x:Name="BtnHotkeyOff" Content="Отключить клавишу" Margin="0,0,10,8" IsEnabled="False" Click="HotkeyOff_Click"/>
+            </WrapPanel>
+            <TextBlock x:Name="HotkeyResult" Style="{StaticResource Caption}" Margin="0,2,0,0" Visibility="Collapsed"/>
+
+            <!-- 3. Улучшения звука -->
+            <local:TrackedText Source="УЛУЧШЕНИЯ ЗВУКА" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <TextBlock Style="{StaticResource Body}" Margin="0,10,0,0"
+                       Text="Улучшения — это обработка звука Windows и драйвера: виртуальный объём, выравнивание громкости, эквалайзер. Она добавляет небольшую задержку и мешает понять, откуда идёт звук, поэтому для игр её обычно выключают."/>
+            <ItemsControl x:Name="FxList" ItemTemplate="{StaticResource FxRow}" Margin="0,4,0,0"/>
+            <TextBlock x:Name="FxNote" Style="{StaticResource Body}" Margin="0,10,0,0"/>
+            <WrapPanel Margin="0,16,0,0">
+                <Button x:Name="BtnFxApply" Content="Применить" Margin="0,0,10,8" Click="FxApply_Click"/>
+                <Button x:Name="BtnFxRestore" Content="Вернуть как было" Margin="0,0,10,8" IsEnabled="False" Click="FxRestore_Click"/>
+                <Button Content="Открыть свойства устройства" Margin="0,0,10,8" Click="OpenProperties_Click"/>
+            </WrapPanel>
+            <TextBlock x:Name="FxResult" Style="{StaticResource Caption}" Margin="0,2,0,0" Visibility="Collapsed"/>
+
+            <!-- 4. Микрофон -->
+            <local:TrackedText Source="МИКРОФОН" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <StackPanel Margin="0,12">
+                    <TextBlock x:Name="MicName" Style="{StaticResource RowTitle}"/>
+                    <TextBlock x:Name="MicNote" Style="{StaticResource Body}" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

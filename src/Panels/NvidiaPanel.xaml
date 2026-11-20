@@ -1,0 +1,99 @@
+<UserControl x:Class="PulsePC.Panels.NvidiaPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PulsePC">
+    <UserControl.Resources>
+        <!-- Строка списка: игра и состояние её профиля -->
+        <DataTemplate x:Key="TargetRow">
+            <StackPanel>
+                <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"/>
+                <TextBlock Text="{Binding Caption}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- Настройка: флажок, название, «сейчас → станет», пояснение -->
+        <DataTemplate x:Key="SettingRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,11">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="30"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <CheckBox IsChecked="{Binding Selected}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,2,0,0"
+                              Visibility="{Binding CanChange, Converter={StaticResource BoolToVis}}"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock x:Name="line" Text="{Binding Line}" FontFamily="{StaticResource Mono}" FontSize="12.5" TextWrapping="Wrap"
+                                   Foreground="{StaticResource Ink1}" Margin="0,4,0,0"/>
+                        <TextBlock Text="{Binding Why}" Style="{StaticResource Caption}" Margin="0,5,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding CanChange}" Value="False">
+                    <Setter TargetName="line" Property="Foreground" Value="{StaticResource Ink3}"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <DataTemplate x:Key="AdviceRow">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                <StackPanel Margin="0,11">
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                    <TextBlock Text="{Binding Text}" Style="{StaticResource Body}" Margin="0,2,0,0"/>
+                    <!-- Приложение производителя установлено: открыть его, чтобы поменять значения там. -->
+                    <Button Content="{Binding LaunchText}" Tag="{Binding Launch}" HorizontalAlignment="Left" Margin="0,10,0,0"
+                            Visibility="{Binding HasLaunch, Converter={StaticResource BoolToVis}}" Click="BtnLaunch_Click"/>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+        <TextBlock x:Name="State" Style="{StaticResource Verdict}" Text="Читаю профили драйвера…"/>
+        <TextBlock x:Name="Intro" Style="{StaticResource Body}" Margin="0,8,0,0"
+                   Text="Это те же «Параметры 3D», что в панели управления NVIDIA: общие настройки драйвера и отдельные — для каждой игры. Они хранятся в самом драйвере: файлы игр и сами игры программа здесь не трогает."/>
+
+        <!-- Видеокарты NVIDIA нет: одна фраза выше и советы общего вида -->
+        <StackPanel x:Name="Fallback" Visibility="Collapsed">
+            <local:TrackedText Source="ЧТО МОЖНО СДЕЛАТЬ НА ЭТОЙ ВИДЕОКАРТЕ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <ItemsControl x:Name="AdviceRows" ItemTemplate="{StaticResource AdviceRow}"/>
+        </StackPanel>
+
+        <Grid x:Name="Work" Margin="0,24,0,0" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250"/>
+                <ColumnDefinition Width="28"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel>
+                <local:TrackedText Source="ПРОФИЛИ" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                <Rectangle Style="{StaticResource Hairline}"/>
+                <ListBox x:Name="TargetList" Background="Transparent" BorderThickness="0" Padding="0"
+                         ItemContainerStyle="{StaticResource CompItem}" ItemTemplate="{StaticResource TargetRow}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                         SelectionChanged="TargetList_SelectionChanged" PreviewMouseWheel="TargetList_PreviewMouseWheel"/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+                <local:TrackedText Source="НАСТРОЙКИ ПРОФИЛЯ" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                <Rectangle Style="{StaticResource Hairline}"/>
+                <TextBlock x:Name="TargetTitle" Style="{StaticResource PanelSection}" Margin="0,12,0,0" TextWrapping="Wrap"/>
+                <TextBlock x:Name="TargetCaption" Style="{StaticResource Caption}" Margin="0,4,0,6"/>
+                <Rectangle Style="{StaticResource Hairline}"/>
+                <ItemsControl x:Name="Rows" ItemTemplate="{StaticResource SettingRow}"/>
+                <TextBlock x:Name="TargetNote" Style="{StaticResource Body}" Margin="0,12,0,0" Visibility="Collapsed"/>
+                <WrapPanel Margin="0,16,0,0">
+                    <Button x:Name="BtnApply" Style="{StaticResource Primary}" Content="Применить отмеченные" Margin="0,0,10,8" IsEnabled="False" Click="BtnApply_Click"/>
+                    <Button x:Name="BtnRestore" Content="Вернуть как было" Margin="0,0,10,8" IsEnabled="False" Click="BtnRestore_Click"/>
+                </WrapPanel>
+                <TextBlock x:Name="AdminNote" Style="{StaticResource Caption}" Margin="0,0,0,4" Visibility="Collapsed"
+                           Text="Менять можно только с правами администратора."/>
+                <TextBlock x:Name="Result" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+            </StackPanel>
+        </Grid>
+    </StackPanel>
+</UserControl>
