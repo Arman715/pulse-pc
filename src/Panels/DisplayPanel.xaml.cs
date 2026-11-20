@@ -13,7 +13,6 @@ namespace PulsePC.Panels;
 /// </summary>
 public partial class DisplayPanel : UserControl, ISystemPanel
 {
-    private const string Nb = " ";
     private PanelHost host;
     private bool busy, loading;
     private readonly DispatcherTimer countdown = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -65,18 +64,21 @@ public partial class DisplayPanel : UserControl, ISystemPanel
         NoScreens.Visibility = screens.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         var low = screens.Select(s => (s, j: DisplayCheck.Judge(s.Hz, s.Rates))).Where(x => x.j.Low).ToList();
-        if (screens.Count == 0) State.Text = "Экраны не прочитаны";
+        if (screens.Count == 0) State.Text = L.T("Экраны не прочитаны");
         else if (low.Count == 1)
-            State.Text = $"{(many ? $"Экран {low[0].s.Number} работает" : "Монитор работает")} на {DisplayCheck.HzText(low[0].s.Hz)}{Nb}Гц, а умеет {low[0].j.Target}{Nb}Гц";
-        else if (low.Count > 1) State.Text = $"{Fmt.Plural(low.Count, "экран работает", "экрана работают", "экранов работают")} ниже своей частоты";
+            State.Text = many
+                ? L.F("Экран {0} работает на {1}\u00A0Гц, а умеет {2}\u00A0Гц", low[0].s.Number, DisplayCheck.HzText(low[0].s.Hz), low[0].j.Target)
+                : L.F("Монитор работает на {0}\u00A0Гц, а умеет {1}\u00A0Гц", DisplayCheck.HzText(low[0].s.Hz), low[0].j.Target);
+        else if (low.Count > 1) State.Text = L.F("{0} ниже своей частоты", Fmt.Plural(low.Count, "экран работает", "экрана работают", "экранов работают"));
         else if (!many)
         {
             var s0 = screens[0];
             // 164,84 Гц при максимуме 165 — это и есть 165: в заголовке круглое число, точное — ниже.
             string hz = s0.MaxHz > 0 && Math.Abs(s0.Hz - s0.MaxHz) <= 1.5 ? s0.MaxHz.ToString() : DisplayCheck.HzText(s0.Hz);
-            State.Text = $"Монитор работает на {hz}{Nb}Гц — " + (s0.AtNative ? "это его максимум" : $"это максимум при {s0.Width}×{s0.Height}");
+            State.Text = s0.AtNative ? L.F("Монитор работает на {0}\u00A0Гц — это его максимум", hz)
+                                     : L.F("Монитор работает на {0}\u00A0Гц — это максимум при {1}×{2}", hz, s0.Width, s0.Height);
         }
-        else State.Text = "Все экраны работают на своей наибольшей частоте";
+        else State.Text = L.T("Все экраны работают на своей наибольшей частоте");
 
         ShowVrr(vrr, vendor);
         ShowPending();
@@ -94,58 +96,60 @@ public partial class DisplayPanel : UserControl, ISystemPanel
         string res = s.Width > 0 ? $"{s.Width}×{s.Height}" : "—";
         var facts = new List<Fact>
         {
-            new("Частоты при " + res, s.Rates.Length > 0 ? string.Join(" · ", s.Rates) + Nb + "Гц" : "не прочитаны",
-                "Столько предлагает драйвер видеокарты для этого монитора и разрешения."),
-            new("Родное разрешение", !s.NativeKnown ? "не прочитано" : $"{s.NativeWidth}×{s.NativeHeight}" + (s.AtNative ? " — включено" : ""),
-                s.NativeKnown && !s.AtNative ? $"Сейчас {res}: картинка растянута и менее чёткая{(s.NativeMaxHz > 0 ? $". При родном разрешении монитор умеет до {s.NativeMaxHz}{Nb}Гц" : "")}." : ""),
-            new("HDR", !s.HdrKnown ? "не читается" : !s.HdrSupported ? "не поддерживается" : s.HdrOn ? "включён" : "поддерживается, выключен",
-                s.HdrKnown && s.HdrSupported && !s.HdrOn ? "Включается в «Параметрах» → «Система» → «Дисплей» → «Использовать HDR». В играх без поддержки HDR картинка от него не улучшится." : "", Mono: false),
-            new("Подключение", s.Connection.Length > 0 ? s.Connection : "Windows не сообщает",
-                s.Encoding.Length > 0 && s.Encoding != "RGB" ? $"Цвет передаётся как {s.Encoding}: обычно так бывает, когда кабелю не хватает пропускной способности." : "", Mono: false),
+            new(L.F("Частоты при {0}", res), s.Rates.Length > 0 ? L.F("{0}\u00A0Гц", string.Join(" · ", s.Rates)) : L.T("не прочитаны"),
+                L.T("Столько предлагает драйвер видеокарты для этого монитора и разрешения.")),
+            new(L.T("Родное разрешение"), !s.NativeKnown ? L.T("не прочитано") : s.AtNative ? L.F("{0}×{1} — включено", s.NativeWidth, s.NativeHeight) : $"{s.NativeWidth}×{s.NativeHeight}",
+                s.NativeKnown && !s.AtNative
+                    ? (s.NativeMaxHz > 0 ? L.F("Сейчас {0}: картинка растянута и менее чёткая. При родном разрешении монитор умеет до {1}\u00A0Гц.", res, s.NativeMaxHz)
+                                         : L.F("Сейчас {0}: картинка растянута и менее чёткая.", res))
+                    : ""),
+            new("HDR", !s.HdrKnown ? L.T("не читается") : !s.HdrSupported ? L.T("не поддерживается") : s.HdrOn ? L.T("включён") : L.T("поддерживается, выключен"),
+                s.HdrKnown && s.HdrSupported && !s.HdrOn ? L.T("Включается в «Параметрах» → «Система» → «Дисплей» → «Использовать HDR». В играх без поддержки HDR картинка от него не улучшится.") : "", Mono: false),
+            new(L.T("Подключение"), s.Connection.Length > 0 ? s.Connection : L.T("Windows не сообщает"),
+                s.Encoding.Length > 0 && s.Encoding != "RGB" ? L.F("Цвет передаётся как {0}: обычно так бывает, когда кабелю не хватает пропускной способности.", s.Encoding) : "", Mono: false),
         };
 
         string verdict, advice = "";
         Severity level;
         if (double.IsNaN(s.Hz) || s.Rates.Length == 0)
         {
-            verdict = "Частоту прочитать не удалось.";
+            verdict = L.T("Частоту прочитать не удалось.");
             level = Severity.Info;
         }
         else if (low)
         {
-            verdict = $"Частота ниже возможной: {DisplayCheck.HzText(s.Hz)}{Nb}Гц вместо {target}{Nb}Гц.";
-            advice = "Так бывает после переустановки драйвера, смены кабеля или разъёма: Windows включает 60 Гц, пока частоту не поменять вручную. "
-                     + "Видеокарта при этом может выдавать больше кадров, но на экране их не видно.";
+            verdict = L.F("Частота ниже возможной: {0}\u00A0Гц вместо {1}\u00A0Гц.", DisplayCheck.HzText(s.Hz), target);
+            advice = L.T("Так бывает после переустановки драйвера, смены кабеля или разъёма: Windows включает 60 Гц, пока частоту не поменять вручную. Видеокарта при этом может выдавать больше кадров, но на экране их не видно.");
             level = Severity.Warn;
         }
         else
         {
-            verdict = s.Rates.Length > 1 ? $"Частота максимальная для {res}." : $"Монитор при {res} работает только на {target}{Nb}Гц.";
+            verdict = s.Rates.Length > 1 ? L.F("Частота максимальная для {0}.", res) : L.F("Монитор при {0} работает только на {1}\u00A0Гц.", res, target);
             if (!s.AtNative && s.NativeMaxHz > target)
-                advice = $"При родном разрешении {s.NativeWidth}×{s.NativeHeight} монитор умеет до {s.NativeMaxHz}{Nb}Гц.";
+                advice = L.F("При родном разрешении {0}×{1} монитор умеет до {2}\u00A0Гц.", s.NativeWidth, s.NativeHeight, s.NativeMaxHz);
             else if (target <= 60 && s.Connection == "HDMI")
-                advice = "Если монитор по паспорту умеет больше 60 Гц, подключите его по DisplayPort или кабелем HDMI 2.0 и новее: старый кабель не пропускает высокую частоту.";
+                advice = L.T("Если монитор по паспорту умеет больше 60 Гц, подключите его по DisplayPort или кабелем HDMI 2.0 и новее: старый кабель не пропускает высокую частоту.");
             level = Severity.Ok;
         }
 
         return new ScreenRow
         {
             Key = s.Key, Target = target,
-            Label = $"ЭКРАН {s.Number}" + (s.Primary && many ? " · ОСНОВНОЙ" : ""),
+            Label = s.Primary && many ? L.F("ЭКРАН {0} · ОСНОВНОЙ", s.Number) : L.F("ЭКРАН {0}", s.Number),
             Title = s.Title,
             NowText = DisplayCheck.HzText(s.Hz),
             NowInk = low ? Palette.Warn : Palette.Ink1,
             MaxText = s.MaxHz > 0 ? s.MaxHz.ToString() : "—",
-            MaxCaption = "наибольшая при этом разрешении",
+            MaxCaption = L.T("наибольшая при этом разрешении"),
             ResText = res,
-            ResCaption = !s.NativeKnown ? "разрешение" : s.AtNative ? "разрешение, родное" : "разрешение, не родное",
+            ResCaption = !s.NativeKnown ? L.T("разрешение") : s.AtNative ? L.T("разрешение, родное") : L.T("разрешение, не родное"),
             BitsText = s.Bits > 0 ? s.Bits.ToString() : "—",
-            BitsUnit = s.Bits > 0 ? " бит" : "",
+            BitsUnit = s.Bits > 0 ? L.T("\u202Fбит") : "",
             Facts = facts,
             Level = level,
             Verdict = verdict,
             Advice = advice,
-            EnableText = $"Включить {target}{Nb}Гц",
+            EnableText = L.F("Включить {0}\u00A0Гц", target),
             EnableVisible = low ? Visibility.Visible : Visibility.Collapsed,
             RestoreVisible = backup ? Visibility.Visible : Visibility.Collapsed,
             ButtonsVisible = low || backup ? Visibility.Visible : Visibility.Collapsed,
@@ -157,45 +161,45 @@ public partial class DisplayPanel : UserControl, ISystemPanel
     private void ShowVrr(VrrInfo v, string vendor)
     {
         static (Severity, string) Flag(bool? on, string yes, string no) =>
-            on switch { true => (Severity.Ok, yes), false => (Severity.Info, no), _ => (Severity.Info, "не задано") };
+            on switch { true => (Severity.Ok, yes), false => (Severity.Info, no), _ => (Severity.Info, L.T("не задано")) };
 
-        (VrrMark.Level, VrrWord.Text) = v == null ? (Severity.Info, "—") : Flag(v.WindowsVrr, "включена", "выключена");
-        (WinOptMark.Level, WinOptWord.Text) = v == null ? (Severity.Info, "—") : Flag(v.WindowedOptimizations, "включены", "выключены");
+        (VrrMark.Level, VrrWord.Text) = v == null ? (Severity.Info, "—") : Flag(v.WindowsVrr, L.T("включена"), L.T("выключена"));
+        (WinOptMark.Level, WinOptWord.Text) = v == null ? (Severity.Info, "—") : Flag(v.WindowedOptimizations, L.T("включены"), L.T("выключены"));
 
-        string windows = "Переключатели Windows — в «Параметрах» → «Система» → «Дисплей» → «Графика», в параметрах графики по умолчанию.";
+        string windows = L.T("Переключатели Windows — в «Параметрах» → «Система» → «Дисплей» → «Графика», в параметрах графики по умолчанию.");
         if (v != null && v.Nvidia)
         {
-            SyncTitle.Text = "G-SYNC в драйвере NVIDIA";
+            SyncTitle.Text = L.T("G-SYNC в драйвере NVIDIA");
             (SyncMark.Level, SyncWord.Text) = v.GsyncMode switch
             {
-                2 => (Severity.Ok, "окно и полный экран"),
-                1 => (Severity.Ok, "только полный экран"),
-                0 => (Severity.Info, "выключен"),
-                -1 => (Severity.Info, "не задан"),
-                _ => (Severity.Info, "не прочитан"),
+                2 => (Severity.Ok, L.T("окно и полный экран")),
+                1 => (Severity.Ok, L.T("только полный экран")),
+                0 => (Severity.Info, L.T("выключен")),
+                -1 => (Severity.Info, L.T("не задан")),
+                _ => (Severity.Info, L.T("не прочитан")),
             };
             SyncText.Text = v.GsyncMode switch
             {
-                2 => "Общая настройка драйвера: G-SYNC работает и в полноэкранных играх, и в оконных.",
-                1 => "Общая настройка драйвера: G-SYNC работает только в полноэкранных играх. Для игр в окне без рамки выберите «полноэкранный и оконный режим».",
-                0 => "Общая настройка драйвера: G-SYNC выключен.",
-                -1 => "В общем профиле драйвера настройка не записана — действует заводское значение драйвера.",
-                _ => "Драйвер не отдал эту настройку.",
+                2 => L.T("Общая настройка драйвера: G-SYNC работает и в полноэкранных играх, и в оконных."),
+                1 => L.T("Общая настройка драйвера: G-SYNC работает только в полноэкранных играх. Для игр в окне без рамки выберите «полноэкранный и оконный режим»."),
+                0 => L.T("Общая настройка драйвера: G-SYNC выключен."),
+                -1 => L.T("В общем профиле драйвера настройка не записана — действует заводское значение драйвера."),
+                _ => L.T("Драйвер не отдал эту настройку."),
             };
-            SyncWhere.Text = "Включён ли G-SYNC для самого монитора, видно в «Панели управления NVIDIA» → «Дисплей» → «Настройка G-SYNC». " + windows + " Программа эти настройки только читает.";
+            SyncWhere.Text = L.T("Включён ли G-SYNC для самого монитора, видно в «Панели управления NVIDIA» → «Дисплей» → «Настройка G-SYNC».") + " " + windows + L.T(" Программа эти настройки только читает.");
         }
         else
         {
-            SyncTitle.Text = vendor switch { "AMD" => "FreeSync в драйвере AMD", "Intel" => "Adaptive Sync в драйвере Intel", _ => "Переменная частота в драйвере видеокарты" };
+            SyncTitle.Text = vendor switch { "AMD" => L.T("FreeSync в драйвере AMD"), "Intel" => L.T("Adaptive Sync в драйвере Intel"), _ => L.T("Переменная частота в драйвере видеокарты") };
             SyncMark.Level = Severity.Info;
-            SyncWord.Text = "не читается";
+            SyncWord.Text = L.T("не читается");
             SyncText.Text = vendor switch
             {
-                "AMD" => "Программа не может прочитать эту настройку. Проверьте в AMD Software: Adrenalin Edition → «Игры» → «Дисплей» → «AMD FreeSync».",
-                "Intel" => "Программа не может прочитать эту настройку. Проверьте в Intel Graphics Software → «Дисплей» → «Adaptive Sync».",
-                _ => "Программа не может прочитать эту настройку. Она есть в фирменной программе драйвера видеокарты, в разделе о дисплее.",
+                "AMD" => L.T("Программа не может прочитать эту настройку. Проверьте в AMD Software: Adrenalin Edition → «Игры» → «Дисплей» → «AMD FreeSync»."),
+                "Intel" => L.T("Программа не может прочитать эту настройку. Проверьте в Intel Graphics Software → «Дисплей» → «Adaptive Sync»."),
+                _ => L.T("Программа не может прочитать эту настройку. Она есть в фирменной программе драйвера видеокарты, в разделе о дисплее."),
             };
-            SyncWhere.Text = windows + " Программа эти настройки только читает.";
+            SyncWhere.Text = windows + L.T(" Программа эти настройки только читает.");
         }
     }
 
@@ -203,13 +207,13 @@ public partial class DisplayPanel : UserControl, ISystemPanel
     private void Enable_Click(object sender, RoutedEventArgs e)
     {
         if (busy || host?.Admin != true || (sender as FrameworkElement)?.Tag is not ScreenRow row) return;
-        Run($"Включаю {row.Target}{Nb}Гц…", () => DisplayCheck.Apply(row.Key, row.Target));
+        Run(L.F("Включаю {0}\u00A0Гц…", row.Target), () => DisplayCheck.Apply(row.Key, row.Target));
     }
 
     private void Restore_Click(object sender, RoutedEventArgs e)
     {
         if (busy || host?.Admin != true || (sender as FrameworkElement)?.Tag is not ScreenRow row) return;
-        Run("Возвращаю…", () => DisplayCheck.Restore(row.Key));
+        Run(L.T("Возвращаю…"), () => DisplayCheck.Restore(row.Key));
     }
 
     private void Run(string progress, Func<(bool Ok, string Message)> action)
@@ -223,7 +227,7 @@ public partial class DisplayPanel : UserControl, ISystemPanel
         {
             string message;
             try { message = action().Message; }
-            catch (Exception ex) { message = "Не удалось: " + ex.Message; }
+            catch (Exception ex) { message = L.F("Не удалось: {0}", ex.Message); }
             host.Ui(() =>
             {
                 host.EndBusy();
@@ -241,8 +245,8 @@ public partial class DisplayPanel : UserControl, ISystemPanel
         PendingBox.Visibility = p == null ? Visibility.Collapsed : Visibility.Visible;
         if (p == null) { countdown.Stop(); return; }
         int left = Math.Max(0, (int)Math.Ceiling((p.Deadline - DateTime.Now).TotalSeconds));
-        PendingTitle.Text = $"«{p.Title}» переключён на {p.ToHz}{Nb}Гц";
-        PendingText.Text = $"Если картинка в порядке, нажмите «Оставить». Без ответа через {left}{Nb}с вернётся {p.FromHz}{Nb}Гц.";
+        PendingTitle.Text = L.F("«{0}» переключён на {1}\u00A0Гц", p.Title, p.ToHz);
+        PendingText.Text = L.F("Если картинка в порядке, нажмите «Оставить». Без ответа через {0}\u00A0с вернётся {1}\u00A0Гц.", left, p.FromHz);
         BtnKeep.IsEnabled = BtnReject.IsEnabled = host?.Admin == true;
         if (IsVisible && !countdown.IsEnabled) countdown.Start();
     }

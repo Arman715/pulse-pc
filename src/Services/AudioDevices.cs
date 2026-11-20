@@ -119,13 +119,13 @@ public readonly record struct SoundHotkey(bool Ctrl, bool Alt, bool Shift, bool 
     /// <summary>Почему такое сочетание нельзя назначить; null — можно.</summary>
     public string Problem()
     {
-        if (IsEmpty || Vk == 0) return "Выберите клавишу.";
+        if (IsEmpty || Vk == 0) return L.T("Выберите клавишу.");
         if (IsNumpad && Shift)
-            return "С клавишами цифрового блока Shift не срабатывает: Windows принимает такое нажатие за стрелки. Снимите флажок Shift.";
+            return L.T("С клавишами цифрового блока Shift не срабатывает: Windows принимает такое нажатие за стрелки. Снимите флажок Shift.");
         if (!IsFunction && !Ctrl && !Alt && !Win)
-            return "Буква или цифра без Ctrl, Alt или Win перестанет печататься во всех программах. Добавьте Ctrl, Alt или Win.";
+            return L.T("Буква или цифра без Ctrl, Alt или Win перестанет печататься во всех программах. Добавьте Ctrl, Alt или Win.");
         if (string.Equals(Key, "F12", StringComparison.OrdinalIgnoreCase) && Modifiers == 0)
-            return "Клавишу F12 без Ctrl, Alt или Shift Windows оставляет себе. Добавьте одну из них.";
+            return L.T("Клавишу F12 без Ctrl, Alt или Shift Windows оставляет себе. Добавьте одну из них.");
         return null;
     }
 }
@@ -205,9 +205,9 @@ public sealed class AudioEnhancements
         try
         {
             using var key = Open(id, true);
-            if (key == null) { error = "Windows не хранит настройку улучшений для этого устройства."; return false; }
+            if (key == null) { error = L.T("Windows не хранит настройку улучшений для этого устройства."); return false; }
             object was = key.GetValue(ValueName);
-            if (was != null && was is not int) { error = "Настройка улучшений записана в незнакомом виде, менять её небезопасно."; return false; }
+            if (was != null && was is not int) { error = L.T("Настройка улучшений записана в незнакомом виде, менять её небезопасно."); return false; }
             int? old = was == null ? null : (int)was;
             if ((old == 1) == disabled) return true;
             Remember(id, old);
@@ -215,10 +215,10 @@ public sealed class AudioEnhancements
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or SecurityException or IOException)
         {
-            error = "Windows не разрешила изменить настройку этого устройства.";
+            error = L.T("Windows не разрешила изменить настройку этого устройства.");
             return false;
         }
-        if ((Read(id) == SysFxState.Off) != disabled) { error = "Настройка записана, но Windows показывает прежнее значение."; return false; }
+        if ((Read(id) == SysFxState.Off) != disabled) { error = L.T("Настройка записана, но Windows показывает прежнее значение."); return false; }
         return true;
     }
 
@@ -250,7 +250,7 @@ public sealed class AudioEnhancements
             else File.WriteAllLines(backupFile, failed.Select(Line));
         }
         catch { }
-        if (failed.Count > 0) error = "Windows не разрешила вернуть настройку: " + Fmt.Plural(failed.Count, "устройство", "устройства", "устройств") + ".";
+        if (failed.Count > 0) error = L.F("Windows не разрешила вернуть настройку: {0}.", Fmt.Plural(failed.Count, "устройство", "устройства", "устройств"));
         return done;
     }
 
@@ -333,7 +333,7 @@ public static class AudioDevices
             if (code == 0) ActiveHotkey = saved;
             else HotkeyProblem = RegisterError(saved, code);
         }
-        catch (Exception ex) { HotkeyProblem = "Горячая клавиша не включена: " + ex.Message; }
+        catch (Exception ex) { HotkeyProblem = L.F("Горячая клавиша не включена: {0}", ex.Message); }
     }
 
     /// <summary>Раздел сообщает свой контекст, если Init ещё не вызывали (например, при проверке вида). Ничего не меняет.</summary>
@@ -388,7 +388,7 @@ public static class AudioDevices
                     list.Add(new AudioDevice
                     {
                         Id = id,
-                        Name = string.IsNullOrWhiteSpace(props.Name) ? "Устройство без названия" : props.Name.Trim(),
+                        Name = string.IsNullOrWhiteSpace(props.Name) ? L.T("Устройство без названия") : props.Name.Trim(),
                         IsDefault = SameId(id, main),
                         IsDefaultComm = SameId(id, comm),
                         Format = props.Format,
@@ -501,13 +501,13 @@ public static class AudioDevices
         if (rate <= 0 || bits <= 0 || channels <= 0) return "";
         string layout = channels switch
         {
-            1 => "моно",
-            2 => "стерео",
+            1 => L.T("моно"),
+            2 => L.T("стерео"),
             6 => "5.1",
             8 => "7.1",
             _ => Fmt.Plural(channels, "канал", "канала", "каналов"),
         };
-        return $"{rate.ToString("#,0", CultureInfo.GetCultureInfo("ru-RU"))} Гц, {bits} бит, {layout}";
+        return L.F("{0:#,0}\u00A0Гц, {1}\u00A0бит, {2}", rate, bits, layout);
     }
 
     internal static bool SameId(string a, string b) => a != null && b != null && string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
@@ -529,13 +529,13 @@ public static class AudioDevices
             {
                 int hr = SetDefaultEndpoint(client, id, role);
                 if (hr >= 0) continue;
-                error = hr == NotFound ? "Устройство отключено или выключено в Windows."
-                    : hr == NoInterface ? "Эта версия Windows не даёт программам переключать звук. Переключите устройство в «Параметрах»."
-                    : $"Windows не переключила устройство (код 0x{hr:X8}).";
+                error = hr == NotFound ? L.T("Устройство отключено или выключено в Windows.")
+                    : hr == NoInterface ? L.T("Эта версия Windows не даёт программам переключать звук. Переключите устройство в «Параметрах».")
+                    : L.F("Windows не переключила устройство (код 0x{0:X8}).", hr);
                 return false;
             }
         }
-        catch (Exception ex) { error = "Windows не дала переключить устройство: " + ex.Message; return false; }
+        catch (Exception ex) { error = L.F("Windows не дала переключить устройство: {0}", ex.Message); return false; }
         finally { Release(client); }
 
         // Windows может сообщить о смене с небольшим опозданием: спрашиваем несколько раз.
@@ -544,7 +544,7 @@ public static class AudioDevices
             if (SameId(DefaultOutputId(), id)) return true;
             Thread.Sleep(50);
         }
-        error = "Windows приняла команду, но основное устройство осталось прежним.";
+        error = L.T("Windows приняла команду, но основное устройство осталось прежним.");
         return false;
     }
 
@@ -634,16 +634,16 @@ public static class AudioDevices
     /// <summary>Что делать по нажатию клавиши: на какое устройство переключить либо что сказать, если переключать не на что.</summary>
     internal static (string Target, string Title, string Text) PlanSwitch(IReadOnlyList<string> cycle, IReadOnlyList<AudioDevice> outputs)
     {
-        const string title = "Звук не переключён";
-        if (outputs == null || outputs.Count == 0) return (null, title, "Звуковых устройств не найдено.");
+        string title = L.T("Звук не переключён");
+        if (outputs == null || outputs.Count == 0) return (null, title, L.T("Звуковых устройств не найдено."));
         var ids = outputs.Select(o => o.Id).ToList();
         string current = outputs.FirstOrDefault(o => o.IsDefault)?.Id;
         string next = NextInCycle(cycle, ids, current);
         if (next != null) return (next, null, null);
 
         var alive = outputs.Where(o => cycle != null && cycle.Any(c => SameId(c, o.Id))).ToList();
-        if (alive.Count == 0) return (null, title, "Отмеченные для переключения устройства сейчас не подключены.");
-        return (null, title, $"Из отмеченных устройств подключено только «{alive[0].Name}» — переключать не на что.");
+        if (alive.Count == 0) return (null, title, L.T("Отмеченные для переключения устройства сейчас не подключены."));
+        return (null, title, L.F("Из отмеченных устройств подключено только «{0}» — переключать не на что.", alive[0].Name));
     }
 
     /// <summary>Переключить звук на следующее отмеченное устройство и показать уведомление у часов.</summary>
@@ -657,8 +657,8 @@ public static class AudioDevices
         if (target != null)
         {
             string name = outputs.First(o => SameId(o.Id, target)).Name;
-            if (SetDefault(target, out string error)) { title = "Звук: " + name; text = "Теперь это основное устройство вывода."; warning = false; }
-            else { title = "Звук не переключён"; text = $"«{name}»: {error}"; }
+            if (SetDefault(target, out string error)) { title = L.F("Звук: {0}", name); text = L.T("Теперь это основное устройство вывода."); warning = false; }
+            else { title = L.T("Звук не переключён"); text = L.Pick($"«{name}»: {error}", $"“{name}”: {error}"); }
         }
         Changed?.Invoke();
         h.Ui(() => h.Notify(title, text, warning, null));
@@ -702,8 +702,8 @@ public static class AudioDevices
         error = hotkey.Problem();
         if (error != null) return false;
         var ids = (cycle ?? Array.Empty<string>()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (ids.Count < 2) { error = "Отметьте хотя бы два устройства: между ними и будет переключать клавиша."; return false; }
-        if (host == null) { error = "Раздел ещё не готов. Откройте его заново."; return false; }
+        if (ids.Count < 2) { error = L.T("Отметьте хотя бы два устройства: между ними и будет переключать клавиша."); return false; }
+        if (host == null) { error = L.T("Раздел ещё не готов. Откройте его заново."); return false; }
 
         var previous = ActiveHotkey;
         if (!previous.IsEmpty) Unregistrar();
@@ -734,8 +734,8 @@ public static class AudioDevices
     }
 
     private static string RegisterError(SoundHotkey hotkey, int code) => code == HotkeyTaken
-        ? $"Сочетание {hotkey.Text} уже занято другой программой или самой Windows. Выберите другое."
-        : $"Windows не приняла сочетание {hotkey.Text} (ошибка {code}). Выберите другое.";
+        ? L.F("Сочетание {0} уже занято другой программой или самой Windows. Выберите другое.", hotkey.Text)
+        : L.F("Windows не приняла сочетание {0} (ошибка {1}). Выберите другое.", hotkey.Text, code);
 
     private static void EnsureWindow()
     {
@@ -849,10 +849,10 @@ public static class AudioDevices
         Check("переключать не на что", NextInCycle(cycle, new[] { "a" }, "a") == null && NextInCycle(cycle, new[] { "x" }, "x") == null && NextInCycle(Array.Empty<string>(), new[] { "a" }, "a") == null);
 
         var pcm = new byte[] { 1, 0, 2, 0, 0x44, 0xAC, 0, 0, 0x10, 0xB1, 2, 0, 4, 0, 16, 0 };
-        Check("формат 44 100 Гц, 16 бит", DescribeFormat(pcm).Replace(' ', ' ').Replace(' ', ' ') == "44 100 Гц, 16 бит, стерео");
+        Check("формат 44 100 Гц, 16 бит", DescribeFormat(pcm).Replace(' ', ' ').Replace(' ', ' ') == L.Pick("44 100 Гц, 16 бит, стерео", "44,100 Hz, 16-bit, stereo"));
         var ext = new byte[40];
         new byte[] { 0xFE, 0xFF, 6, 0, 0x80, 0xBB, 0, 0, 0, 0, 0, 0, 24, 0, 32, 0, 22, 0, 24, 0 }.CopyTo(ext, 0);
-        Check("расширенный формат: 24 бита в 32-битной ячейке", DescribeFormat(ext).Replace(' ', ' ').Replace(' ', ' ') == "48 000 Гц, 24 бит, 5.1");
+        Check("расширенный формат: 24 бита в 32-битной ячейке", DescribeFormat(ext).Replace(' ', ' ').Replace(' ', ' ') == L.Pick("48 000 Гц, 24 бит, 5.1", "48,000 Hz, 24-bit, 5.1"));
         Check("обрезанный формат", DescribeFormat(new byte[8]) == "" && DescribeFormat(null) == "");
         return (passed, failed);
     }

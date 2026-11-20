@@ -60,7 +60,7 @@ public class NumberText : TextBlock
         unitRun = null;
         if (!string.IsNullOrEmpty(Unit))
         {
-            unitRun = new Run("\u202F" + Unit) { FontSize = UnitSize };
+            unitRun = new Run("\u202F" + L.T(Unit)) { FontSize = UnitSize };
             Inlines.Add(unitRun);
         }
         UpdateText();
@@ -160,20 +160,21 @@ public sealed class ChartZoom
     public static string FormatSpan(TimeSpan t)
     {
         double s = t.TotalSeconds;
-        if (s < 119.5) return $"{Math.Max(1, Math.Round(s)):0} с";
+        string su = L.Pick("с", "s"), mu = L.Pick("мин", "min"), hu = L.Pick("ч", "h");
+        if (s < 119.5) return $"{Math.Max(1, Math.Round(s)):0} {su}";
         if (s < 300)
         {
             int total = (int)(Math.Round(s / 5) * 5), m = total / 60, sec = total % 60;
-            return sec == 0 ? $"{m} мин" : $"{m} мин {sec} с";
+            return sec == 0 ? $"{m} {mu}" : $"{m} {mu} {sec} {su}";
         }
         double min = Math.Round(t.TotalMinutes);
-        if (min < 60) return $"{min:0} мин";
+        if (min < 60) return $"{min:0} {mu}";
         if (min < 600)
         {
             int h = (int)(min / 60), m = (int)(min % 60);
-            return m == 0 ? $"{h} ч" : $"{h} ч {m} мин";
+            return m == 0 ? $"{h} {hu}" : $"{h} {hu} {m} {mu}";
         }
-        return $"{Math.Round(t.TotalHours):0} ч";
+        return $"{Math.Round(t.TotalHours):0} {hu}";
     }
 }
 
@@ -499,7 +500,7 @@ public class LoadChart : FrameworkElement
         {
             double v = Min + (max - Min) * Levels[k];
             string s = v.ToString(max - Min < 10 ? "0.#" : "0", CultureInfo.CurrentCulture);
-            if (Levels[k] == 1.0 && Unit.Length > 0) s = s + " " + Unit;
+            if (Levels[k] == 1.0 && Unit.Length > 0) s = s + " " + L.T(Unit);     // единица из разметки («мс», «с») — на языке программы
             axisText[k] = new FormattedText(s, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, AxisFace, 10.5, Palette.Ink3, dpi);
         }
     }
@@ -686,9 +687,9 @@ public class ChartZoomBar : Grid
         FontFamily = Mono, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0),
         Foreground = Palette.Ink2, TextWrapping = TextWrapping.NoWrap,
     };
-    private readonly ZoomKey minus = new("−", "Мельче — виден больший отрезок времени. То же делает колесо мыши над графиком"),
-                             plus = new("+", "Крупнее — виден меньший отрезок. То же делает колесо мыши над графиком"),
-                             all = new("весь", "Показать весь график. То же делает двойной щелчок по графику");
+    private readonly ZoomKey minus = new("−", L.T("Мельче — виден больший отрезок времени. То же делает колесо мыши над графиком")),
+                             plus = new("+", L.T("Крупнее — виден меньший отрезок. То же делает колесо мыши над графиком")),
+                             all = new(L.T("весь"), L.T("Показать весь график. То же делает двойной щелчок по графику"));
     private ChartZoom zoom;
 
     public ChartZoomBar()
@@ -756,7 +757,7 @@ public class ZoomKey : Button
     public ZoomKey(string label, string tip)
     {
         this.label = label;
-        Content = label == "−" ? "Мельче" : label == "+" ? "Крупнее" : "Весь график";
+        Content = label == "−" ? L.T("Мельче") : label == "+" ? L.T("Крупнее") : L.T("Весь график");
         ToolTip = tip;
         Cursor = Cursors.Hand;
         Focusable = true;

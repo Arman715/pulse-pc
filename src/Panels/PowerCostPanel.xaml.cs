@@ -26,6 +26,9 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
     {
         InitializeComponent();
         LegendHatch.Fill = PowerBar.Hatch;
+        // Единицы в разметке заданы по-русски; по-английски деньги — без знака валюты (тариф вписывает сам пользователь).
+        NowGpu.Unit = NowCpu.Unit = NowRest.Unit = NowTotal.Unit = L.T("Вт");
+        DayMain.Unit = WeekMain.Unit = MonthMain.Unit = Currency;
         tick.Tick += (_, _) => RefreshNow();
         IsVisibleChanged += (_, _) => { if (IsVisible && host != null) { tick.Start(); RefreshNow(); } else tick.Stop(); };
     }
@@ -80,13 +83,13 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         double tariff = double.NaN;
         if (tariffText.Length > 0 && !PowerCost.TryParseTariff(tariffText, out tariff))
         {
-            ShowResult("Тариф не понят: впишите число от 0,1 до 100, например 6,43.", true);
+            ShowResult(L.T("Тариф не понят: впишите число от 0,1 до 100, например 6,43."), true);
             TariffBox.Focus();
             return;
         }
         if (!PowerCost.TryParseMonitor(MonitorBox.Text, out double monitor))
         {
-            ShowResult("Мощность монитора не понята: впишите число от 5 до 300 или оставьте поле пустым.", true);
+            ShowResult(L.T("Мощность монитора не понята: впишите число от 5 до 300 или оставьте поле пустым."), true);
             MonitorBox.Focus();
             return;
         }
@@ -94,8 +97,8 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         host.Settings.Set(PowerCost.KMonitor, monitor > 0 ? monitor.ToString(CultureInfo.InvariantCulture) : null);
         host.Settings.Save();
         LoadSaved();
-        ShowResult(double.IsNaN(tariff) ? "Тариф убран: расход показывается только в киловатт-часах."
-                   : $"Сохранено: {PowerCost.Show(tariff)}{Nb}₽ за кВт·ч" + (monitor > 0 ? $", монитор {monitor:0}{Nb}Вт." : ", без монитора."), false);
+        ShowResult(double.IsNaN(tariff) ? L.T("Тариф убран: расход показывается только в киловатт-часах.")
+                   : L.F("Сохранено: {0} ₽ за кВт·ч", PowerCost.Show(tariff)) + (monitor > 0 ? L.F(", монитор {0:0} Вт.", monitor) : L.T(", без монитора.")), false);
         Recalc();
     }
 
@@ -128,34 +131,33 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         // ---- вывод
         if (r.HasForecast && r.HasTariff)
             State.Text = gameMonth > 0
-                ? $"Около {PowerCost.Money(r.Rub(month))}{Nb}₽ в месяц, из них на игры — {PowerCost.Money(r.Rub(gameMonth))}{Nb}₽."
-                : $"Около {PowerCost.Money(r.Rub(month))}{Nb}₽ в месяц. Игр за эти дни не было.";
+                ? L.F("Около {0} ₽ в месяц, из них на игры — {1} ₽.", PowerCost.Money(r.Rub(month)), PowerCost.Money(r.Rub(gameMonth)))
+                : L.F("Около {0} ₽ в месяц. Игр за эти дни не было.", PowerCost.Money(r.Rub(month)));
         else if (r.HasForecast)
-            State.Text = $"Около {PowerCost.Kwh(month)}{Nb}кВт·ч в месяц. Впишите тариф, чтобы перевести это в рубли.";
+            State.Text = L.F("Около {0} кВт·ч в месяц. Впишите тариф, чтобы перевести это в рубли.", PowerCost.Kwh(month));
         else if (r.Games.Any(x => !double.IsNaN(x.TotalW)))
-            State.Text = "Расход по играм уже виден, а прогноз на месяц появится, когда наберётся статистика за день.";
+            State.Text = L.T("Расход по играм уже виден, а прогноз на месяц появится, когда наберётся статистика за день.");
         else
-            State.Text = "Данных пока мало: расход появится, когда программа поработает хотя бы час.";
+            State.Text = L.T("Данных пока мало: расход появится, когда программа поработает хотя бы час.");
 
         // ---- сутки, неделя, месяц
         ForecastBody.Visibility = r.HasForecast ? Visibility.Visible : Visibility.Collapsed;
         ForecastEmpty.Visibility = r.HasForecast ? Visibility.Collapsed : Visibility.Visible;
-        ForecastEmpty.Text = "Прогноз строится по тому, сколько часов в сутки работает компьютер и сколько из них идёт игра. "
-                           + "Статистика копится, пока программа запущена, в том числе свёрнутая к часам.";
+        ForecastEmpty.Text = L.T("Прогноз строится по тому, сколько часов в сутки работает компьютер и сколько из них идёт игра. Статистика копится, пока программа запущена, в том числе свёрнутая к часам.");
         if (r.HasForecast)
         {
-            Period(DayMain, DaySub, r, r.KwhDay, "за сутки");
-            Period(WeekMain, WeekSub, r, r.KwhDay * 7, "за неделю");
-            Period(MonthMain, MonthSub, r, month, "за месяц");
+            Period(DayMain, DaySub, r, r.KwhDay, L.T("за сутки"));
+            Period(WeekMain, WeekSub, r, r.KwhDay * 7, L.T("за неделю"));
+            Period(MonthMain, MonthSub, r, month, L.T("за месяц"));
             string days = Fmt.Plural(r.Days, "день", "дня", "дней");
             ForecastNote.Text = r.IdleKnown
-                ? $"Прогноз по средним за {days}: компьютер работал {Hours(g.HoursPerDay + i.HoursPerDay)} в сутки, из них игры — {Hours(g.HoursPerDay)}. "
-                  + "Время, когда программа была закрыта, не учтено, поэтому настоящий расход может быть больше."
-                : $"Время игр — по записанным сессиям за {days}. Сколько компьютер работает без игр, пока неизвестно: в прогнозе только игры.";
+                ? L.F("Прогноз по средним за {0}: компьютер работал {1} в сутки, из них игры — {2}.", days, Hours(g.HoursPerDay + i.HoursPerDay), Hours(g.HoursPerDay))
+                  + " " + L.T("Время, когда программа была закрыта, не учтено, поэтому настоящий расход может быть больше.")
+                : L.F("Время игр — по записанным сессиям за {0}. Сколько компьютер работает без игр, пока неизвестно: в прогнозе только игры.", days);
 
             ModeRow(g, r, GameWhat, GameHours, GameW, GameKwh, GameRub);
             ModeRow(i, r, IdleWhat, IdleHours, IdleW, IdleKwh, IdleRub);
-            if (!r.IdleKnown) { IdleWhat.Text = "нет статистики"; IdleHours.Text = IdleKwh.Text = IdleRub.Text = "—"; }
+            if (!r.IdleKnown) { IdleWhat.Text = L.T("нет статистики"); IdleHours.Text = IdleKwh.Text = IdleRub.Text = "—"; }
         }
 
         // ---- из чего складывается
@@ -165,13 +167,14 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         {
             var list = new List<PartRow>
             {
-                new("Видеокарта", r.Games.Count > 0 ? "средняя за игры по записанным сессиям" : "средняя за минуты игры", g.GpuW, "измерено", PowerBar.Solid),
-                new("Процессор", $"{r.Tdp}{Nb}Вт по паспорту × загрузка {g.CpuLoad:0}{Nb}%" + (g.LoadMeasured ? "" : " (принято, нет записей)") + (r.TdpKnown ? "" : "; модель не узнана"),
-                    g.CpuW, "оценка", PowerBar.Hatch),
-                new("Плата, память, диски, вентиляторы", "обычно 40–60" + Nb + "Вт", g.BaseW, "оценка", PowerBar.HatchLight),
-                new("Потери в блоке питания", "около 10" + Nb + "% от всего остального", g.LossW, "оценка", PowerBar.HatchLight),
+                new(L.T("Видеокарта"), r.Games.Count > 0 ? L.T("средняя за игры по записанным сессиям") : L.T("средняя за минуты игры"), g.GpuW, L.T("измерено"), PowerBar.Solid),
+                new(L.T("Процессор"), L.F("{0} Вт по паспорту × загрузка {1:0} %", r.Tdp, g.CpuLoad)
+                                      + (g.LoadMeasured ? "" : " " + L.T("(принято, нет записей)")) + (r.TdpKnown ? "" : L.T("; модель не узнана")),
+                    g.CpuW, L.T("оценка"), PowerBar.Hatch),
+                new(L.T("Плата, память, диски, вентиляторы"), L.T("обычно 40–60 Вт"), g.BaseW, L.T("оценка"), PowerBar.HatchLight),
+                new(L.T("Потери в блоке питания"), L.T("около 10 % от всего остального"), g.LossW, L.T("оценка"), PowerBar.HatchLight),
             };
-            if (g.MonitorW > 0) list.Add(new("Монитор", "по вашим данным", g.MonitorW, "вписано вами", PowerBar.HatchLight));
+            if (g.MonitorW > 0) list.Add(new(L.T("Монитор"), L.T("по вашим данным"), g.MonitorW, L.T("вписано вами"), PowerBar.HatchLight));
             Parts.ItemsSource = list;
             Bar.SetParts(list.Select(p => (p.W, p.Swatch)).ToList(), g.TotalW);
         }
@@ -181,40 +184,54 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         {
             Game = c.Game,
             Count = Fmt.Plural(c.Sessions, "сессия", "сессии", "сессий") + " · " + Fmt.Duration(TimeSpan.FromHours(c.Hours))
-                    + (double.IsNaN(c.TotalW) ? "" : $" · {PowerCost.Kwh(c.Kwh)}{Nb}кВт·ч" + (r.HasTariff ? $", {PowerCost.Money(r.Rub(c.Kwh))}{Nb}₽" : "")),
-            Gpu = double.IsNaN(c.GpuW) ? "—" : $"{c.GpuW:0}{Nb}Вт",
-            Total = double.IsNaN(c.TotalW) ? "—" : $"{c.TotalW:0}{Nb}Вт",
+                    + (double.IsNaN(c.TotalW) ? "" : " · " + PowerCost.Kwh(c.Kwh) + KwhUnit + (r.HasTariff ? ", " + Money(r.Rub(c.Kwh)) : "")),
+            Gpu = double.IsNaN(c.GpuW) ? "—" : Watts(c.GpuW),
+            Total = double.IsNaN(c.TotalW) ? "—" : Watts(c.TotalW),
             KwhHour = double.IsNaN(c.TotalW) ? "—" : PowerCost.Kwh(c.KwhPerHour),
-            RubHour = double.IsNaN(c.TotalW) || !r.HasTariff ? "—" : $"{PowerCost.Money(r.Rub(c.KwhPerHour))}{Nb}₽",
+            RubHour = double.IsNaN(c.TotalW) || !r.HasTariff ? "—" : Money(r.Rub(c.KwhPerHour)),
         }).ToList();
         GamesBlock.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         GameList.ItemsSource = rows;
-        GamesNote.Text = (r.HasTariff ? "" : "Впишите тариф, чтобы увидеть рубли. ")
-                       + "У сессий без датчика видеокарты расход не считается — там прочерк.";
+        GamesNote.Text = (r.HasTariff ? "" : L.T("Впишите тариф, чтобы увидеть рубли.") + " ")
+                       + L.T("У сессий без датчика видеокарты расход не считается — там прочерк.");
         GamesNote.Visibility = r.HasTariff && r.Games.All(c => !double.IsNaN(c.GpuW)) ? Visibility.Collapsed : Visibility.Visible;
 
         // ---- как считается
         string cpu = ShortCpu(r.CpuName);
         HowCpu.Text = r.TdpKnown
-            ? $"Процессор — оценка: паспортная мощность {(cpu.Length > 0 ? cpu + " — " : "")}{r.Tdp}{Nb}Вт, умноженная на его среднюю загрузку. Под нагрузкой настоящий расход бывает и больше, и меньше."
-            : $"Процессор — оценка: модель {(cpu.Length > 0 ? "«" + cpu + "» " : "")}программа не знает, поэтому взято {r.Tdp}{Nb}Вт, как у обычного настольного процессора, и умножено на среднюю загрузку.";
-        NowCpuCaption.Text = "процессор · оценка";
+            ? cpu.Length > 0
+                ? L.F("Процессор — оценка: паспортная мощность {0} — {1} Вт, умноженная на его среднюю загрузку. Под нагрузкой настоящий расход бывает и больше, и меньше.", cpu, r.Tdp)
+                : L.F("Процессор — оценка: паспортная мощность {0} Вт, умноженная на его среднюю загрузку. Под нагрузкой настоящий расход бывает и больше, и меньше.", r.Tdp)
+            : cpu.Length > 0
+                ? L.F("Процессор — оценка: модель «{0}» программа не знает, поэтому взято {1} Вт, как у обычного настольного процессора, и умножено на среднюю загрузку.", cpu, r.Tdp)
+                : L.F("Процессор — оценка: модель программа не знает, поэтому взято {0} Вт, как у обычного настольного процессора, и умножено на среднюю загрузку.", r.Tdp);
+        NowCpuCaption.Text = L.T("процессор · оценка");
         RefreshNow();
     }
+
+    /// <summary>Знак валюты: рубль — только по-русски; по-английски тариф в валюте пользователя, сумма без знака.</summary>
+    private static string Currency => L.En ? "" : "₽";
+
+    /// <summary>«1 240 ₽» по-русски, «1,240» по-английски.</summary>
+    private static string Money(double v) => L.En ? PowerCost.Money(v) : PowerCost.Money(v) + Nb + "₽";
+
+    private static string KwhUnit => L.Pick(" кВт·ч", " kWh");
+
+    private static string Watts(double w) => L.F("{0:0} Вт", w);
 
     private static void Period(NumberText main, TextBlock sub, PowerReport r, double kwh, string when)
     {
         if (r.HasTariff)
         {
             double rub = r.Rub(kwh);
-            main.Unit = "₽";
+            main.Unit = Currency;
             main.Format = rub < 10 ? "0.00" : rub < 100 ? "0.0" : "0";
             main.Value = rub;
-            sub.Text = $"{when} · {PowerCost.Kwh(kwh)}{Nb}кВт·ч";
+            sub.Text = when + " · " + PowerCost.Kwh(kwh) + KwhUnit;
         }
         else
         {
-            main.Unit = "кВт·ч";
+            main.Unit = L.T("кВт·ч");
             main.Format = kwh < 10 ? "0.00" : kwh < 100 ? "0.0" : "0";
             main.Value = kwh;
             sub.Text = when;
@@ -223,15 +240,15 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
 
     private static void ModeRow(PowerMode p, PowerReport r, TextBlock what, TextBlock hours, TextBlock w, TextBlock kwh, TextBlock rub)
     {
-        what.Text = double.IsNaN(p.GpuW) ? "видеокарта не сообщает потребление"
-                  : $"видеокарта {p.GpuW:0}{Nb}Вт · " + (p.GpuMeasured ? "измерено" : "оценка");
+        what.Text = double.IsNaN(p.GpuW) ? L.T("видеокарта не сообщает потребление")
+                  : L.F("видеокарта {0:0} Вт", p.GpuW) + " · " + (p.GpuMeasured ? L.T("измерено") : L.T("оценка"));
         hours.Text = double.IsNaN(p.HoursPerDay) ? "—" : Hours(p.HoursPerDay);
-        w.Text = double.IsNaN(p.TotalW) ? "—" : $"{p.TotalW:0}{Nb}Вт";
+        w.Text = double.IsNaN(p.TotalW) ? "—" : Watts(p.TotalW);
         kwh.Text = PowerCost.Kwh(p.KwhPerDay);
-        rub.Text = r.HasTariff && !double.IsNaN(p.KwhPerDay) ? $"{PowerCost.Money(r.Rub(p.KwhPerDay * 30))}{Nb}₽" : "—";
+        rub.Text = r.HasTariff && !double.IsNaN(p.KwhPerDay) ? Money(r.Rub(p.KwhPerDay * 30)) : "—";
     }
 
-    private static string Hours(double h) => h <= 0 || double.IsNaN(h) ? "0 мин" : Fmt.Duration(TimeSpan.FromHours(h));
+    private static string Hours(double h) => h <= 0 || double.IsNaN(h) ? L.T("0 мин") : Fmt.Duration(TimeSpan.FromHours(h));
 
     /// <summary>«12th Gen Intel(R) Core(TM) i5-12400F» → «Intel Core i5-12400F».</summary>
     private static string ShortCpu(string name)
@@ -252,8 +269,8 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         NowRest.Value = double.IsNaN(p.LossW) ? p.BaseW : p.BaseW + p.LossW + p.MonitorW;
         NowTotal.Value = p.TotalW;
         NowNote.Text = double.IsNaN(p.GpuW)
-            ? "Видеокарта сейчас не сообщает потребление, поэтому общий расход не посчитан."
-            : double.IsNaN(p.CpuLoad) ? "" : $"Процессор загружен на {p.CpuLoad:0}{Nb}%: {report.Tdp}{Nb}Вт × {p.CpuLoad:0}{Nb}% ≈ {p.CpuW:0}{Nb}Вт.";
+            ? L.T("Видеокарта сейчас не сообщает потребление, поэтому общий расход не посчитан.")
+            : double.IsNaN(p.CpuLoad) ? "" : L.F("Процессор загружен на {0:0} %: {1} Вт × {0:0} % ≈ {2:0} Вт.", p.CpuLoad, report.Tdp, p.CpuW);
         NowNote.Visibility = NowNote.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -264,7 +281,7 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         public string Name { get; }
         public string Note { get; }
         public double W { get; }
-        public string Watts => double.IsNaN(W) ? "—" : $"{W:0}{Nb}Вт";
+        public string Watts => double.IsNaN(W) ? "—" : L.F("{0:0} Вт", W);
         public string Kind { get; }
         public Brush Swatch { get; }
     }
@@ -332,7 +349,7 @@ public sealed class PowerBar : FrameworkElement
         dc.DrawLine(Dim, new Point(width - 0.5, y - 5), new Point(width - 0.5, barTop - 2));
         dc.DrawLine(Dim, new Point(-3, y + 3), new Point(4, y - 3));
         dc.DrawLine(Dim, new Point(width - 4, y + 3), new Point(width + 3, y - 3));
-        string label = $"≈ {(double.IsNaN(total) ? sum : total):0} Вт из розетки";
+        string label = L.F("≈ {0:0} Вт из розетки", double.IsNaN(total) ? sum : total);
         var ft = new FormattedText(label, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, Face, 11.5, Palette.Ink1, dpi);
         double lx = (width - ft.Width) / 2;
         dc.DrawRectangle(Palette.Base, null, new Rect(lx - 8, y - ft.Height / 2, ft.Width + 16, ft.Height));

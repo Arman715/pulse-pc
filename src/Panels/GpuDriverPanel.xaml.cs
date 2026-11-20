@@ -67,13 +67,13 @@ public partial class GpuDriverPanel : UserControl, ISystemPanel
         lastReport = report;
         main = adapters.FirstOrDefault();
         var latest = VersionCheck.DriverStatusFor(main, host.Settings);
-        State.Text = report == null && main != null ? (main.Basic ? "Драйвер видеокарты не установлен" : "Читаю журнал Windows…")
+        State.Text = report == null && main != null ? (main.Basic ? L.T("Драйвер видеокарты не установлен") : L.T("Читаю журнал Windows…"))
             : GpuDriver.Verdict(main, report, latest.Newer ? latest.Latest.Version : null, latest.Checked && latest.Diff == 0);
         ShowLatest(latest);
         if (main == null)
         {
-            GpuName.Text = "Видеокарта не найдена";
-            DriverLine.Text = "Windows не сообщила ни об одной видеокарте с установленным драйвером. Так бывает в виртуальной машине или при удалённом подключении.";
+            GpuName.Text = L.T("Видеокарта не найдена");
+            DriverLine.Text = L.T("Windows не сообщила ни об одной видеокарте с установленным драйвером. Так бывает в виртуальной машине или при удалённом подключении.");
             AgeValue.Text = AgeLabel.Text = DriverAdvice.Text = "";
             BtnDownload.IsEnabled = false;
             return;
@@ -81,23 +81,23 @@ public partial class GpuDriverPanel : UserControl, ISystemPanel
         GpuName.Text = main.Name;
         DriverLine.Text = GpuDriver.DriverLine(main);
         AgeValue.Text = main.AgeText;
-        AgeLabel.Text = main.AgeDays < 0 ? "" : "возраст драйвера";
+        AgeLabel.Text = main.AgeDays < 0 ? "" : L.T("возраст драйвера");
         AgeValue.Foreground = main.AgeDays >= 0 && !main.Fresh ? Palette.Warn : Palette.Ink1;
         DriverAdvice.Text = latest.Newer
-            ? "Обновлять не обязательно: стоит, если новую версию требует игра или в ней исправили вашу проблему. Новый драйвер ставится поверх нынешнего."
-            : latest.Checked && latest.Diff == 0 ? "Установлена последняя версия с сайта NVIDIA — обновлять нечего."
+            ? L.T("Обновлять не обязательно: стоит, если новую версию требует игра или в ней исправили вашу проблему. Новый драйвер ставится поверх нынешнего.")
+            : latest.Checked && latest.Diff == 0 ? L.T("Установлена последняя версия с сайта NVIDIA — обновлять нечего.")
             : GpuDriver.DriverAdvice(main);
 
-        var others = adapters.Skip(1).Select(a => a.Name + (a.Version != "" ? " — версия " + a.Version : "")
-                                                  + (a.AgeDays >= 0 ? ", драйверу " + a.AgeText : "")).ToList();
-        OtherGpus.Text = others.Count > 0 ? "Вторая видеокарта: " + string.Join("; ", others) + "." : "";
+        var others = adapters.Skip(1).Select(a => a.Name + (a.Version != "" ? " — " + L.F("версия {0}", a.Version) : "")
+                                                  + (a.AgeDays >= 0 ? ", " + L.F("драйверу {0}", a.AgeText) : "")).ToList();
+        OtherGpus.Text = others.Count > 0 ? L.F("Вторая видеокарта: {0}.", string.Join("; ", others)) : "";
         OtherGpus.Visibility = others.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         bool hasPage = GpuDriver.DownloadUrl(main.Vendor) != "";
         BtnDownload.IsEnabled = hasPage;
         DownloadNote.Text = hasPage
-            ? $"Откроется сайт {main.Vendor} в вашем браузере. Драйвер программа не скачивает и не ставит."
-            : "Производитель видеокарты не определён — найдите драйвер на сайте производителя компьютера.";
+            ? L.F("Откроется сайт {0} в вашем браузере. Драйвер программа не скачивает и не ставит.", main.Vendor)
+            : L.T("Производитель видеокарты не определён — найдите драйвер на сайте производителя компьютера.");
     }
 
     /// <summary>Строка «последняя версия на сайте NVIDIA» по проверке раздела «Новые версии» (сама строка в сеть не ходит).</summary>
@@ -105,27 +105,29 @@ public partial class GpuDriverPanel : UserControl, ISystemPanel
     {
         LatestBlock.Visibility = st.Checkable ? Visibility.Visible : Visibility.Collapsed;
         if (!st.Checkable) return;
-        var ru = System.Globalization.CultureInfo.GetCultureInfo("ru-RU");
-        string when = st.CheckedAt is DateTime at ? " Проверено " + VersionCheck.When(at) + "." : "";
+        string when = st.CheckedAt is DateTime at ? " " + L.F("Проверено {0}.", VersionCheck.When(at)) : "";
         BtnWhatsNew.Visibility = st.Checked && st.Latest.DetailsUrl != "" ? Visibility.Visible : Visibility.Collapsed;
         if (st.Checked)
         {
             var l = st.Latest;
-            string date = l.Date is DateTime d ? " от " + d.ToString("d MMMM yyyy", ru) : "";
+            string beta = l.Beta ? " " + L.T("(бета)") : "";
             LatestMarker.Level = st.Newer ? Severity.Warn : Severity.Ok;
             LatestValue.Text = l.Version;
             LatestValue.Foreground = st.Newer ? Palette.Warn : Palette.Ink1;
-            LatestLine.Text = st.Newer ? $"Вышла версия {l.Version}{date}{(l.Beta ? " (бета)" : "")}, у вас {main?.Version}." + when
-                : st.Diff == 0 ? "У вас последняя версия." + when
-                : $"У вас версия новее, чем NVIDIA предлагает для обычной установки ({l.Version})." + when;
-            BtnWhatsNew.Content = "Что нового в " + l.Version;
+            LatestLine.Text = st.Newer
+                    ? (l.Date is DateTime d
+                        ? L.F("Вышла версия {0} от {1}{2}, у вас {3}.", l.Version, d.ToString(L.En ? "MMMM d, yyyy" : "d MMMM yyyy", L.Culture), beta, main?.Version)
+                        : L.F("Вышла версия {0}{1}, у вас {2}.", l.Version, beta, main?.Version)) + when
+                : st.Diff == 0 ? L.T("У вас последняя версия.") + when
+                : L.F("У вас версия новее, чем NVIDIA предлагает для обычной установки ({0}).", l.Version) + when;
+            BtnWhatsNew.Content = L.F("Что нового в {0}", l.Version);
         }
         else
         {
             LatestMarker.Level = Severity.Info;
             LatestValue.Text = "—";
             LatestValue.Foreground = Palette.Ink1;
-            LatestLine.Text = st.Error != "" ? $"Сервис NVIDIA не ответил: {st.Error}." + when : "Последнюю версию на сайте NVIDIA программа ещё не проверяла.";
+            LatestLine.Text = st.Error != "" ? L.F("Сервис NVIDIA не ответил: {0}.", L.T(st.Error)) + when : L.T("Последнюю версию на сайте NVIDIA программа ещё не проверяла.");
         }
     }
 
@@ -134,7 +136,7 @@ public partial class GpuDriverPanel : UserControl, ISystemPanel
         string url = VersionCheck.DriverStatusFor(main, host?.Settings).Latest?.DetailsUrl ?? "";
         if (url == "") return;
         try { GameLibrary.OpenAsUser(url); }
-        catch { CacheResult.Text = "Браузер не открылся. Откройте страницу сами: " + url; }
+        catch { CacheResult.Text = L.F("Браузер не открылся. Откройте страницу сами: {0}", url); }
     }
 
     private void BtnVersions_Click(object sender, RoutedEventArgs e) => host?.Open("sys:" + VersionCheck.SectionTitle);
@@ -143,28 +145,32 @@ public partial class GpuDriverPanel : UserControl, ISystemPanel
     {
         CacheRows.ItemsSource = caches.Select(c => new DriverRow { Title = c.Title, Extra = c.Path, Value = Fmt.Size(c.Bytes) }).ToList();
         long total = caches.Sum(c => c.Bytes);
-        CacheSummary.Text = caches.Count == 0 ? "Папок кэша шейдеров на этом компьютере нет" : "Всего";
+        CacheSummary.Text = caches.Count == 0 ? L.T("Папок кэша шейдеров на этом компьютере нет") : L.T("Всего");
         CacheTotal.Text = caches.Count == 0 ? "" : Fmt.Size(total);
         BtnClear.IsEnabled = total > 0;
         if (CacheResult.Text == "")
         {
             string last = host.Settings.Get("gpudriver.lastClear");
             if (DateTime.TryParse(last, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var when))
-                CacheResult.Text = "Прошлая очистка: " + when.ToString("d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("ru-RU")) + ".";
+                CacheResult.Text = L.F("Прошлая очистка: {0}.", when.ToString(L.En ? "MMMM d, yyyy" : "d MMMM yyyy", L.Culture));
         }
     }
 
     private void ShowEvents(DriverEventReport r)
     {
-        EventsLabel.Source = r?.SeenSince != null ? "СБОИ ДРАЙВЕРА " + r.Period.ToUpperInvariant() : "СБОИ ДРАЙВЕРА ЗА 30 ДНЕЙ";
+        EventsLabel.Source = r?.SeenSince != null ? L.F("СБОИ ДРАЙВЕРА {0}", r.Period).ToUpper(L.Culture) : "СБОИ ДРАЙВЕРА ЗА 30 ДНЕЙ";
         bool marked = LogMarks.Seen(LogMarks.Gpu, host.Settings) != null;
         SeenBlock.Visibility = r != null && r.Ok && (r.Total > 0 || marked) ? Visibility.Visible : Visibility.Collapsed;
         BtnSeen.Visibility = r != null && r.Total > 0 ? Visibility.Visible : Visibility.Collapsed;
         BtnUnseen.Visibility = marked ? Visibility.Visible : Visibility.Collapsed;
         if (r == null || !r.Ok)
         {
-            EventsHeadline.Text = "Журнал Windows прочитать не удалось";
-            EventsFacts.ItemsSource = new[] { "Windows не дала прочитать журнал «Система»" + (string.IsNullOrEmpty(r?.Error) ? "." : ": " + r.Error) + " Откройте раздел ещё раз через минуту." };
+            EventsHeadline.Text = L.T("Журнал Windows прочитать не удалось");
+            EventsFacts.ItemsSource = new[]
+            {
+                (string.IsNullOrEmpty(r?.Error) ? L.T("Windows не дала прочитать журнал «Система».") : L.F("Windows не дала прочитать журнал «Система»: {0}.", r.Error))
+                + " " + L.T("Откройте раздел ещё раз через минуту."),
+            };
             EventsDetail.Visibility = Visibility.Collapsed;
             return;
         }
@@ -184,7 +190,7 @@ public partial class GpuDriverPanel : UserControl, ISystemPanel
         string url = GpuDriver.DownloadUrl(main?.Vendor ?? "");
         if (url == "") return;
         try { GameLibrary.OpenAsUser(url); }
-        catch { CacheResult.Text = "Браузер не открылся. Откройте страницу сами: " + url; }
+        catch { CacheResult.Text = L.F("Браузер не открылся. Откройте страницу сами: {0}", url); }
     }
 
     /// <summary>Кэш шейдеров чистится в одном месте — в «Очистке»: открыть её с отмеченным только этим пунктом.</summary>

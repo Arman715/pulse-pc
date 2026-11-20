@@ -165,7 +165,20 @@ public sealed class FpsCapture
         }
         if (colFrame >= parts.Length) return;
         if (!double.TryParse(parts[colFrame], NumberStyles.Float, CultureInfo.InvariantCulture, out double ms)) return;
-        if (ms <= 0 || ms > 10000) return;     // первый кадр и паузы (загрузки, свёрнутое окно) в статистику не идут
+        if (ms <= 0) return;
+        if (ms > 10000)
+        {
+            // Первый кадр и паузы (загрузки, свёрнутое окно) в статистику не идут. Отрезки для FPS «сейчас» и для ряда
+            // начинаются заново: иначе первая секунда после паузы делилась бы на всю паузу — FPS около нуля, а в отчёте
+            // ложная просадка «до 0 FPS» после каждого сворачивания игры.
+            lock (gate)
+            {
+                bucketStart = secondStart = double.NaN;
+                bucketFrames = secondFrames = 0;
+                if (colTime < 0) clock += ms / 1000.0;
+            }
+            return;
+        }
 
         lock (gate)
         {

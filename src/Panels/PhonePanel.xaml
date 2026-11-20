@@ -81,6 +81,13 @@
             </Grid>
         </StackPanel>
 
+        <!-- Что программа сама видит: брандмауэр закрыл подключения, устройство не из домашней сети -->
+        <StackPanel x:Name="TroubleBlock" Visibility="Collapsed">
+            <local:TrackedText Source="ЧТО МЕШАЕТ ТЕЛЕФОНУ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <TextBlock x:Name="TroubleFound" Style="{StaticResource Body}" Foreground="{StaticResource Warn}" Margin="0,12,0,0"/>
+        </StackPanel>
+
         <local:TrackedText Source="ЧТО ВИДНО НА ТЕЛЕФОНЕ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
         <Rectangle Style="{StaticResource Hairline}"/>
         <TextBlock Style="{StaticResource Body}" Margin="0,12,0,0"
@@ -90,7 +97,11 @@
         <Rectangle Style="{StaticResource Hairline}" Margin="0,0,0,12"/>
         <Grid>
             <TextBlock Style="{StaticResource Body}" Text="—"/>
-            <TextBlock Style="{StaticResource Tip}" Text="Телефон и компьютер должны быть в одной сети: тот же роутер, тот же Wi-Fi. Гостевая сеть роутера и мобильный интернет не подойдут."/>
+            <TextBlock Style="{StaticResource Tip}" Text="Телефон и компьютер должны быть подключены к одному роутеру: телефон — по Wi-Fi, компьютер — кабелем или по Wi-Fi, неважно. Гостевая сеть роутера и мобильный интернет не подойдут."/>
+        </Grid>
+        <Grid>
+            <TextBlock Style="{StaticResource Body}" Text="—"/>
+            <TextBlock Style="{StaticResource Tip}" Text="На телефоне выключите VPN и «частный узел» (iCloud Private Relay и подобное): с ними телефон ищет компьютер в интернете, а не дома."/>
         </Grid>
         <Grid>
             <TextBlock Style="{StaticResource Body}" Text="—"/>
@@ -102,7 +113,7 @@
         </Grid>
         <Grid>
             <TextBlock Style="{StaticResource Body}" Text="—"/>
-            <TextBlock Style="{StaticResource Tip}" Text="В запросе Windows нужно было отметить «Частные сети» и нажать «Разрешить доступ». Если запрос закрыли, Windows запомнила отказ. Исправить это можно в «Безопасности Windows»: «Брандмауэр и безопасность сети» → «Разрешить работу с приложением через брандмауэр» → строка «Пульс ПК»."/>
+            <TextBlock Style="{StaticResource Tip}" Text="В запросе Windows нужно было отметить «Частные сети» и нажать «Разрешить доступ». Если запрос закрыли, Windows запомнила отказ. Исправить это можно в «Безопасности Windows»: «Брандмауэр и безопасность сети» → «Разрешить работу с приложением через брандмауэр» → «Изменить параметры» → строка «PulsePC», отметка «Частная»."/>
         </Grid>
         <Grid>
             <TextBlock Style="{StaticResource Body}" Text="—"/>
@@ -111,6 +122,10 @@
         <Grid>
             <TextBlock Style="{StaticResource Body}" Text="—"/>
             <TextBlock Style="{StaticResource Tip}" Margin="18,0,0,0" Text="Адрес компьютера в сети может смениться после перезагрузки роутера. Тогда страница покажет «нет связи» — откройте этот раздел и возьмите новый адрес."/>
+        </Grid>
+        <Grid>
+            <TextBlock Style="{StaticResource Body}" Text="—"/>
+            <TextBlock Style="{StaticResource Tip}" Text="Если всё так, а страница не открывается только когда компьютер на кабеле, — в роутере может быть включена «изоляция клиентов» (AP isolation, «изоляция беспроводных клиентов»): она не пускает устройства из Wi-Fi к компьютерам на кабеле. Её выключают в настройках Wi-Fi роутера."/>
         </Grid>
     </StackPanel>
 </UserControl>

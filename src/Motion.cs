@@ -33,10 +33,18 @@ public static class Motion
     /// <summary>Вызывается, когда меняется возможность анимировать (активность окна, настройки Windows).</summary>
     public static event Action Changed;
 
+    private static bool systemHooked;
+
     public static void Init(Window window)
     {
         Evaluate();
-        SystemParameters.StaticPropertyChanged += (_, _) => { Evaluate(); Changed?.Invoke(); };
+        // Init зовёт каждое окно (осмотр, отзыв — при каждом открытии): подписка на настройки Windows — одна на программу,
+        // иначе обработчики копились бы и Changed срабатывал бы столько раз, сколько окон открывалось.
+        if (!systemHooked)
+        {
+            systemHooked = true;
+            SystemParameters.StaticPropertyChanged += (_, _) => { Evaluate(); Changed?.Invoke(); };
+        }
         window.Activated += (_, _) => { windowActive = true; Changed?.Invoke(); };
         window.Deactivated += (_, _) => { windowActive = false; Changed?.Invoke(); };
     }

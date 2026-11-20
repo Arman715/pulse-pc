@@ -22,7 +22,7 @@
         </Style>
     </Window.Resources>
 
-    <Border x:Name="Root" Background="{StaticResource Base}" BorderBrush="#BDB5A6" BorderThickness="1">
+    <Border x:Name="Root" Background="{StaticResource Base}" BorderBrush="{StaticResource WindowEdge}" BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="48"/>
@@ -85,6 +85,8 @@
                             <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,4">
                                 <Button x:Name="BtnMain" Style="{StaticResource Primary}" Content="Установить" MinWidth="148" Margin="0" IsDefault="True" Click="Main_Click"/>
                             </StackPanel>
+                            <!-- Текст удаления длинный, окно на маленьком экране ниже: форма прокручивается, кнопка остаётся внизу -->
+                            <ScrollViewer x:Name="FormScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Padding="0,0,6,0">
                             <StackPanel x:Name="FormContent">
                                 <local:TrackedText x:Name="NotesLabel" Source="НАЗНАЧЕНИЕ" Style="{StaticResource Label}"/>
                                 <StackPanel x:Name="Notes" Margin="0,8,0,0"/>
@@ -124,29 +126,33 @@
                                     </DockPanel>
                                 </StackPanel>
                             </StackPanel>
+                            </ScrollViewer>
                         </DockPanel>
 
                         <!-- Ход работы и итог -->
                         <Grid x:Name="WorkPanel" Visibility="Collapsed">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <local:TrackedText x:Name="WorkLabel" Source="ХОД МОНТАЖА" Style="{StaticResource Label}"/>
-                            <StackPanel x:Name="Steps" Grid.Row="1" Margin="0,8,0,0"/>
+                            <!-- Шаги и итог прокручиваются: итог с предупреждениями бывает длинным -->
+                            <ScrollViewer x:Name="WorkScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Padding="0,0,6,0">
+                            <StackPanel>
+                            <StackPanel x:Name="Steps" Margin="0,8,0,18"/>
 
-                            <StackPanel x:Name="Verdict" Grid.Row="3" Margin="0,0,0,14" Visibility="Collapsed">
+                            <StackPanel x:Name="Verdict" Margin="0,0,0,14" Visibility="Collapsed">
                                 <StackPanel Orientation="Horizontal">
                                     <local:StateMarker x:Name="VerdictMark" Level="Ok" VerticalAlignment="Center" Margin="0,3,12,0"/>
                                     <TextBlock x:Name="VerdictTitle" Text="Готово" Style="{StaticResource Verdict}"/>
                                 </StackPanel>
                                 <TextBlock x:Name="VerdictText" Style="{StaticResource Body}" Margin="0,4,0,0"/>
                             </StackPanel>
+                            </StackPanel>
+                            </ScrollViewer>
 
-                            <Grid Grid.Row="4" Margin="0,0,0,4">
+                            <Grid Grid.Row="2" Margin="0,8,0,4">
                                 <StackPanel x:Name="ProgressBlock">
                                     <Grid Margin="0,0,0,7">
                                         <TextBlock x:Name="StepCounter" Style="{StaticResource Stamp}"/>

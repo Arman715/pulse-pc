@@ -12,7 +12,7 @@
         <WindowChrome CaptionHeight="44" ResizeBorderThickness="0" GlassFrameThickness="1" CornerRadius="0" UseAeroCaptionButtons="False"/>
     </WindowChrome.WindowChrome>
 
-    <Border Background="{StaticResource Base}" BorderBrush="#BDB5A6" BorderThickness="1">
+    <Border Background="{StaticResource Base}" BorderBrush="{StaticResource WindowEdge}" BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="44"/>
@@ -56,7 +56,10 @@
                             <local:TrackedText Source="ПОРЯДОК ОСМОТРА" Style="{StaticResource Label}"/>
                         </DockPanel>
                         <Rectangle DockPanel.Dock="Top" Style="{StaticResource Hairline}" Fill="{StaticResource LineStrong}"/>
-                        <StackPanel x:Name="StepList"/>
+                        <!-- На низком экране окно ужимается (WindowFit) — список шагов тогда прокручивается -->
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+                            <StackPanel x:Name="StepList"/>
+                        </ScrollViewer>
                     </DockPanel>
 
                     <Rectangle Grid.Column="1" Fill="{StaticResource Line}" Margin="0,4,0,18"/>

@@ -45,7 +45,7 @@ public partial class MainWindow
 
     private static string CompTitle(Comp c) => c switch
     {
-        Comp.Cpu => "Процессор", Comp.Gpu => "Видеокарта", Comp.Ram => "Память", Comp.Storage => "Диски", _ => "Материнская плата",
+        Comp.Cpu => L.T("Процессор"), Comp.Gpu => L.T("Видеокарта"), Comp.Ram => L.T("Память"), Comp.Storage => L.T("Диски"), _ => L.T("Материнская плата"),
     };
 
     private static string CompIcon(Comp c) => c switch
@@ -117,7 +117,7 @@ public partial class MainWindow
         Drawing.GhostOthers = false;
         Drawing.Highlight = Part.None;
         Crumbs(null);
-        OvHeader.Play("ЧЕРТЁЖ", "СИСТЕМНЫЙ БЛОК", "ОБЩИЙ ВИД, БОКОВАЯ КРЫШКА СНЯТА");
+        OvHeader.Play(L.T("ЧЕРТЁЖ"), L.T("СИСТЕМНЫЙ БЛОК"), L.T("ОБЩИЙ ВИД, БОКОВАЯ КРЫШКА СНЯТА"));
         AngleMarkEl.Visibility = Visibility.Collapsed;
         RulerEl.Visibility = Visibility.Collapsed;
         ShowStrip(true, animate);
@@ -157,8 +157,8 @@ public partial class MainWindow
 
         detail = true;
         Crumbs(c);
-        OvHeader.Play("ЧЕРТЁЖ", $"ВИД {ViewLetter(c)} · {CompTitle(c).ToUpperInvariant()}",
-            c == Comp.Board ? "РАСПОЛОЖЕНИЕ НА ОБЩЕМ ВИДЕ" : c == Comp.Storage ? StorageSubtitle() : "КОНСТРУКТИВНАЯ СХЕМА, РАЗНЕСЁННЫЙ ВИД");
+        OvHeader.Play(L.T("ЧЕРТЁЖ"), L.F("ВИД {0} · {1}", ViewLetter(c), CompTitle(c).ToUpperInvariant()),
+            c == Comp.Board ? L.T("РАСПОЛОЖЕНИЕ НА ОБЩЕМ ВИДЕ") : c == Comp.Storage ? StorageSubtitle() : L.T("КОНСТРУКТИВНАЯ СХЕМА, РАЗНЕСЁННЫЙ ВИД"));
         ShowStrip(false, true);
         ShowPanel(c, animate: true);
         SelectCompInList(c);
@@ -185,7 +185,8 @@ public partial class MainWindow
         });
     }
 
-    private static string ViewLetter(Comp c) => c switch { Comp.Cpu => "А", Comp.Gpu => "Б", Comp.Ram => "В", Comp.Storage => "Г", _ => "Д" };
+    // Буквы видов: по-английски латиница.
+    private static string ViewLetter(Comp c) => c switch { Comp.Cpu => L.Pick("А", "A"), Comp.Gpu => L.Pick("Б", "B"), Comp.Ram => L.Pick("В", "C"), Comp.Storage => L.Pick("Г", "D"), _ => L.Pick("Д", "E") };
 
     /// <summary>Хлебные крошки: на общем виде — просто «Общий вид», в детали — ссылка назад и название.</summary>
     private void Crumbs(Comp? c)
@@ -347,7 +348,7 @@ public partial class MainWindow
         if (changed && sel == null)
         {
             CompGlyph.Data = Icon("IcoDiag");
-            CompName.Text = "Нагрузка";
+            CompName.Text = L.T("Нагрузка");
             readings.Clear();
             CompHero.Visibility = CompScale.Visibility = CompCells.Visibility = BlockDisks.Visibility = Visibility.Collapsed;
             BlockChart.Visibility = BlockProcs.Visibility = Visibility.Visible;
@@ -364,19 +365,19 @@ public partial class MainWindow
             switch (c)
             {
                 case Comp.Gpu:
-                    Row("IcoCores", "Загрузка"); Row("IcoBolt", "Потребление"); Row("IcoWave", "Частота"); Row("IcoFan", "Вентилятор"); Row("IcoRam", "Видеопамять"); Row("IcoInfo", "Драйвер");
+                    Row("IcoCores", L.T("Загрузка")); Row("IcoBolt", L.T("Потребление")); Row("IcoWave", L.T("Частота")); Row("IcoFan", L.T("Вентилятор")); Row("IcoRam", L.T("Видеопамять")); Row("IcoInfo", L.T("Драйвер"));
                     break;
                 case Comp.Cpu:
-                    Row("IcoWave", "Частота сейчас"); Row("IcoCores", "Ядра / потоки"); Row("IcoClock", "Базовая частота"); Row("IcoCpu", "Сокет");
+                    Row("IcoWave", L.T("Частота сейчас")); Row("IcoCores", L.T("Ядра / потоки")); Row("IcoClock", L.T("Базовая частота")); Row("IcoCpu", L.T("Сокет"));
                     break;
                 case Comp.Ram:
-                    Row("IcoRam", "Доступно программам"); Row("IcoCores", "Планки"); Row("IcoWave", "Частота");
+                    Row("IcoRam", L.T("Доступно программам")); Row("IcoCores", L.T("Планки")); Row("IcoWave", L.T("Частота"));
                     break;
                 case Comp.Storage:
-                    Row("IcoDrive", "Свободно на системном"); Row("IcoShield", "Состояние"); Row("IcoTemp", "Температура");
+                    Row("IcoDrive", L.T("Свободно на системном")); Row("IcoShield", L.T("Состояние")); Row("IcoTemp", L.T("Температура"));
                     break;
                 case Comp.Board:
-                    Row("IcoBoard", "Производитель"); Row("IcoCpu", "Чипсет"); Row("IcoInfo", "BIOS"); Row("IcoClock", "Без перезагрузки");
+                    Row("IcoBoard", L.T("Производитель")); Row("IcoCpu", L.T("Чипсет")); Row("IcoInfo", "BIOS"); Row("IcoClock", L.T("Без перезагрузки"));
                     break;
             }
             CompScale.Visibility = c == Comp.Gpu ? Visibility.Visible : Visibility.Collapsed;
@@ -402,7 +403,7 @@ public partial class MainWindow
         UpdateStrip();
         if (shownComp == null)
         {
-            CompModel.Text = double.IsNaN(ghz) ? "Процессор и видеокарта" : $"процессор {load:0} % · {ghz:0.00} ГГц";
+            CompModel.Text = double.IsNaN(ghz) ? L.T("Процессор и видеокарта") : L.F("процессор {0:0} % · {1:0.00} ГГц", load, ghz);
             CompNote.Visibility = Visibility.Collapsed;
             return;
         }
@@ -411,7 +412,7 @@ public partial class MainWindow
         switch (c)
         {
             case Comp.Gpu:
-                CompModel.Text = GpuFullName() is string gn && gn != "" ? gn : "Видеокарта не определена";
+                CompModel.Text = GpuFullName() is string gn && gn != "" ? gn : L.T("Видеокарта не определена");
                 SetRow(5, gpuOk && gpu.Driver.Length > 0 ? gpu.Driver : hw.MainGpu?.Driver is string dv && dv != "" ? dv : "—");
                 // Температуру отдают драйвер NVIDIA и Windows (у отдельных видеокарт AMD и Intel); без неё главное число — загрузка.
                 bool hasTemp = gpuOk && !double.IsNaN(gpu.Temp);
@@ -422,57 +423,57 @@ public partial class MainWindow
                 CompScale.Target = hasTemp ? gpu.Temp : double.NaN;
                 SetRow(0, Num(gpuOk ? gpu.Load : double.NaN, "0", "%"));
                 SetRow(1, gpuOk ? gpu.PowerText : "—");
-                SetRow(2, Num(gpuOk ? gpu.Clock : double.NaN, "0", "МГц"));
+                SetRow(2, Num(gpuOk ? gpu.Clock : double.NaN, "0", L.Pick("МГц", "MHz")));
                 SetRow(3, gpuOk ? gpu.FanText : "—");
-                SetRow(4, gpuOk && !double.IsNaN(gpu.MemUsed) ? $"{gpu.MemUsed / 1024:0.0} / {(double.IsNaN(gpu.MemTotal) ? hw.MainGpu?.VramGb ?? 0 : gpu.MemTotal / 1024):0.0} ГБ" : hw.MainGpu?.VramGb > 0 ? $"{hw.MainGpu.VramGb:0.#} ГБ" : "—");
+                SetRow(4, gpuOk && !double.IsNaN(gpu.MemUsed) ? $"{gpu.MemUsed / 1024:0.0} / {(double.IsNaN(gpu.MemTotal) ? hw.MainGpu?.VramGb ?? 0 : gpu.MemTotal / 1024):0.0} {Fmt.GbUnit}" : hw.MainGpu?.VramGb > 0 ? $"{hw.MainGpu.VramGb:0.#} {Fmt.GbUnit}" : "—");
                 break;
             case Comp.Cpu:
-                CompModel.Text = string.IsNullOrEmpty(metrics.CpuName) ? "Процессор" : HardwareInfo.ShortCpu(metrics.CpuName);
+                CompModel.Text = string.IsNullOrEmpty(metrics.CpuName) ? L.T("Процессор") : HardwareInfo.ShortCpu(metrics.CpuName);
                 CompHero.Unit = "%"; CompHero.Format = "0"; CompHero.UnitSize = 40;
                 CompHero.Value = load;
                 CompHero.Foreground = Palette.Ink1;
-                SetRow(0, Num(ghz, "0.00", "ГГц"));
+                SetRow(0, Num(ghz, "0.00", L.Pick("ГГц", "GHz")));
                 SetRow(1, hw.Cores > 0 ? $"{hw.Cores} / {hw.Threads}" : "—");
-                SetRow(2, hw.MaxMhz > 0 ? $"{hw.MaxMhz / 1000.0:0.0} ГГц" : "—");
+                SetRow(2, hw.MaxMhz > 0 ? $"{hw.MaxMhz / 1000.0:0.0} {L.Pick("ГГц", "GHz")}" : "—");
                 SetRow(3, CpuSocket());
-                CompNote.Text = "Температуру этого процессора Windows не сообщает без стороннего драйвера, поэтому её здесь нет.";
+                CompNote.Text = L.T("Температуру этого процессора Windows не сообщает без стороннего драйвера, поэтому её здесь нет.");
                 break;
             case Comp.Ram:
-                CompModel.Text = hw.Ram.Count > 0 ? $"{hw.Ram.Count} × {hw.Ram[0].SizeGb:0} ГБ  ·  {hw.Ram[0].Maker} {hw.RamType}".TrimEnd() : $"{Math.Round(total):0} ГБ";
-                CompHero.Unit = $"/ {total:0.0} ГБ"; CompHero.Format = "0.0"; CompHero.UnitSize = 24;
+                CompModel.Text = hw.Ram.Count > 0 ? $"{hw.Ram.Count} × {hw.Ram[0].SizeGb:0} {Fmt.GbUnit}  ·  {hw.Ram[0].Maker} {hw.RamType}".TrimEnd() : $"{Math.Round(total):0} {Fmt.GbUnit}";
+                CompHero.Unit = $"/ {total:0.0} {Fmt.GbUnit}"; CompHero.Format = "0.0"; CompHero.UnitSize = 24;
                 CompHero.Value = used;
                 CompHero.Foreground = avail < 2 ? Palette.Warn : Palette.Ink1;
                 CompCells.Target = used;
-                SetRow(0, $"{avail:0.0} ГБ", avail < 2 ? Palette.Warn : null);
-                SetRow(1, hw.Ram.Count > 0 ? string.Join(" + ", hw.Ram.Select(m => $"{m.SizeGb:0}")) + " ГБ" : "—");
-                SetRow(2, hw.Ram.Count > 0 && hw.Ram[0].Mhz > 0 ? $"{hw.Ram[0].Mhz} МТ/с" : "—");
+                SetRow(0, $"{avail:0.0} {Fmt.GbUnit}", avail < 2 ? Palette.Warn : null);
+                SetRow(1, hw.Ram.Count > 0 ? string.Join(" + ", hw.Ram.Select(m => $"{m.SizeGb:0}")) + " " + Fmt.GbUnit : "—");
+                SetRow(2, hw.Ram.Count > 0 && hw.Ram[0].Mhz > 0 ? $"{hw.Ram[0].Mhz} {L.Pick("МТ/с", "MT/s")}" : "—");
                 break;
             case Comp.Storage:
             {
                 var sys = SystemDrive();
                 var sysDisk = SystemPhysDisk();
                 CompModel.Text = metrics.Disks.Count > 0
-                    ? $"{Fmt.Plural(metrics.Disks.Count, "диск", "диска", "дисков")}  ·  системный {ShortDisk(sysDisk.Name)}"
+                    ? L.F("{0}  ·  системный {1}", Fmt.Plural(metrics.Disks.Count, "диск", "диска", "дисков"), ShortDisk(sysDisk.Name))
                     : Fmt.Plural(drives.Count, "раздел", "раздела", "разделов");
-                CompHero.Unit = "ГБ своб."; CompHero.Format = "0"; CompHero.UnitSize = 24;
+                CompHero.Unit = L.T("ГБ своб."); CompHero.Format = "0"; CompHero.UnitSize = 24;
                 CompHero.Value = sys == null ? double.NaN : sys.AvailableFreeSpace / Fmt.Gib;
                 CompHero.Foreground = sys != null && sys.AvailableFreeSpace < 0.1 * sys.TotalSize ? Palette.Warn : Palette.Ink1;
-                SetRow(0, sys == null ? "—" : $"{100.0 * sys.AvailableFreeSpace / sys.TotalSize:0} %  из {Fmt.Size(sys.TotalSize)}");
+                SetRow(0, sys == null ? "—" : L.F("{0:0} %  из {1}", 100.0 * sys.AvailableFreeSpace / sys.TotalSize, Fmt.Size(sys.TotalSize)));
                 var disks = metrics.Disks;
                 int healthy = disks.Count(d => d.Health == "Healthy");
-                SetRow(1, disks.Count == 0 ? (metrics.DisksLoaded ? "нужны права администратора" : "читаю…")
-                    : healthy == disks.Count ? "все исправны" : $"исправны {healthy} из {disks.Count}", disks.Count > 0 && healthy < disks.Count ? Palette.Bad : null);
+                SetRow(1, disks.Count == 0 ? (metrics.DisksLoaded ? L.T("нужны права администратора") : L.T("читаю…"))
+                    : healthy == disks.Count ? L.T("все исправны") : L.F("исправны {0} из {1}", healthy, disks.Count), disks.Count > 0 && healthy < disks.Count ? Palette.Bad : null);
                 var temps = disks.Where(d => d.Temp != null).Select(d => d.Temp.Value).ToList();
-                SetRow(2, temps.Count > 0 ? $"до {temps.Max():0} °C" : "—");
+                SetRow(2, temps.Count > 0 ? L.F("до {0:0} °C", temps.Max()) : "—");
                 break;
             }
             case Comp.Board:
-                CompModel.Text = hw.Loaded ? hw.Board : "Материнская плата";
+                CompModel.Text = hw.Loaded ? hw.Board : L.T("Материнская плата");
                 SetRow(0, hw.Loaded && hw.MakerShort != "" ? hw.MakerShort : "—");
                 SetRow(1, hw.Chipset != "" ? hw.Chipset : "—");
-                SetRow(2, hw.Loaded ? hw.Bios + (hw.BiosDate.Length > 0 ? " от " + hw.BiosDate : "") : "—");
+                SetRow(2, hw.Loaded ? hw.Bios + (hw.BiosDate.Length > 0 ? L.F(" от {0}", hw.BiosDate) : "") : "—");
                 var up = TimeSpan.FromMilliseconds(Environment.TickCount64);
-                SetRow(3, $"{(int)up.TotalHours} ч {up.Minutes} мин");
+                SetRow(3, Fmt.Duration(up));
                 break;
         }
         CompNote.Visibility = c == Comp.Cpu ? Visibility.Visible : Visibility.Collapsed;
@@ -556,7 +557,7 @@ public partial class MainWindow
     private static string DiskName(string n) =>
         System.Text.RegularExpressions.Regex.Replace(ShortDisk(n ?? ""), @"\s+\d+(\.\d+)?\s?(TB|GB)$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
 
-    private static string DiskSize(double gb) => gb >= 1000 ? $"{gb / 1024:0.#} ТБ" : $"{gb:0} ГБ";
+    private static string DiskSize(double gb) => gb >= 1000 ? $"{gb / 1024:0.#} {L.Pick("ТБ", "TB")}" : $"{gb:0} {Fmt.GbUnit}";
 
     /// <summary>
     /// Список накопителей для чертежа: системный сверху, затем NVMe, SATA, HDD. Буквы разделов приписываются диску,
@@ -604,11 +605,11 @@ public partial class MainWindow
         if (detail && comp == Comp.Storage)
         {
             Drawing.ClearCallouts();
-            OvHeader.Play("ЧЕРТЁЖ", $"ВИД {ViewLetter(Comp.Storage)} · {CompTitle(Comp.Storage).ToUpperInvariant()}", StorageSubtitle());
+            OvHeader.Play(L.T("ЧЕРТЁЖ"), L.F("ВИД {0} · {1}", ViewLetter(Comp.Storage), CompTitle(Comp.Storage).ToUpperInvariant()), StorageSubtitle());
         }
     }
 
-    private string StorageSubtitle() => DriveStackShown ? "ВСЕ ДИСКИ, РАЗНЕСЁННЫЙ ВИД" : "СИСТЕМНЫЙ ДИСК C:, РАЗНЕСЁННЫЙ ВИД";
+    private string StorageSubtitle() => DriveStackShown ? L.T("ВСЕ ДИСКИ, РАЗНЕСЁННЫЙ ВИД") : L.T("СИСТЕМНЫЙ ДИСК C:, РАЗНЕСЁННЫЙ ВИД");
 
     /// <summary>Выноски стопки накопителей: имя, объём и буквы; число — свободно, иначе температура или состояние.</summary>
     private void SetDiskCallouts()
@@ -626,18 +627,18 @@ public partial class MainWindow
             string value; bool warn = false;
             if (bad)
             {
-                value = pd.Health == "Healthy" ? "ошибки чтения" : pd.Health == "Warning" ? "есть сбои" : pd.Health == "Unhealthy" ? "неисправен" : pd.Health;
+                value = pd.Health == "Healthy" ? L.T("ошибки чтения") : pd.Health == "Warning" ? L.T("есть сбои") : pd.Health == "Unhealthy" ? L.T("неисправен") : pd.Health;
                 warn = true;
             }
-            else if (hot) { value = $"{pd.Temp:0} °C"; warn = true; if (!double.IsNaN(free)) label += $" · своб. {free:0} ГБ"; }
+            else if (hot) { value = $"{pd.Temp:0} °C"; warn = true; if (!double.IsNaN(free)) label += L.F(" · своб. {0:0} ГБ", free); }
             else if (!double.IsNaN(free))
             {
-                value = $"{free:0} ГБ своб.";
+                value = L.F("{0:0} ГБ своб.", free);
                 warn = pd.SizeGb > 0 && free < 0.1 * pd.SizeGb;
                 if (pd.Temp is double t) label += $" · {t:0} °C";
             }
             else if (pd.Temp is double t2) value = $"{t2:0} °C";
-            else value = pd.Health == "Healthy" ? "исправен" : "—";
+            else value = pd.Health == "Healthy" ? L.T("исправен") : "—";
             Drawing.SetCallout($"disk.{i}", label, value, warn);
         }
     }
@@ -654,33 +655,33 @@ public partial class MainWindow
     {
         double used = total - avail;
         var sys = SystemDrive();
-        string free = sys == null ? "—" : $"{sys.AvailableFreeSpace / Fmt.Gib:0} ГБ";
+        string free = sys == null ? "—" : $"{sys.AvailableFreeSpace / Fmt.Gib:0} {Fmt.GbUnit}";
         if (!detail)
         {
             string cpuModel = HardwareInfo.ShortCpu(metrics.CpuName);
             string gpuModel = GpuShortName();
             int disks = metrics.Disks.Count > 0 ? metrics.Disks.Count : drives.Count;
             bool diskTrouble = metrics.Disks.Any(d => d.Health != "Healthy" || d.ReadErrors > 0);
-            Drawing.SetCallout("pc.cpu", "А  Процессор", cpuModel, compact: true);
-            Drawing.SetCallout("pc.gpu", "Б  Видеокарта", gpuModel, gpuOk && gpu.Temp >= 83, compact: true);
-            Drawing.SetCallout("pc.ram", "В  Память", $"{Math.Round(total):0} ГБ", compact: true);
-            Drawing.SetCallout("pc.storage", "Г  Диски", disks > 0 ? Fmt.Plural(disks, "диск", "диска", "дисков") : "", diskTrouble, compact: true);
-            Drawing.SetCallout("pc.board", "Д  Материнская плата", hw.Loaded ? hw.Board.Split('(')[0].Trim() : "", compact: true);
+            Drawing.SetCallout("pc.cpu", L.T("А  Процессор"), cpuModel, compact: true);
+            Drawing.SetCallout("pc.gpu", L.T("Б  Видеокарта"), gpuModel, gpuOk && gpu.Temp >= 83, compact: true);
+            Drawing.SetCallout("pc.ram", L.T("В  Память"), $"{Math.Round(total):0} {Fmt.GbUnit}", compact: true);
+            Drawing.SetCallout("pc.storage", L.T("Г  Диски"), disks > 0 ? Fmt.Plural(disks, "диск", "диска", "дисков") : "", diskTrouble, compact: true);
+            Drawing.SetCallout("pc.board", L.T("Д  Материнская плата"), hw.Loaded ? hw.Board.Split('(')[0].Trim() : "", compact: true);
             return;
         }
         switch (comp)
         {
             case Comp.Gpu:
-                Drawing.SetCallout("gpu.fan", "Вентилятор", gpuOk ? gpu.FanText : "—");
-                Drawing.SetCallout("gpu.power", "Потребление", gpuOk ? gpu.PowerText : "—");
-                Drawing.SetCallout("gpu.die", "Частота", Num(gpuOk ? gpu.Clock : double.NaN, "0", "МГц"));
+                Drawing.SetCallout("gpu.fan", L.T("Вентилятор"), gpuOk ? gpu.FanText : "—");
+                Drawing.SetCallout("gpu.power", L.T("Потребление"), gpuOk ? gpu.PowerText : "—");
+                Drawing.SetCallout("gpu.die", L.T("Частота"), Num(gpuOk ? gpu.Clock : double.NaN, "0", L.Pick("МГц", "MHz")));
                 break;
             case Comp.Cpu:
                 // Обе выноски с числами — на корпус процессора; кулер и сокет только подписаны.
-                Drawing.SetCallout("cpu.ihs", "Загрузка", Num(load, "0", "%"));
-                Drawing.SetCallout("cpu.package", "Частота", Num(ghz, "0.00", "ГГц"));
-                Drawing.SetCallout("cpu.cooler", "Кулер", "");
-                Drawing.SetCallout("cpu.socket", "Сокет " + CpuSocket(), "");
+                Drawing.SetCallout("cpu.ihs", L.T("Загрузка"), Num(load, "0", "%"));
+                Drawing.SetCallout("cpu.package", L.T("Частота"), Num(ghz, "0.00", L.Pick("ГГц", "GHz")));
+                Drawing.SetCallout("cpu.cooler", L.T("Кулер"), "");
+                Drawing.SetCallout("cpu.socket", L.F("Сокет {0}", CpuSocket()), "");
                 break;
             case Comp.Ram:
             {
@@ -690,11 +691,11 @@ public partial class MainWindow
                 {
                     var r = hw.Ram[i];
                     string slot = SlotName(r.Slot);
-                    string who = r.Maker != "" && slot != "" ? r.Maker + " · " + slot : r.Maker != "" ? r.Maker : slot != "" ? "Слот " + slot : $"Планка {i + 1}";
-                    Drawing.SetCallout($"ram.stick{i + 1}", who, $"{r.SizeGb:0} ГБ", compact: sticks > 4);
+                    string who = r.Maker != "" && slot != "" ? r.Maker + " · " + slot : r.Maker != "" ? r.Maker : slot != "" ? L.F("Слот {0}", slot) : L.F("Планка {0}", i + 1);
+                    Drawing.SetCallout($"ram.stick{i + 1}", who, $"{r.SizeGb:0} {Fmt.GbUnit}", compact: sticks > 4);
                 }
-                Drawing.SetCallout("ram.chips", "Занято", $"{used:0.0} ГБ", avail < 2);
-                Drawing.SetDimension($"{total:0.0} ГБ");
+                Drawing.SetCallout("ram.chips", L.T("Занято"), $"{used:0.0} {Fmt.GbUnit}", avail < 2);
+                Drawing.SetDimension($"{total:0.0} {Fmt.GbUnit}");
                 break;
             }
             case Comp.Storage when DriveStackShown:
@@ -703,14 +704,14 @@ public partial class MainWindow
             case Comp.Storage:
             {
                 var nvme = SystemPhysDisk();
-                Drawing.SetCallout("ssd.nand", "Свободно на C:", free);
-                if (nvme?.Temp is double t) Drawing.SetCallout("ssd.controller", "Температура", $"{t:0} °C", t >= 70);
-                else Drawing.SetCallout("ssd.controller", "Контроллер", "");
-                Drawing.SetCallout("ssd.heatsink", "Состояние", nvme == null ? "нужны права" : nvme.Health == "Healthy" ? "исправен" : nvme.Health, nvme != null && nvme.Health != "Healthy");
+                Drawing.SetCallout("ssd.nand", L.T("Свободно на C:"), free);
+                if (nvme?.Temp is double t) Drawing.SetCallout("ssd.controller", L.T("Температура"), $"{t:0} °C", t >= 70);
+                else Drawing.SetCallout("ssd.controller", L.T("Контроллер"), "");
+                Drawing.SetCallout("ssd.heatsink", L.T("Состояние"), nvme == null ? L.T("нужны права") : nvme.Health == "Healthy" ? L.T("исправен") : nvme.Health, nvme != null && nvme.Health != "Healthy");
                 break;
             }
             case Comp.Board:
-                Drawing.SetCallout("pc.board", "Материнская плата", hw.Loaded ? hw.Board.Split('(')[0].Trim() : "—");
+                Drawing.SetCallout("pc.board", L.T("Материнская плата"), hw.Loaded ? hw.Board.Split('(')[0].Trim() : "—");
                 break;
         }
     }
@@ -723,7 +724,7 @@ public partial class MainWindow
         StripCpuVal.Value = load;
         StripGpuVal.Value = gpuOk ? gpu.Temp : double.NaN;     // у видеокарт без датчика в Windows — прочерк
         StripGpuVal.Foreground = gpuOk && gpu.Temp >= 83 ? Palette.Warn : Palette.Ink1;
-        StripRamVal.Unit = $"/ {total:0.0} ГБ";
+        StripRamVal.Unit = $"/ {total:0.0} {Fmt.GbUnit}";
         StripRamVal.Value = total - avail;
         StripRamBar.Target = total > 0 ? (total - avail) / total : double.NaN;
         var sys = SystemDrive();
@@ -733,11 +734,11 @@ public partial class MainWindow
 
     private void UpdateFooter()
     {
-        string cpu = string.IsNullOrEmpty(metrics.CpuName) ? "процессор" : HardwareInfo.ShortCpu(metrics.CpuName);
-        string gpuName = GpuShortName() is string gs && gs != "" ? gs : "видеокарта";
+        string cpu = string.IsNullOrEmpty(metrics.CpuName) ? L.T("процессор") : HardwareInfo.ShortCpu(metrics.CpuName);
+        string gpuName = GpuShortName() is string gs && gs != "" ? gs : L.T("видеокарта");
         string board = hw.Loaded ? "  •  " + hw.Board.Split('(')[0].Trim() : "";
         var up = TimeSpan.FromMilliseconds(Environment.TickCount64);
-        FooterText.Text = $"{cpu}  •  {gpuName}  •  {Math.Round(total):0} ГБ{board}  •  Windows {Environment.OSVersion.Version.Build}  •  без перезагрузки {(int)up.TotalHours} ч {up.Minutes} мин";
+        FooterText.Text = $"{cpu}  •  {gpuName}  •  {Math.Round(total):0} {Fmt.GbUnit}{board}  •  Windows {Environment.OSVersion.Version.Build}  •  " + L.F("без перезагрузки {0}", Fmt.Duration(up));
     }
 }
 

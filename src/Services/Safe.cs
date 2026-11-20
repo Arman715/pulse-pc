@@ -46,9 +46,18 @@ public static class AtomicFile
         foreach (var p in new[] { path, path + ".bak" })
         {
             if (!File.Exists(p)) continue;
+            // Занятый файл (антивирус, OneDrive, чтение из другого потока) — не испорченный: ждём, пока освободится,
+            // иначе взяли бы более старую копию «.bak», и следующая запись молча затёрла бы то, что было только в файле.
+            string text;
+            try { text = ReadRetrying(p); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Error("чтение " + Path.GetFileName(p), ex);
+                continue;
+            }
             try
             {
-                var v = parse(File.ReadAllText(p));
+                var v = parse(text);
                 if (v != null)
                 {
                     if (p != path) Log.Info($"{Path.GetFileName(path)} испорчен — данные взяты из резервной копии");
@@ -65,6 +74,56 @@ public static class AtomicFile
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Прочитать файл; если он занят другим процессом — несколько попыток с нарастающей паузой (всего около 1,5 с).
+    /// Нет файла — исключение сразу.
+    /// </summary>
+    internal static string ReadRetrying(string path, int attempts = 8)
+    {
+        for (int i = 1; ; i++)
+        {
+            try { return File.ReadAllText(path); }
+            catch (Exception ex) when (i < attempts && ex is not FileNotFoundException and not DirectoryNotFoundException
+                                       && ex is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(50 * i);
+            }
+        }
+    }
+
+    /// <summary>Самопроверка во временной папке: занятый на время файл ждётся, испорченный — берётся из «.bak». Систему не трогает.</summary>
+    public static string SelfTest()
+    {
+        var sb = new StringBuilder();
+        string fail = null;
+        void Check(string what, bool ok) { sb.AppendLine((ok ? "  ok   " : "  FAIL ") + what); if (!ok) fail ??= what; }
+        string dir = Path.Combine(Path.GetTempPath(), "pulsepc-atomic-test-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(dir);
+            string file = Path.Combine(dir, "data.txt");
+            WriteAllText(file, "old");
+            WriteAllText(file, "new");          // теперь «.bak» — прежнее содержимое
+            Check("запись: в файле новое, в «.bak» прежнее", File.ReadAllText(file) == "new" && File.ReadAllText(file + ".bak") == "old");
+
+            string got;
+            using (var hold = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                var release = Task.Run(() => { Thread.Sleep(300); hold.Dispose(); });
+                got = Read(file, t => t);
+                release.Wait();
+            }
+            Check("файл ненадолго занят — прочитан он сам, а не прежняя копия «.bak»", got == "new");
+
+            File.WriteAllText(file, "{испорчен");
+            got = Read(file, t => t.StartsWith('{') ? throw new FormatException("испорчен") : t);
+            Check("испорченный файл — данные из «.bak»", got == "old");
+        }
+        catch (Exception ex) { Check("исключение: " + ex.Message, false); }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+        return (fail == null ? "OK" : "FAIL: " + fail) + Environment.NewLine + sb;
     }
 }
 
@@ -148,8 +207,7 @@ public static class SecureStore
         {
             fellBack = true;
             Log.Error("защищённая папка " + dir, ex);
-            Health.Fail(PartName, $"{dir} не удалось закрыть от записи без прав администратора ({ex.Message}). " +
-                                  "Обновление программы, запись кадров и автозапуск отключены, копии для отката лежат в папке пользователя.");
+            Health.Fail(PartName, L.F("{0} не удалось закрыть от записи без прав администратора ({1}). Обновление программы, запись кадров и автозапуск отключены, копии для отката лежат в папке пользователя.", dir, ex.Message));
             return SessionStore.Folder;
         }
     }

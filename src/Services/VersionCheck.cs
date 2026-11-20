@@ -70,7 +70,9 @@ public static class VersionCheck
     public const string DefaultFeed = "Arman715/pulse-pc";
     public const int TimeoutMs = 15000;
     public const string SectionTitle = "Новые версии";
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
+    // Язык: причины сбоев (error) и сообщения Download/Launch/WaitForInstaller остаются здесь по-русски — их сохраняют
+    // в настройках и проверяет самопроверка (Contains("подпись") и т. п.). Переводит их тот, кто показывает: L.T(текст),
+    // английские строки и шаблоны с {0} для них — в Lang\en\g4.json.
     private const string Nb = "\u00A0";
 
     private const string NvidiaService =
@@ -148,7 +150,8 @@ public static class VersionCheck
         {
             s.Set("update.notified", app.Release.Version);
             changed = true;
-            host.Notify("Вышла новая версия «Пульс ПК»", $"Версия {app.Release.Version}. Обновить можно в разделе «{SectionTitle}» вкладки «Система».",
+            // Название раздела вписано в текст: SectionTitle — ключ раздела, он не переводится.
+            host.Notify(L.T("Вышла новая версия «Пульс ПК»"), L.F("Версия {0}. Обновить можно в разделе «Новые версии» вкладки «Система».", app.Release.Version),
                 false, () => host.Open("sys:" + SectionTitle));
         }
         var gpu = SafeMainGpu();
@@ -157,7 +160,9 @@ public static class VersionCheck
         {
             s.Set("versions.nv.notified", d.Latest.Version);
             changed = true;
-            host.Notify("Вышел новый драйвер видеокарты", $"NVIDIA {d.Latest.Version}{(d.Latest.Date is DateTime dt ? " от " + dt.ToString("d MMMM", Ru) : "")}. Сейчас установлен {gpu.Version}.",
+            host.Notify(L.T("Вышел новый драйвер видеокарты"), d.Latest.Date is DateTime dt
+                    ? L.F("NVIDIA {0} от {1}. Сейчас установлен {2}.", d.Latest.Version, DayMonth(dt), gpu.Version)
+                    : L.F("NVIDIA {0}. Сейчас установлен {1}.", d.Latest.Version, gpu.Version),
                 false, () => host.Open("sys:" + SectionTitle));
         }
         if (changed) Save(s);
@@ -295,12 +300,17 @@ public static class VersionCheck
     private static DateTime? ReadTime(string v) =>
         DateTime.TryParseExact(v ?? "", "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : null;
 
-    /// <summary>«сегодня в 11:54», «вчера в 20:10», «17 ноября в 09:03».</summary>
+    /// <summary>«сегодня в 11:54», «вчера в 20:10», «17 ноября в 09:03» (по-английски «today at 11:54», «November 17 at 09:03»).</summary>
     public static string When(DateTime t)
     {
-        string day = t.Date == DateTime.Today ? "сегодня" : t.Date == DateTime.Today.AddDays(-1) ? "вчера" : t.ToString("d MMMM", Ru);
-        return day + " в " + t.ToString("HH:mm", Ru);
+        string time = t.ToString("HH:mm", L.Culture);
+        if (t.Date == DateTime.Today) return L.F("сегодня в {0}", time);
+        if (t.Date == DateTime.Today.AddDays(-1)) return L.F("вчера в {0}", time);
+        return DayMonth(t) + L.Pick(" в ", " at ") + time;
     }
+
+    /// <summary>«17 ноября» / «November 17» — день и месяц на языке интерфейса.</summary>
+    public static string DayMonth(DateTime t) => t.ToString(L.En ? "MMMM d" : "d MMMM", L.Culture);
 
     // ================================================================== драйвер NVIDIA
 
@@ -1048,24 +1058,24 @@ public static class VersionCheck
             // У ноутбуков BIOS ищут по модели ноутбука на сайте его производителя.
             return maker switch
             {
-                "ASUS" when systemModel != "" => (systemModel, $"https://www.asus.com/supportonly/{Enc(systemModel)}/helpdesk_bios/", "Страница BIOS на сайте ASUS"),
-                "HP" => (systemModel, "https://support.hp.com/drivers", "Поддержка HP: найдите свою модель"),
-                "Lenovo" => (systemModel, "https://pcsupport.lenovo.com/", "Поддержка Lenovo: найдите свою модель"),
-                "Dell" => (systemModel, "https://www.dell.com/support/home/", "Поддержка Dell: найдите свою модель"),
+                "ASUS" when systemModel != "" => (systemModel, $"https://www.asus.com/supportonly/{Enc(systemModel)}/helpdesk_bios/", L.T("Страница BIOS на сайте ASUS")),
+                "HP" => (systemModel, "https://support.hp.com/drivers", L.T("Поддержка HP: найдите свою модель")),
+                "Lenovo" => (systemModel, "https://pcsupport.lenovo.com/", L.T("Поддержка Lenovo: найдите свою модель")),
+                "Dell" => (systemModel, "https://www.dell.com/support/home/", L.T("Поддержка Dell: найдите свою модель")),
                 _ => (systemModel != "" ? systemModel : model, "", ""),
             };
         }
         if (model == "") return ("", "", "");
         return maker switch
         {
-            "MSI" when slug != "" => (model, $"https://www.msi.com/Motherboard/{slug}/support#bios", "Страница BIOS на сайте MSI"),
-            "ASUS" => (model, $"https://www.asus.com/supportonly/{Enc(model)}/helpdesk_bios/", "Страница BIOS на сайте ASUS"),
+            "MSI" when slug != "" => (model, $"https://www.msi.com/Motherboard/{slug}/support#bios", L.T("Страница BIOS на сайте MSI")),
+            "ASUS" => (model, $"https://www.asus.com/supportonly/{Enc(model)}/helpdesk_bios/", L.T("Страница BIOS на сайте ASUS")),
             // У GIGABYTE в адресе есть ревизия платы («rev-10» для 1.0), она записана в BaseBoardVersion.
-            "GIGABYTE" when slug != "" => (model, $"https://www.gigabyte.com/Motherboard/{slug}{GigabyteRev(boardVersion)}/support#support-dl-bios", "Страница BIOS на сайте GIGABYTE"),
-            "ASRock" when cpuVendor is "Intel" or "AMD" => (model, $"https://www.asrock.com/mb/{cpuVendor}/{Enc(model)}/index.asp#BIOS", "Страница BIOS на сайте ASRock"),
-            "HP" => (model, "https://support.hp.com/drivers", "Поддержка HP: найдите свою модель"),
-            "Lenovo" => (model, "https://pcsupport.lenovo.com/", "Поддержка Lenovo: найдите свою модель"),
-            "Dell" => (model, "https://www.dell.com/support/home/", "Поддержка Dell: найдите свою модель"),
+            "GIGABYTE" when slug != "" => (model, $"https://www.gigabyte.com/Motherboard/{slug}{GigabyteRev(boardVersion)}/support#support-dl-bios", L.T("Страница BIOS на сайте GIGABYTE")),
+            "ASRock" when cpuVendor is "Intel" or "AMD" => (model, $"https://www.asrock.com/mb/{cpuVendor}/{Enc(model)}/index.asp#BIOS", L.T("Страница BIOS на сайте ASRock")),
+            "HP" => (model, "https://support.hp.com/drivers", L.T("Поддержка HP: найдите свою модель")),
+            "Lenovo" => (model, "https://pcsupport.lenovo.com/", L.T("Поддержка Lenovo: найдите свою модель")),
+            "Dell" => (model, "https://www.dell.com/support/home/", L.T("Поддержка Dell: найдите свою модель")),
             _ => (model, "", ""),
         };
     }

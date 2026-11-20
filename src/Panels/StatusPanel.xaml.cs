@@ -90,32 +90,32 @@ public partial class StatusPanel : UserControl, ISystemPanel
         var lasting = parts.Where(p => p.Alarm).ToList();
         var failing = parts.Where(p => p.Level == Severity.Bad).ToList();
         var quiet = parts.Where(p => p.Level == Severity.Warn).ToList();
-        State.Text = parts.Count == 0 ? "Части программы ещё не отметились."
-            : lasting.Count > 0 ? $"Не работает больше {HealthWatch.AlarmMinutes} минут: {Names(lasting)}."
-            : failing.Count > 0 ? $"Ошибка: {Names(failing)}. Программа пробует снова."
-            : quiet.Count > 0 ? $"Нет свежих данных: {Names(quiet)}."
-            : "Все части программы работают.";
+        State.Text = parts.Count == 0 ? L.T("Части программы ещё не отметились.")
+            : lasting.Count > 0 ? L.F("Не работает больше {0} минут: {1}.", HealthWatch.AlarmMinutes, Names(lasting))
+            : failing.Count > 0 ? L.F("Ошибка: {0}. Программа пробует снова.", Names(failing))
+            : quiet.Count > 0 ? L.F("Нет свежих данных: {0}.", Names(quiet))
+            : L.T("Все части программы работают.");
         AlarmMark.Visibility = lasting.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         PartsEmpty.Visibility = parts.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         PartList.ItemsSource = parts.Select(p => new PartRowVm
         {
-            Name = p.Name, Detail = p.Detail, Status = p.Status, Level = p.Level,
+            Name = L.T(p.Name), Detail = p.Detail, Status = p.Status, Level = p.Level,
             Ink = p.Level == Severity.Bad ? Palette.Bad : p.Level == Severity.Warn ? Palette.Warn : p.Level == Severity.Info ? Palette.Ink3 : Palette.Ink1,
-            Tip = string.IsNullOrWhiteSpace(p.Raw) || p.Detail.Contains(p.Raw.Trim()) ? null : "Как записала программа: " + p.Raw.Trim(),
+            Tip = string.IsNullOrWhiteSpace(p.Raw) || p.Detail.Contains(p.Raw.Trim()) ? null : L.F("Как записала программа: {0}", p.Raw.Trim()),
         }).ToList();
 
         FactList.ItemsSource = new[]
         {
-            new Fact { Title = "Версия", Value = Installer.Version },
+            new Fact { Title = L.T("Версия"), Value = Installer.Version },
             new Fact { Title = "Windows", Value = snap.Windows },
-            new Fact { Title = "Права администратора", Value = host.Admin ? "есть" : "нет — программа только показывает состояние" },
-            new Fact { Title = "Папка данных", Value = SessionStore.Folder },
+            new Fact { Title = L.T("Права администратора"), Value = host.Admin ? L.T("есть") : L.T("нет — программа только показывает состояние") },
+            new Fact { Title = L.T("Папка данных"), Value = SessionStore.Folder },
         };
 
         LogPath.Text = System.IO.Path.GetFileName(Log.FilePath);
         LogText.Inlines.Clear();
-        if (snap.Log.Count == 0) LogText.Inlines.Add(new Run("Журнал пуст: программа пока ничего в него не записала."));
+        if (snap.Log.Count == 0) LogText.Inlines.Add(new Run(L.T("Журнал пуст: программа пока ничего в него не записала.")));
         for (int i = 0; i < snap.Log.Count; i++)
         {
             string line = snap.Log[i];
@@ -127,14 +127,14 @@ public partial class StatusPanel : UserControl, ISystemPanel
     }
 
     private static string Names(List<PartState> parts) =>
-        string.Join(", ", parts.Take(3).Select(p => "«" + p.Name + "»")) + (parts.Count > 3 ? $" и ещё {parts.Count - 3}" : "");
+        string.Join(", ", parts.Take(3).Select(p => L.En ? "“" + L.T(p.Name) + "”" : "«" + p.Name + "»")) + (parts.Count > 3 ? " " + L.F("и ещё {0}", parts.Count - 3) : "");
 
     // ================================================================ кнопки
 
     private void BtnLog_Click(object sender, RoutedEventArgs e)
     {
         string path = Log.FilePath;
-        if (!File.Exists(path)) { Say("Журнала ещё нет: программа пока ничего в него не записала."); return; }
+        if (!File.Exists(path)) { Say(L.T("Журнала ещё нет: программа пока ничего в него не записала.")); return; }
         try
         {
             // Блокнот запускается через Проводник, то есть с обычными правами, а не с правами администратора программы.
@@ -148,9 +148,9 @@ public partial class StatusPanel : UserControl, ISystemPanel
             try
             {
                 Process.Start(new ProcessStartInfo("explorer.exe", "/select,\"" + path + "\"") { UseShellExecute = false });
-                Say("Блокнот не открылся — журнал показан в папке: " + Path.GetFileName(path) + ".");
+                Say(L.F("Блокнот не открылся — журнал показан в папке: {0}.", Path.GetFileName(path)));
             }
-            catch (Exception ex) { Say("Не удалось открыть журнал: " + ex.Message); }
+            catch (Exception ex) { Say(L.F("Не удалось открыть журнал: {0}", ex.Message)); }
         }
     }
 
@@ -166,10 +166,10 @@ public partial class StatusPanel : UserControl, ISystemPanel
             host.Ui(() =>
             {
                 BtnReport.IsEnabled = true;
-                if (text == null) { Say("Не удалось составить отчёт. Подробности — в журнале."); return; }
+                if (text == null) { Say(L.T("Не удалось составить отчёт. Подробности — в журнале.")); return; }
                 Say(Copy(text)
-                    ? "Отчёт скопирован: версия, сборка Windows, состояние частей и последние 100 строк журнала. Имя пользователя и личные папки в нём заменены. Вставьте его в сообщение (Ctrl+V)."
-                    : "Буфер обмена занят другой программой. Нажмите ещё раз через пару секунд.");
+                    ? L.T("Отчёт скопирован: версия, сборка Windows, состояние частей и последние 100 строк журнала. Имя пользователя и личные папки в нём заменены. Вставьте его в сообщение (Ctrl+V).")
+                    : L.T("Буфер обмена занят другой программой. Нажмите ещё раз через пару секунд."));
             });
         });
     }

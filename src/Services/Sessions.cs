@@ -23,6 +23,64 @@ public static class GameDetector
         ["Car Mechanic Simulator 2027 Demo"] = "Car Mechanic Simulator 2027",
     };
 
+    private static CustomGame[] custom = Array.Empty<CustomGame>();
+
+    /// <summary>Игры, добавленные вручную (из настроек). Вызывается при загрузке настроек и после каждого изменения списка.</summary>
+    public static void SetCustom(IEnumerable<CustomGame> games) =>
+        Volatile.Write(ref custom, games?.Where(g => !string.IsNullOrWhiteSpace(g?.Exe)).Select(g => new CustomGame { Name = g.Name, Exe = g.Exe }).ToArray()
+                                   ?? Array.Empty<CustomGame>());
+
+    /// <summary>
+    /// Добавленная вручную игра для файла процесса: тот же .exe или любой .exe из папки игры и её подпапок
+    /// (часто запускают лаунчер, а играет другой файл рядом — «…-Win64-Shipping.exe»). Служебные файлы — античит, отчёт о сбое,
+    /// программа обновления — не в счёт.
+    /// </summary>
+    public static CustomGame MatchCustom(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return null;
+        string exe = Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
+        foreach (var g in Volatile.Read(ref custom))
+        {
+            if (string.Equals(path, g.Exe, StringComparison.OrdinalIgnoreCase)) return g;
+            string dir = Path.GetDirectoryName(g.Exe);
+            if (string.IsNullOrEmpty(dir) || !CustomGame.FolderUsable(dir)) continue;
+            if (path.StartsWith(dir.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase) && !SkipExeParts.Any(exe.Contains)) return g;
+        }
+        return null;
+    }
+
+    /// <summary>Самопроверка распознавания игр, добавленных вручную (на выдуманных путях, процессы не трогаются).</summary>
+    public static string SelfTest()
+    {
+        var saved = Volatile.Read(ref custom);
+        var fails = new List<string>();
+        void Check(string what, bool ok) { if (!ok) fails.Add(what); }
+        try
+        {
+            SetCustom(new[]
+            {
+                new CustomGame { Name = "Моя игра", Exe = @"D:\Games\MyGame\Launcher.exe" },
+                new CustomGame { Name = "Из загрузок", Exe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "tiny.exe") },
+            });
+            Check("тот же файл", MatchCustom(@"D:\Games\MyGame\Launcher.exe")?.Name == "Моя игра");
+            Check("другой файл в подпапке игры", MatchCustom(@"D:\Games\MyGame\Binaries\Win64\MyGame-Win64-Shipping.exe")?.Name == "Моя игра");
+            Check("античит и отчёт о сбое — не игра", MatchCustom(@"D:\Games\MyGame\EasyAntiCheat\EasyAntiCheat_Setup.exe") == null
+                                                      && MatchCustom(@"D:\Games\MyGame\CrashReporter.exe") == null);
+            Check("соседняя папка — не игра", MatchCustom(@"D:\Games\MyGameTools\Tool.exe") == null && MatchCustom(@"D:\Games\Other\Other.exe") == null);
+            Check("из «Загрузок» узнаётся только сам файл", MatchCustom(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "other.exe")) == null
+                                                         && MatchCustom(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "tiny.exe"))?.Name == "Из загрузок");
+            Check("корень диска и общие папки лаунчеров не годятся как папка игры",
+                !CustomGame.FolderUsable(@"D:\") && !CustomGame.FolderUsable(@"D:\SteamLibrary\steamapps\common") && !CustomGame.FolderUsable(@"C:\Games")
+                && !CustomGame.FolderUsable(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)) && CustomGame.FolderUsable(@"D:\Games\MyGame"));
+            Check("пустой путь", MatchCustom(null) == null && MatchCustom("") == null);
+        }
+        catch (Exception ex) { fails.Add("исключение: " + ex.Message); }
+        finally { Volatile.Write(ref custom, saved); }
+        return fails.Count == 0 ? "OK (7 проверок)" : "FAIL: " + string.Join("; ", fails);
+    }
+
+    public static List<CustomGame> CustomList() => Volatile.Read(ref custom).Select(g => new CustomGame { Name = g.Name, Exe = g.Exe }).ToList();
+
     /// <summary>Запущенная игра или null. Если подходят несколько процессов, берётся самый «тяжёлый».</summary>
     public static DetectedGame Find()
     {
@@ -38,8 +96,13 @@ public static class GameDetector
                     if (!string.IsNullOrEmpty(test) && name.Equals(test, StringComparison.OrdinalIgnoreCase))
                         return new DetectedGame { Name = "Тестовая игра", Pid = p.Id };
                     long mem = p.WorkingSet64;
-                    if (mem < 300L * 1024 * 1024) continue;        // игры занимают сотни мегабайт: дешёвый отсев до обращения к процессу
-                    string game = GameName(PathOf(p.Id), name);
+                    // Игры занимают сотни мегабайт: дешёвый отсев до обращения к процессу. Для добавленных вручную порог ниже —
+                    // небольшие и старые игры бывают легче.
+                    bool anyCustom = Volatile.Read(ref custom).Length > 0;
+                    if (mem < (anyCustom ? 60L : 300L) * 1024 * 1024) continue;
+                    string path = PathOf(p.Id);
+                    string game = MatchCustom(path)?.Name;
+                    if (game == null && mem >= 300L * 1024 * 1024) game = GameName(path, name);
                     if (game != null && mem > bestMem) { best = new DetectedGame { Name = game, Pid = p.Id }; bestMem = mem; }
                 }
             }
@@ -49,7 +112,7 @@ public static class GameDetector
     }
 
     /// <summary>Файл похож на игру (лежит в библиотеке Steam, Epic, Riot и т.д.) — такие не предлагается закрывать.</summary>
-    public static bool LooksLikeGame(string path) => GameName(path, Path.GetFileNameWithoutExtension(path ?? "")) != null;
+    public static bool LooksLikeGame(string path) => MatchCustom(path) != null || GameName(path, Path.GetFileNameWithoutExtension(path ?? "")) != null;
 
     /// <summary>Запущена ли сейчас программа из этой папки (игра перезаписывает свои настройки при выходе).</summary>
     public static bool IsRunningFrom(string dir)
@@ -128,6 +191,61 @@ public static class GameDetector
     [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr h);
 }
 
+/// <summary>Игра, добавленная вручную: название и файл .exe.</summary>
+public class CustomGame
+{
+    public string Name { get; set; } = "";
+    public string Exe { get; set; } = "";
+
+    /// <summary>
+    /// По папке игры можно узнавать её файлы, только если это действительно папка игры, а не корень диска,
+    /// «Program Files», «Загрузки» или рабочий стол: иначе «игрой» стала бы любая программа оттуда.
+    /// </summary>
+    public static bool FolderUsable(string dir)
+    {
+        try
+        {
+            string full = Path.GetFullPath(dir).TrimEnd('\\');
+            if (Path.GetPathRoot(full)?.TrimEnd('\\').Equals(full, StringComparison.OrdinalIgnoreCase) == true) return false;
+            string user = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string[] broad =
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                Environment.GetFolderPath(Environment.SpecialFolder.Windows), Environment.GetFolderPath(Environment.SpecialFolder.System),
+                user, Path.Combine(user, "Downloads"), Path.Combine(user, "Desktop"), Path.Combine(user, "Documents"),
+                Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs"),
+            };
+            if (broad.Any(b => !string.IsNullOrEmpty(b) && b.TrimEnd('\\').Equals(full, StringComparison.OrdinalIgnoreCase))) return false;
+            // Общие папки лаунчеров: «…\steamapps\common», «…\Epic Games» — в них лежат все игры сразу.
+            string name = Path.GetFileName(full);
+            return !new[] { "common", "steamapps", "Epic Games", "Games", "Игры", "AstrumPlay", "Riot Games" }.Contains(name, StringComparer.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Название по файлу: «Название продукта» из свойств .exe, иначе имя папки игры, иначе имя файла.</summary>
+    public static string GuessName(string exe)
+    {
+        try
+        {
+            var info = FileVersionInfo.GetVersionInfo(exe);
+            foreach (string s in new[] { info.ProductName, info.FileDescription })
+            {
+                string t = s?.Trim();
+                if (!string.IsNullOrEmpty(t) && t.Length <= 60 && !t.Contains("Unreal", StringComparison.OrdinalIgnoreCase)
+                    && !t.Contains("Unity", StringComparison.OrdinalIgnoreCase) && !t.Contains("Launcher", StringComparison.OrdinalIgnoreCase)) return t;
+            }
+        }
+        catch { }
+        string dir = Path.GetFileName(Path.GetDirectoryName(exe) ?? "");
+        if (!string.IsNullOrEmpty(dir) && !new[] { "bin", "x64", "Win64", "Binaries", "Game" }.Contains(dir, StringComparer.OrdinalIgnoreCase))
+            return dir.Replace('_', ' ');
+        return Path.GetFileNameWithoutExtension(exe).Replace('_', ' ');
+    }
+}
+
 public class DetectedGame
 {
     public string Name;
@@ -195,6 +313,9 @@ public class GameSession
     public DateTime? StartUtc { get; set; }
     public DateTime? EndUtc { get; set; }
 
+    /// <summary>Сессия не легла на диск: причина (null — сохранена). В файл не пишется.</summary>
+    [JsonIgnore] public string SaveError { get; set; }
+
     [JsonIgnore] public TimeSpan Duration => Seconds is double sec ? TimeSpan.FromSeconds(Math.Max(0, sec)) : End - Start;
     [JsonIgnore] public string Title => Game;
     [JsonIgnore] public string Caption => $"{Start:d MMM, HH:mm} · {Fmt.Duration(Duration)}";
@@ -206,7 +327,7 @@ public sealed class SessionRecorder
     private readonly List<double> cpu = new(), gpu = new(), temp = new(), fan = new();
     private double minRam = double.MaxValue, maxVram, vramTotal, powerSum;
     private int powerCount, misses;
-    private NetCounters netStart;
+    private PingTarget.Mark netMark;
 
     private FpsCapture fps;
     private GameNetMonitor gameNet;
@@ -215,6 +336,7 @@ public sealed class SessionRecorder
     private readonly List<double> recentFps = new();
     private DateTime lastMemoryProbe;
     private volatile bool probing;
+    private int probeGen;     // номер сессии (под замком memoryAt): проба, начатая в прошлой сессии, в новую не попадает
     // Реально записанное время: сумма промежутков между замерами, кроме разрывов дольше 10 с (сон компьютера, зависание).
     // Считается по Stopwatch, а не по часам Windows: перевод часов и сон не раздувают длительность.
     private long lastAddTs;
@@ -283,9 +405,11 @@ public sealed class SessionRecorder
         CurrentGame = game.Name; GamePid = game.Pid; StartedAt = DateTime.Now; startedUtc = DateTime.UtcNow; misses = 0;
         lastAddTs = 0; recordedSec = 0;
         cpu.Clear(); gpu.Clear(); temp.Clear(); fan.Clear();
-        samples.Clear(); memoryAt.Clear(); recentFps.Clear();
+        samples.Clear(); recentFps.Clear();
+        // Под замком: фоновая проба памяти прошлой сессии может как раз дописывать словарь.
+        lock (memoryAt) { memoryAt.Clear(); probeGen++; }
         minRam = double.MaxValue; maxVram = 0; vramTotal = 0; powerSum = 0; powerCount = 0;
-        netStart = net?.Internet.Counters ?? default;
+        netMark = net?.Internet.Begin();
 
         fps = null; gameNet = null;
         // Кадры и сетевые события — только с правами администратора и не в играх с античитом уровня ядра.
@@ -353,14 +477,15 @@ public sealed class SessionRecorder
         bool memoryTight = s.RamAvail < 1.2 || s.PagesIn >= 300;
         if (!dip || !memoryTight) return;
 
-        int index = samples.Count - 1, pid = GamePid;
+        int index = samples.Count - 1, pid = GamePid, gen;
+        lock (memoryAt) gen = probeGen;
         lastMemoryProbe = DateTime.Now; probing = true;
         Task.Run(() =>
         {
             try
             {
                 string who = ProcessMemory.Describe(ProcessMemory.Top(3, pid));
-                lock (memoryAt) memoryAt[index] = who;
+                lock (memoryAt) { if (gen == probeGen) memoryAt[index] = who; }
             }
             catch { }
             finally { probing = false; }
@@ -387,14 +512,16 @@ public sealed class SessionRecorder
             CpuSeries = Downsample(cpu, 240), GpuSeries = Downsample(gpu, 240), TempSeries = Downsample(temp, 240),
         };
 
-        if (net != null)
+        if (net != null && netMark != null)
         {
-            var d = net.Internet.Counters.Minus(netStart);
+            // Разброс — только между замерами внутри сессии: разница первого замера в игре с последним до неё не считается.
+            var d = net.Internet.End(netMark, out double crossDiff);
+            netMark = null;
             if (d.Sent >= 10)
             {
                 session.LossPct = 100.0 * d.Lost / d.Sent;
                 if (d.Received > 0) session.AvgPingMs = d.SumMs / d.Received;
-                if (d.Received > 1) session.JitterMs = d.SumAbsDiff / (d.Received - 1);
+                if (d.Received > 1) session.JitterMs = Math.Max(0, d.SumAbsDiff - crossDiff) / (d.Received - 1);
             }
         }
         var capture = fps;
@@ -424,7 +551,9 @@ public sealed class SessionRecorder
             try { SessionAnalysis.Apply(session, recorded, baseGhz, memory, netStats?.GapTimes); }
             catch (Exception ex) { Log.Error("разбор сессии " + session.Game, ex); }
             session.Notes = BuildNotes(session);
-            SessionStore.Add(session);
+            session.SaveError = SessionStore.Add(session);
+            if (session.SaveError != null)
+                session.Notes.Insert(0, L.F("Отчёт не сохранён на диск ({0}) — после перезапуска программы его не будет.", session.SaveError));
         }
 
         if (wait)
@@ -440,7 +569,7 @@ public sealed class SessionRecorder
                     Complete(partial, netNow);
                     Task.Run(() => { try { Finished?.Invoke(session); } catch { } });
                 }
-                catch (Exception ex) { Health.Fail("Запись сессий", "сохранение при выходе: " + ex.Message); }
+                catch (Exception ex) { Health.Fail("Запись сессий", L.F("сохранение при выходе: {0}", ex.Message)); }
             }
             // Сессия уже на диске — теперь можно спокойно гасить PresentMon и сеанс сети (не дольше 5 с; что не успеет,
             // завершит Windows через задание для дочерних процессов, а остаток сеанса уберётся при следующем запуске).
@@ -466,7 +595,7 @@ public sealed class SessionRecorder
                 Complete(result, netStats);
                 Finished?.Invoke(session);
             }
-            catch (Exception ex) { Health.Fail("Запись сессий", "итог сессии: " + ex.Message); }
+            catch (Exception ex) { Health.Fail("Запись сессий", L.F("итог сессии: {0}", ex.Message)); }
         });
     }
 
@@ -474,43 +603,46 @@ public sealed class SessionRecorder
     {
         var notes = new List<string>();
         if (s.AvgFps > 0 && s.Low1Fps > 0 && s.Low1Fps < 0.5 * s.AvgFps)
-            notes.Add($"Сильные просадки: в среднем {s.AvgFps:0} FPS, а в худшие моменты — {s.Low1Fps:0} FPS. Игра шла рывками.");
+            notes.Add(L.F("Сильные просадки: в среднем {0:0} FPS, а в худшие моменты — {1:0} FPS. Игра шла рывками.", s.AvgFps, s.Low1Fps));
         if (s.MinRamGb > 0 && s.MinRamGb < 1.0)
-            notes.Add($"Не хватало памяти: в худший момент свободно было {s.MinRamGb:0.0} ГБ. Перед игрой закрывайте тяжёлые программы.");
+            notes.Add(L.F("Не хватало памяти: в худший момент свободно было {0:0.0} ГБ. Перед игрой закрывайте тяжёлые программы.", s.MinRamGb));
         if (s.Dips is { Count: > 0 })
         {
             var main = s.Dips.GroupBy(d => d.Cause).OrderByDescending(g => g.Count()).First();
-            string why = main.Key == "unknown" ? "" : $" Чаще всего причина — {SessionAnalysis.CauseTitle(main.Key)} ({main.Count()} из {s.Dips.Count}).";
-            notes.Add($"{Fmt.Plural(s.Dips.Count, "резкая просадка", "резкие просадки", "резких просадок")} FPS.{why} Разбор каждой — ниже, в «Просадках».");
+            string count = Fmt.Plural(s.Dips.Count, "резкая просадка", "резкие просадки", "резких просадок");
+            notes.Add(main.Key == "unknown"
+                ? L.F("{0} FPS. Разбор каждой — ниже, в «Просадках».", count)
+                : L.F("{0} FPS. Чаще всего причина — {1} ({2} из {3}). Разбор каждой — ниже, в «Просадках».",
+                      count, SessionAnalysis.CauseTitle(main.Key), main.Count(), s.Dips.Count));
         }
         if (s.BoundGpuPct == null)
         {
             // Старый способ: по средней загрузке, если подробных замеров нет.
             if (s.AvgGpu >= 93)
-                notes.Add($"Игра упиралась в видеокарту (в среднем {s.AvgGpu:0} %). Поднять FPS можно настройками графики или {(GameTuning.IsNvidia ? "DLSS" : "FSR / XeSS")}.");
+                notes.Add(L.F("Игра упиралась в видеокарту (в среднем {0:0} %). Поднять FPS можно настройками графики или {1}.", s.AvgGpu, GameTuning.IsNvidia ? "DLSS" : "FSR / XeSS"));
             else if (s.AvgGpu > 0 && s.AvgGpu < 75 && s.AvgCpu >= 40)
-                notes.Add($"Игра упиралась в процессор: видеокарта была загружена в среднем на {s.AvgGpu:0} %. Настройки графики на FPS почти не влияют.");
+                notes.Add(L.F("Игра упиралась в процессор: видеокарта была загружена в среднем на {0:0} %. Настройки графики на FPS почти не влияют.", s.AvgGpu));
         }
         if (s.GpuThermalLimitPct >= 5)
-            notes.Add($"{s.GpuThermalLimitPct:0} % времени под нагрузкой видеокарта сбрасывала частоту из-за нагрева. Почистите радиатор и проверьте обдув.");
+            notes.Add(L.F("{0:0} % времени под нагрузкой видеокарта сбрасывала частоту из-за нагрева. Почистите радиатор и проверьте обдув.", s.GpuThermalLimitPct));
         if (s.GpuHardLimitPct >= 5)
-            notes.Add($"{s.GpuHardLimitPct:0} % времени видеокарта аварийно снижала частоту по сигналу от блока питания или платы. Проверьте, плотно ли вставлен разъём питания видеокарты.");
+            notes.Add(L.F("{0:0} % времени видеокарта аварийно снижала частоту по сигналу от блока питания или платы. Проверьте, плотно ли вставлен разъём питания видеокарты.", s.GpuHardLimitPct));
         if (s.CpuSlowPct >= 10)
-            notes.Add($"{s.CpuSlowPct:0} % времени под нагрузкой процессор работал ниже базовой частоты — скорее всего, из-за перегрева или ограничения питания. Проверьте кулер процессора.");
+            notes.Add(L.F("{0:0} % времени под нагрузкой процессор работал ниже базовой частоты — скорее всего, из-за перегрева или ограничения питания. Проверьте кулер процессора.", s.CpuSlowPct));
         if (s.MaxPagesIn >= 1000 && !(s.MinRamGb > 0 && s.MinRamGb < 1.0))
-            notes.Add("Windows часто обращалась к файлу подкачки: игре не хватало памяти, отсюда рывки.");
+            notes.Add(L.T("Windows часто обращалась к файлу подкачки: игре не хватало памяти, отсюда рывки."));
         if (s.NetGaps >= 3)
-            notes.Add($"Связь с сервером игры прерывалась {Fmt.Plural(s.NetGaps.Value, "раз", "раза", "раз")} (самый долгий обрыв — {s.NetMaxGapSec:0.0} с). Отсюда «телепорты» и запоздалые действия.");
+            notes.Add(L.F("Связь с сервером игры прерывалась {0} (самый долгий обрыв — {1:0.0} с). Отсюда «телепорты» и запоздалые действия.", SessionAnalysis.Times(s.NetGaps.Value), s.NetMaxGapSec));
         if (s.MaxTemp >= 83)
-            notes.Add($"Видеокарта нагревалась до {s.MaxTemp:0} °C. Проверьте обдув корпуса.");
+            notes.Add(L.F("Видеокарта нагревалась до {0:0} °C. Проверьте обдув корпуса.", s.MaxTemp));
         if (s.VramTotalGb > 0 && s.MaxVramGb >= 0.92 * s.VramTotalGb)
-            notes.Add($"Видеопамять была заполнена почти полностью ({s.MaxVramGb:0.0} из {s.VramTotalGb:0.0} ГБ). Снизьте качество текстур.");
+            notes.Add(L.F("Видеопамять была заполнена почти полностью ({0:0.0} из {1:0.0} ГБ). Снизьте качество текстур.", s.MaxVramGb, s.VramTotalGb));
         if (s.LossPct >= 1)
-            notes.Add($"Терялось {s.LossPct:0.0} % пакетов — в сетевой игре это «телепорты» и рывки.");
+            notes.Add(L.F("Терялось {0:0.0} % пакетов — в сетевой игре это «телепорты» и рывки.", s.LossPct));
         if (s.JitterMs >= 15)
-            notes.Add($"Пинг «гулял»: разброс {s.JitterMs:0} мс при среднем {s.AvgPingMs:0} мс.");
+            notes.Add(L.F("Пинг «гулял»: разброс {0:0} мс при среднем {1:0} мс.", s.JitterMs, s.AvgPingMs));
         if (notes.Count == 0)
-            notes.Add("Замечаний нет: температура, память и загрузка были в норме.");
+            notes.Add(L.T("Замечаний нет: температура, память и загрузка были в норме."));
         return notes;
     }
 
@@ -581,9 +713,9 @@ public static class SessionStore
                         return salvaged;
                     }
                 }
-                if (File.Exists(SessionsFile)) Health.Fail("Запись сессий", "sessions.json не читается — копия сохранена как sessions.unreadable.json");
+                if (File.Exists(SessionsFile)) Health.Fail("Запись сессий", L.T("sessions.json не читается — копия сохранена как sessions.unreadable.json"));
             }
-            catch (Exception ex) { KeepBroken(); Health.Fail("Запись сессий", "чтение сессий: " + ex.Message); }
+            catch (Exception ex) { KeepBroken(); Health.Fail("Запись сессий", L.F("чтение сессий: {0}", ex.Message)); }
             return new List<GameSession>();
         }
     }
@@ -614,20 +746,65 @@ public static class SessionStore
         catch { }
     }
 
-    public static void Add(GameSession session)
+    /// <summary>
+    /// Список для перезаписи файла. Если файл есть, но не прочитался совсем (заблокирован, испорчен и копия тоже), Load вернул бы
+    /// пустой список — и запись новой сессии поверх него стёрла бы всю историю. Тогда запись отменяется с понятной причиной.
+    /// </summary>
+    private static List<GameSession> LoadForWrite()
+    {
+        var all = Load();
+        if (all.Count == 0)
+        {
+            var info = new FileInfo(SessionsFile);
+            if (info.Exists && info.Length > 16)
+                throw new IOException(L.T("файл сессий сейчас не читается — чтобы не затереть историю, запись отложена"));
+        }
+        return all;
+    }
+
+    /// <summary>Удалить из файла сессии, подходящие под условие. Возвращает, сколько удалено, и причину ошибки (null — всё в порядке).</summary>
+    public static (int Removed, string Error) Remove(Func<GameSession, bool> match)
+    {
+        lock (AtomicFile.LockFor(SessionsFile))
+        {
+            try
+            {
+                var all = LoadForWrite();
+                int removed = all.RemoveAll(s => match(s));
+                if (removed > 0) AtomicFile.WriteAllText(SessionsFile, JsonSerializer.Serialize(all, Json));
+                return (removed, null);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("удаление сессий", ex);
+                return (0, Services.Installer.Reason(ex));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Дописать сессию в файл. Возвращает null, если сессия на диске, иначе — причину (по ней окно не скажет «Сессия записана»:
+    /// раньше ошибка уходила только в журнал, а после перезапуска отчёта не оказывалось).
+    /// </summary>
+    public static string Add(GameSession session)
     {
         // Чтение и запись под одним замком: две сессии, закончившиеся одновременно (смена игры, выход), не теряют друг друга.
         lock (AtomicFile.LockFor(SessionsFile))
         {
             try
             {
-                var all = Load();
+                var all = LoadForWrite();
                 all.Insert(0, session);
                 if (all.Count > 200) all.RemoveRange(200, all.Count - 200);     // хватает на сводки за несколько недель
                 AtomicFile.WriteAllText(SessionsFile, JsonSerializer.Serialize(all, Json));
                 Health.Ok("Запись сессий");
+                return null;
             }
-            catch (Exception ex) { Health.Fail("Запись сессий", $"сессия {session?.Game} не сохранена: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                Health.Fail("Запись сессий", L.F("сессия {0} не сохранена: {1}", session?.Game, ex.Message));
+                return Services.Installer.Reason(ex);
+            }
         }
     }
 }
@@ -670,6 +847,8 @@ public class AppSettings
     public bool FirstScanDone { get; set; }
     /// <summary>Игры, о рекомендациях для которых уже сообщалось у часов.</summary>
     public List<string> TuneNotified { get; set; } = new();
+    /// <summary>Игры, добавленные вручную: программа узнаёт их при запуске и записывает, как найденные сама.</summary>
+    public List<CustomGame> CustomGames { get; set; } = new();
     /// <summary>Настройки разделов вкладки «Система»: ключ вида «раздел.параметр» → значение строкой.</summary>
     public Dictionary<string, string> Values { get; set; } = new();
 
@@ -679,6 +858,21 @@ public class AppSettings
     /// Кто меняет списки и словари настроек не из окна — делает это под этим замком.
     /// </summary>
     public static readonly object SyncRoot = new();
+
+    /// <summary>Выбранный язык интерфейса ("ru", "en" или пусто) — читается до запуска окна, прямо из файла настроек.</summary>
+    public static string LanguageSetting() => StartupValue(L.SettingKey);
+
+    /// <summary>Выбранная тема ("light", "dark" или пусто — как в Windows).</summary>
+    public static string ThemeSetting() => StartupValue(Theme.SettingKey);
+
+    private static AppSettings startupCopy;
+    private static string StartupValue(string key)
+    {
+        try { return (startupCopy ??= Load()).Get(key); } catch { return ""; }
+    }
+
+    /// <summary>Копия списка добавленных вручную игр для фоновых потоков (библиотека игр).</summary>
+    public static List<CustomGame> CurrentCustom() => GameDetector.CustomList();
 
     public string Get(string key, string fallback = "")
     {
@@ -707,7 +901,7 @@ public class AppSettings
         try
         {
             var s = AtomicFile.Read(FilePath, text => JsonSerializer.Deserialize<AppSettings>(text));
-            if (s != null) { s.Values ??= new(); s.DiskStates ??= new(); return s; }
+            if (s != null) { s.Values ??= new(); s.DiskStates ??= new(); s.CustomGames ??= new(); GameDetector.SetCustom(s.CustomGames); return s; }
             if (File.Exists(FilePath) || File.Exists(FilePath + ".bak"))
                 Log.Error("settings.json и его копия не читаются — настройки по умолчанию (испорченный файл сохранён рядом)");
         }
@@ -730,6 +924,7 @@ public class AppSettings
                     copy.KnownApplied = KnownApplied?.ToList() ?? new();
                     copy.RevertedTweaks = RevertedTweaks?.ToList() ?? new();
                     copy.TuneNotified = TuneNotified?.ToList() ?? new();
+                    copy.CustomGames = CustomGames?.Select(g => new CustomGame { Name = g.Name, Exe = g.Exe }).ToList() ?? new();
                     AtomicFile.WriteAllText(FilePath, JsonSerializer.Serialize(copy));
                     return;
                 }

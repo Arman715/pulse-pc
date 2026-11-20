@@ -52,7 +52,7 @@ public static class Weekly
             if (fps > 0 && before > 0)
             {
                 double pct = 100 * (fps.Value - before.Value) / before.Value;
-                change = Math.Abs(pct) < 3 ? "как раньше" : $"{(pct > 0 ? "+" : "−")}{Math.Abs(pct):0} %";
+                change = Math.Abs(pct) < 3 ? L.T("как раньше") : (pct > 0 ? "+" : "−") + Math.Abs(pct).ToString("0", L.Culture) + (L.En ? "%" : " %");
                 if (pct <= -8) ink = Palette.Warn;
             }
             w.Games.Add(new WeekGameRow
@@ -68,24 +68,29 @@ public static class Weekly
 
         // Выводы: только то, на что стоит обратить внимание.
         var top = w.Games[0];
-        w.Notes.Add($"Больше всего — {top.Game}: {top.Hours}" + (w.Games.Count > 1 ? $". Всего за неделю — {Fmt.Plural(w.Games.Count, "игра", "игры", "игр")}." : "."));
+        w.Notes.Add(w.Games.Count > 1
+            ? L.F("Больше всего — {0}: {1}. Всего за неделю — {2}.", top.Game, top.Hours, Fmt.Plural(w.Games.Count, "игра", "игры", "игр"))
+            : L.F("Больше всего — {0}: {1}.", top.Game, top.Hours));
         if (w.PrevHours > 0.5)
         {
             double d = w.Hours - w.PrevHours;
-            if (Math.Abs(d) >= 1) w.Notes.Add($"Играли на {Hours(Math.Abs(d))} {(d > 0 ? "больше" : "меньше")}, чем неделей раньше (тогда — {Hours(w.PrevHours)}).");
+            if (Math.Abs(d) >= 1)
+                w.Notes.Add(d > 0
+                    ? L.F("Играли на {0} больше, чем неделей раньше (тогда — {1}).", Hours(Math.Abs(d)), Hours(w.PrevHours))
+                    : L.F("Играли на {0} меньше, чем неделей раньше (тогда — {1}).", Hours(Math.Abs(d)), Hours(w.PrevHours)));
         }
         foreach (var g in week.GroupBy(s => s.Game))
         {
             double? fps = WeightedFps(g), before = WeightedFps(prev.Where(s => s.Game == g.Key));
             if (fps > 0 && before > 0 && fps < before * 0.92)
-                w.Notes.Add($"{g.Key}: FPS упал с {before:0} до {fps:0}. Если игру не обновляли и настройки те же — посмотрите разбор просадок в её сессиях.");
+                w.Notes.Add(L.F("{0}: FPS упал с {1:0} до {2:0}. Если игру не обновляли и настройки те же — посмотрите разбор просадок в её сессиях.", g.Key, before, fps));
         }
         var causes = week.Where(s => s.Dips != null).SelectMany(s => s.Dips).GroupBy(d => d.Cause).OrderByDescending(g => g.Count()).FirstOrDefault();
         if (causes != null && causes.Key != "unknown" && causes.Count() >= 3)
-            w.Notes.Add($"Главная причина просадок за неделю — {SessionAnalysis.CauseTitle(causes.Key)} ({Fmt.Plural(causes.Count(), "раз", "раза", "раз")}).");
+            w.Notes.Add(L.F("Главная причина просадок за неделю — {0} ({1}).", SessionAnalysis.CauseTitle(causes.Key), SessionAnalysis.Times(causes.Count())));
         int lowRam = week.Count(s => s.MinRamGb > 0 && s.MinRamGb < 1.0);
-        if (lowRam >= 2) w.Notes.Add($"В {Fmt.Plural(lowRam, "сессии", "сессиях", "сессиях")} из {week.Count} не хватало памяти. Перед игрой закрывайте тяжёлые программы (вкладка «Оптимизация») или добавьте памяти.");
-        if (w.MaxTemp >= 83) w.Notes.Add($"Видеокарта нагревалась до {w.MaxTemp:0} °C — проверьте обдув корпуса.");
+        if (lowRam >= 2) w.Notes.Add(L.F("В {0} из {1} не хватало памяти. Перед игрой закрывайте тяжёлые программы (вкладка «Оптимизация») или добавьте памяти.", Fmt.Plural(lowRam, "сессии", "сессиях", "сессиях"), week.Count));
+        if (w.MaxTemp >= 83) w.Notes.Add(L.F("Видеокарта нагревалась до {0:0} °C — проверьте обдув корпуса.", w.MaxTemp));
         return w;
     }
 
@@ -96,5 +101,5 @@ public static class Weekly
         return secs > 0 ? list.Sum(s => s.AvgFps.Value * s.Duration.TotalSeconds) / secs : null;
     }
 
-    public static string Hours(double h) => h >= 1 ? $"{h:0.#} ч" : $"{h * 60:0} мин";
+    public static string Hours(double h) => h >= 1 ? L.F("{0:0.#} ч", h) : L.F("{0:0} мин", h * 60);
 }

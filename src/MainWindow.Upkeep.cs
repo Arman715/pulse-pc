@@ -29,7 +29,8 @@ public partial class MainWindow
     {
         var left = settings.RevertedTweaks ?? new List<string>();
         RevertedBar.Visibility = left.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        RevertedText.Text = left.Count == 0 ? "" : "Обновление Windows сбросило: " + string.Join("; ", left) + ".";
+        // В списке — русские названия настроек (ключи), на экран — перевод.
+        RevertedText.Text = left.Count == 0 ? "" : L.F("Обновление Windows сбросило: {0}.", string.Join("; ", left.Select(L.T)));
         BtnRestoreTweaks.IsEnabled = admin;
     }
 
@@ -73,7 +74,7 @@ public partial class MainWindow
         // Пришли за одним пунктом — остальные (корзина, кэш обновлений) не должны удалиться заодно.
         foreach (var i in cleanAll) i.Selected = i == item;
         if (!scanned && BtnScan.IsEnabled) BtnScan_Click(BtnScan, new RoutedEventArgs());
-        else Motion.SetText(CleanSummary, $"Отмечен только пункт «{title}». Проверьте размер и нажмите «Очистить».");
+        else Motion.SetText(CleanSummary, L.F("Отмечен только пункт «{0}». Проверьте размер и нажмите «Очистить».", L.T(title)));
         Dispatcher.BeginInvoke(new Action(() =>
         {
             if (CleanList.ItemContainerGenerator.ContainerFromItem(item) is FrameworkElement row) row.BringIntoView();
@@ -91,9 +92,11 @@ public partial class MainWindow
 
     private void UpdateAutoCleanText()
     {
-        AutoCleanLast.Text = !admin ? "Работает только с правами администратора."
-            : settings.LastAutoClean == DateTime.MinValue ? (Cleaner.WeeklyOptedIn(settings) ? "Первая плановая очистка — через несколько минут после запуска." : "")
-            : $"Последняя плановая очистка — {settings.LastAutoClean:d MMMM}" + (Cleaner.WeeklyOptedIn(settings) ? $", следующая — около {settings.LastAutoClean.AddDays(7):d MMMM}." : ".");
+        AutoCleanLast.Text = !admin ? L.T("Работает только с правами администратора.")
+            : settings.LastAutoClean == DateTime.MinValue ? (Cleaner.WeeklyOptedIn(settings) ? L.T("Первая плановая очистка — через несколько минут после запуска.") : "")
+            : Cleaner.WeeklyOptedIn(settings)
+                ? L.F("Последняя плановая очистка — {0:d MMMM}, следующая — около {1:d MMMM}.", settings.LastAutoClean, settings.LastAutoClean.AddDays(7))
+                : L.F("Последняя плановая очистка — {0:d MMMM}.", settings.LastAutoClean);
     }
 
     private bool autoCleaning;
@@ -119,7 +122,7 @@ public partial class MainWindow
                 UpdateAutoCleanText();
                 UpdateDrives();
                 if (settings.AlertsEnabled && freed >= 50L * 1024 * 1024)
-                    tray.Notify("Плановая очистка", $"Удалены временные файлы и старые журналы: освобождено {Fmt.Size(freed)}.");
+                    tray.Notify(L.T("Плановая очистка"), L.F("Удалены временные файлы и старые журналы: освобождено {0}.", Fmt.Size(freed)));
             });
         });
     }
@@ -148,7 +151,7 @@ public partial class MainWindow
                 tuning = false;
                 tunes = found;
                 TuneList.ItemsSource = tunes;
-                TuneEmpty.Text = tunes.Count == 0 ? "Установленных игр не найдено (Steam, Epic, Riot, Astrum Play, Minecraft)." : "";
+                TuneEmpty.Text = tunes.Count == 0 ? L.T("Установленных игр не найдено (Steam, Epic, Riot, Astrum Play, Minecraft).") : "";
                 TuneEmpty.Visibility = tunes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                 TuneList.SelectedItem = tunes.FirstOrDefault(t => t.Game == keep) ?? tunes.FirstOrDefault();
                 if (tuneMessage != null) { TuneResult.Text = tuneMessage; tuneMessage = null; }
@@ -166,9 +169,9 @@ public partial class MainWindow
         settings.Save();
         if (!settings.AlertsEnabled) return;
         string text = fresh.Count == 1
-            ? $"Для {fresh[0].Game} есть {Fmt.Plural(fresh[0].Changes.Count, "рекомендация", "рекомендации", "рекомендаций")} по настройкам графики. Нажмите, чтобы посмотреть."
-            : $"Есть рекомендации по настройкам графики для {Fmt.Plural(fresh.Count, "игры", "игр", "игр")}: {string.Join(", ", fresh.Take(4).Select(t => t.Game))}. Нажмите, чтобы посмотреть.";
-        tray.Notify("Настройки игр", text, false, () =>
+            ? L.F("Для {0} есть {1} по настройкам графики. Нажмите, чтобы посмотреть.", fresh[0].Game, Fmt.Plural(fresh[0].Changes.Count, "рекомендация", "рекомендации", "рекомендаций"))
+            : L.F("Есть рекомендации по настройкам графики для {0}: {1}. Нажмите, чтобы посмотреть.", Fmt.Plural(fresh.Count, "игры", "игр", "игр"), string.Join(", ", fresh.Take(4).Select(t => t.Game)));
+        tray.Notify(L.T("Настройки игр"), text, false, () =>
         {
             ShowFromTray();
             SelectTab(PgTweaks);
@@ -190,7 +193,7 @@ public partial class MainWindow
         TuneBasis.Visibility = t.CanEdit ? Visibility.Visible : Visibility.Collapsed;
         TuneChanges.ItemsSource = t.Changes;
         TuneNote.Text = t.CanEdit
-            ? ((t.Changes.Count == 0 ? "Всё, что программа проверяет в этой игре, уже настроено как надо. " : "") + t.Note).Trim()
+            ? ((t.Changes.Count == 0 ? L.T("Всё, что программа проверяет в этой игре, уже настроено как надо.") + " " : "") + t.Note).Trim()
             : t.Note;
         BtnTuneApply.Visibility = t.CanEdit && t.Changes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         BtnTuneRestore.Visibility = t.HasBackup ? Visibility.Visible : Visibility.Collapsed;
@@ -203,12 +206,12 @@ public partial class MainWindow
     {
         if (TuneList.SelectedItem is not GameTune t) return;
         var chosen = t.Changes.Where(c => c.Selected).ToList();
-        if (chosen.Count == 0) { TuneResult.Text = "Ничего не отмечено."; return; }
+        if (chosen.Count == 0) { TuneResult.Text = L.T("Ничего не отмечено."); return; }
         BtnTuneApply.IsEnabled = false;
         BeginBusy();
         string result;
         try { result = await Task.Run(() => GameTuning.Apply(t, chosen)); }
-        catch (Exception ex) { result = "Не удалось записать файл: " + ex.Message; }
+        catch (Exception ex) { result = L.F("Не удалось записать файл: {0}", ex.Message); }
         finally { EndBusy(); BtnTuneApply.IsEnabled = true; }
         // Файл перечитывается: рекомендации пересчитаются, итог появится под ними.
         tuneMessage = result;
@@ -221,7 +224,7 @@ public partial class MainWindow
         BeginBusy();
         string result;
         try { result = await Task.Run(() => GameTuning.Restore(t)); }
-        catch (Exception ex) { result = "Не удалось восстановить файл из копии: " + ex.Message; }
+        catch (Exception ex) { result = L.F("Не удалось восстановить файл из копии: {0}", ex.Message); }
         finally { EndBusy(); }
         tuneMessage = result;
         LoadTunes(notify: false);

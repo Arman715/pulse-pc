@@ -31,6 +31,8 @@
             <SolidColorBrush x:Key="Bad" Color="#9E1B32"/>
             <SolidColorBrush x:Key="BadTint" Color="#F1D9DC"/>
             <SolidColorBrush x:Key="OnRed" Color="#FBF8F2"/>
+            <!-- Рамка окна (в тёмной теме — темнее, см. Theme.cs) -->
+            <SolidColorBrush x:Key="WindowEdge" Color="#BDB5A6"/>
 
             <FontFamily x:Key="Din">Bahnschrift</FontFamily>
             <FontFamily x:Key="TextFont">Segoe UI Variable Text, Segoe UI</FontFamily>
@@ -46,7 +48,7 @@
                 <Setter Property="Control.Template">
                     <Setter.Value>
                         <ControlTemplate>
-                            <Rectangle Margin="-3" Stroke="{StaticResource Ink1}" StrokeThickness="1" StrokeDashArray="2 2" SnapsToDevicePixels="True"/>
+                            <Rectangle Margin="-3" Stroke="{DynamicResource Ink1}" StrokeThickness="1" StrokeDashArray="2 2" SnapsToDevicePixels="True"/>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
@@ -59,7 +61,7 @@
                 <Setter Property="FontSize" Value="44"/>
                 <Setter Property="LineHeight" Value="44"/>
                 <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
             <!-- Подзаголовок листа: капс с разрядкой второго уровня -->
@@ -67,7 +69,7 @@
                 <Setter Property="FontFamily" Value="{StaticResource Din}"/>
                 <Setter Property="FontSize" Value="11.5"/>
                 <Setter Property="LineHeight" Value="16"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink2}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink2}"/>
                 <Setter Property="TextWrapping" Value="NoWrap"/>
             </Style>
             <!-- Метка группы: капс с разрядкой первого уровня -->
@@ -76,7 +78,7 @@
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="FontSize" Value="11"/>
                 <Setter Property="LineHeight" Value="14"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink3}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink3}"/>
                 <Setter Property="TextWrapping" Value="NoWrap"/>
             </Style>
             <Style x:Key="HeroXL" TargetType="TextBlock">
@@ -85,7 +87,7 @@
                 <Setter Property="FontSize" Value="88"/>
                 <Setter Property="LineHeight" Value="84"/>
                 <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
             </Style>
             <Style x:Key="Hero" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource Din}"/>
@@ -93,7 +95,7 @@
                 <Setter Property="FontSize" Value="64"/>
                 <Setter Property="LineHeight" Value="62"/>
                 <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
             </Style>
             <Style x:Key="Secondary" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource Din}"/>
@@ -101,14 +103,14 @@
                 <Setter Property="FontSize" Value="36"/>
                 <Setter Property="LineHeight" Value="40"/>
                 <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
             </Style>
             <Style x:Key="Reading" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource Din}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="FontSize" Value="24"/>
                 <Setter Property="LineHeight" Value="28"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
             </Style>
             <Style x:Key="Verdict" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
@@ -116,84 +118,84 @@
                 <Setter Property="FontSize" Value="24"/>
                 <Setter Property="LineHeight" Value="30"/>
                 <Setter Property="TextWrapping" Value="Wrap"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
             </Style>
             <Style x:Key="PanelTitle" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="FontSize" Value="26"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
             </Style>
             <Style x:Key="PanelModel" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
                 <Setter Property="FontSize" Value="20"/>
                 <Setter Property="LineHeight" Value="26"/>
                 <Setter Property="TextWrapping" Value="Wrap"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
             </Style>
             <Style x:Key="PanelSection" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="FontSize" Value="20"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
             </Style>
             <Style x:Key="RowTitle" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="FontSize" Value="14"/>
                 <Setter Property="TextWrapping" Value="Wrap"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
             </Style>
             <Style x:Key="ReadingLabel" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="FontSize" Value="14"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink2}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink2}"/>
             </Style>
             <Style x:Key="Body" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
                 <Setter Property="FontSize" Value="13.5"/>
                 <Setter Property="LineHeight" Value="20"/>
                 <Setter Property="TextWrapping" Value="Wrap"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink2}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink2}"/>
             </Style>
             <Style x:Key="Caption" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource SmallFont}"/>
                 <Setter Property="FontSize" Value="12"/>
                 <Setter Property="LineHeight" Value="16"/>
                 <Setter Property="TextWrapping" Value="Wrap"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink3}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink3}"/>
             </Style>
             <Style x:Key="MonoNum" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource Mono}"/>
                 <Setter Property="FontSize" Value="12.5"/>
                 <Setter Property="TextAlignment" Value="Right"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
             </Style>
             <Style x:Key="Brand" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource DisplayFont}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="FontSize" Value="16"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
             </Style>
             <Style x:Key="Footer" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
                 <Setter Property="FontSize" Value="13"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink2}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink2}"/>
                 <Setter Property="TextWrapping" Value="NoWrap"/>
             </Style>
             <Style x:Key="Stamp" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource Mono}"/>
                 <Setter Property="FontSize" Value="10.5"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink2}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink2}"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
             <Style x:Key="StripLabel" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="FontSize" Value="14"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink2}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink2}"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
                 <Setter Property="Margin" Value="10,0,0,0"/>
             </Style>
@@ -202,12 +204,12 @@
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="FontSize" Value="28"/>
                 <Setter Property="LineHeight" Value="32"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
                 <Setter Property="Margin" Value="0,6,0,0"/>
             </Style>
             <Style x:Key="Hairline" TargetType="Rectangle">
                 <Setter Property="Height" Value="1"/>
-                <Setter Property="Fill" Value="{StaticResource Line}"/>
+                <Setter Property="Fill" Value="{DynamicResource Line}"/>
                 <Setter Property="SnapsToDevicePixels" Value="True"/>
             </Style>
 
@@ -227,10 +229,10 @@
 
             <!-- ============ Подсказка ============ -->
             <Style TargetType="ToolTip">
-                <Setter Property="Background" Value="{StaticResource Raised}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource Ink1}"/>
+                <Setter Property="Background" Value="{DynamicResource Raised}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource Ink1}"/>
                 <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
                 <Setter Property="FontFamily" Value="{StaticResource SmallFont}"/>
                 <Setter Property="FontSize" Value="12"/>
                 <Setter Property="Padding" Value="8,6"/>
@@ -249,9 +251,9 @@
             <!-- ============ Кнопки ============ -->
             <!-- Обычная (контур): рамка тушью, наведение — утопленная бумага, нажатие — сдвиг на 1 px. -->
             <Style TargetType="Button">
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
                 <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="BorderBrush" Value="{StaticResource Ink1}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource Ink1}"/>
                 <Setter Property="BorderThickness" Value="1"/>
                 <Setter Property="Height" Value="36"/>
                 <Setter Property="Padding" Value="18,0"/>
@@ -268,7 +270,7 @@
                             <Grid x:Name="root">
                                 <Border x:Name="face" Background="{TemplateBinding Background}" CornerRadius="2"/>
                                 <Rectangle x:Name="frame" Stroke="{TemplateBinding BorderBrush}" StrokeThickness="1" RadiusX="2" RadiusY="2"/>
-                                <Border x:Name="hover" Background="{StaticResource Track}" CornerRadius="2" Opacity="0" Margin="1"/>
+                                <Border x:Name="hover" Background="{DynamicResource Track}" CornerRadius="2" Opacity="0" Margin="1"/>
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
                             </Grid>
                             <ControlTemplate.Triggers>
@@ -287,8 +289,8 @@
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
                                     <Setter TargetName="frame" Property="StrokeDashArray" Value="2 2"/>
-                                    <Setter TargetName="frame" Property="Stroke" Value="{StaticResource Ink4}"/>
-                                    <Setter Property="Foreground" Value="{StaticResource Ink4}"/>
+                                    <Setter TargetName="frame" Property="Stroke" Value="{DynamicResource Ink4}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource Ink4}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -299,8 +301,8 @@
 
             <!-- Главное действие листа: единственная красная кнопка. -->
             <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                <Setter Property="Background" Value="{StaticResource Accent}"/>
-                <Setter Property="Foreground" Value="{StaticResource OnRed}"/>
+                <Setter Property="Background" Value="{DynamicResource Accent}"/>
+                <Setter Property="Foreground" Value="{DynamicResource OnRed}"/>
                 <Setter Property="BorderBrush" Value="Transparent"/>
                 <Setter Property="Template">
                     <Setter.Value>
@@ -311,17 +313,17 @@
                             </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="face" Property="Background" Value="{StaticResource RedHover}"/>
+                                    <Setter TargetName="face" Property="Background" Value="{DynamicResource RedHover}"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="face" Property="Background" Value="{StaticResource RedPressed}"/>
+                                    <Setter TargetName="face" Property="Background" Value="{DynamicResource RedPressed}"/>
                                     <Setter TargetName="root" Property="RenderTransform">
                                         <Setter.Value><TranslateTransform Y="1"/></Setter.Value>
                                     </Setter>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter TargetName="face" Property="Background" Value="{StaticResource Track}"/>
-                                    <Setter Property="Foreground" Value="{StaticResource Ink4}"/>
+                                    <Setter TargetName="face" Property="Background" Value="{DynamicResource Track}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource Ink4}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -331,13 +333,13 @@
 
             <!-- Необратимое действие: кармин. -->
             <Style x:Key="Destructive" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                <Setter Property="Foreground" Value="{StaticResource Bad}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource Bad}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Bad}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource Bad}"/>
             </Style>
 
             <!-- Текстовая кнопка и ссылка: без рамки, при наведении — подчёркивание. -->
             <Style x:Key="Link" TargetType="Button">
-                <Setter Property="Foreground" Value="{StaticResource Ink2}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink2}"/>
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
                 <Setter Property="FontSize" Value="13"/>
                 <Setter Property="Cursor" Value="Hand"/>
@@ -347,15 +349,15 @@
                         <ControlTemplate TargetType="Button">
                             <Grid Background="Transparent">
                                 <ContentPresenter VerticalAlignment="Center" Margin="0,2,0,3"/>
-                                <Rectangle x:Name="under" Height="1" VerticalAlignment="Bottom" Fill="{StaticResource Ink1}" Opacity="0"/>
+                                <Rectangle x:Name="under" Height="1" VerticalAlignment="Bottom" Fill="{DynamicResource Ink1}" Opacity="0"/>
                             </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
                                     <Setter TargetName="under" Property="Opacity" Value="1"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter Property="Foreground" Value="{StaticResource Ink4}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource Ink4}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -365,7 +367,7 @@
 
             <!-- Ячейка нижней полосы «Обзора»: без рамки, наведение — утопленная бумага и красная черта снизу. -->
             <Style x:Key="StripCell" TargetType="Button">
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
                 <Setter Property="Cursor" Value="Hand"/>
                 <Setter Property="FocusVisualStyle" Value="{StaticResource FocusDash}"/>
                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -373,10 +375,10 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
                             <Grid x:Name="root" Background="Transparent">
-                                <Border x:Name="hover" Background="{StaticResource Track}" Opacity="0"/>
-                                <Rectangle Width="1" Fill="{StaticResource Line}" HorizontalAlignment="Right" Margin="0,12"/>
+                                <Border x:Name="hover" Background="{DynamicResource Track}" Opacity="0"/>
+                                <Rectangle Width="1" Fill="{DynamicResource Line}" HorizontalAlignment="Right" Margin="0,12"/>
                                 <ContentPresenter Margin="16,14,18,12"/>
-                                <Rectangle x:Name="mark" Height="2" Fill="{StaticResource Accent}" VerticalAlignment="Bottom" Opacity="0"/>
+                                <Rectangle x:Name="mark" Height="2" Fill="{DynamicResource Accent}" VerticalAlignment="Bottom" Opacity="0"/>
                             </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
@@ -397,7 +399,7 @@
             <!-- Кнопки управления окном -->
             <Style x:Key="CaptionButton" TargetType="Button">
                 <Setter Property="Width" Value="46"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink2}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink2}"/>
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="FontFamily" Value="{StaticResource Icons}"/>
                 <Setter Property="FontSize" Value="10"/>
@@ -411,8 +413,8 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="b" Property="Background" Value="{StaticResource Track}"/>
-                                    <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                                    <Setter TargetName="b" Property="Background" Value="{DynamicResource Track}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -429,7 +431,7 @@
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="b" Property="Background" Value="#C42B1C"/>
-                                    <Setter Property="Foreground" Value="{StaticResource OnRed}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource OnRed}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -440,7 +442,7 @@
             <!-- Вкладка: пиктограмма (в Tag) и подпись; у выбранной — красная тушь и полужирный.
                  Невидимая полужирная копия подписи держит ширину, чтобы соседи не сдвигались. -->
             <Style x:Key="Tab" TargetType="RadioButton">
-                <Setter Property="Foreground" Value="{StaticResource Ink2}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink2}"/>
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
                 <Setter Property="FontSize" Value="14"/>
                 <Setter Property="Cursor" Value="Hand"/>
@@ -449,7 +451,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
-                            <Border Background="Transparent" Padding="12,0">
+                            <Border x:Name="pad" Background="Transparent" Padding="12,0">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Path x:Name="glyph" Data="{TemplateBinding Tag}" Width="16" Height="16" Stretch="Uniform" Stroke="{TemplateBinding Foreground}"
                                           StrokeThickness="1.25" StrokeStartLineCap="Square" StrokeEndLineCap="Square" Margin="0,0,8,0" VerticalAlignment="Center"/>
@@ -463,19 +465,24 @@
                                 <Trigger Property="IsChecked" Value="True">
                                     <Setter TargetName="text" Property="FontWeight" Value="SemiBold"/>
                                 </Trigger>
+                                <!-- Узкое окно: вкладки без пиктограмм и плотнее (MainWindow.FitTitle убирает Tag) -->
+                                <Trigger Property="Tag" Value="{x:Null}">
+                                    <Setter TargetName="glyph" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="pad" Property="Padding" Value="9,0"/>
+                                </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
                 <Style.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{StaticResource Ink1}"/></Trigger>
-                    <Trigger Property="IsChecked" Value="True"><Setter Property="Foreground" Value="{StaticResource RedHover}"/></Trigger>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink1}"/></Trigger>
+                    <Trigger Property="IsChecked" Value="True"><Setter Property="Foreground" Value="{DynamicResource RedHover}"/></Trigger>
                 </Style.Triggers>
             </Style>
 
             <!-- Выбор отрезка времени: подписи через тонкие вертикали, выбранная — полужирная с красной чертой -->
             <Style x:Key="Range" TargetType="RadioButton">
-                <Setter Property="Foreground" Value="{StaticResource Ink3}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink3}"/>
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
                 <Setter Property="FontSize" Value="13"/>
                 <Setter Property="Cursor" Value="Hand"/>
@@ -489,8 +496,8 @@
                                     <TextBlock Text="{TemplateBinding Content}" FontWeight="SemiBold" Visibility="Hidden"/>
                                     <TextBlock x:Name="text" Text="{TemplateBinding Content}" HorizontalAlignment="Center"/>
                                 </Grid>
-                                <Rectangle x:Name="mark" Height="2" Fill="{StaticResource Accent}" VerticalAlignment="Bottom" Margin="12,0" Opacity="0"/>
-                                <Rectangle Width="1" Height="12" Fill="{StaticResource Line}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,0,0,4"/>
+                                <Rectangle x:Name="mark" Height="2" Fill="{DynamicResource Accent}" VerticalAlignment="Bottom" Margin="12,0" Opacity="0"/>
+                                <Rectangle Width="1" Height="12" Fill="{DynamicResource Line}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,0,0,4"/>
                             </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsChecked" Value="True">
@@ -502,8 +509,8 @@
                     </Setter.Value>
                 </Setter>
                 <Style.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{StaticResource Ink1}"/></Trigger>
-                    <Trigger Property="IsChecked" Value="True"><Setter Property="Foreground" Value="{StaticResource Ink1}"/></Trigger>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink1}"/></Trigger>
+                    <Trigger Property="IsChecked" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink1}"/></Trigger>
                 </Style.Triggers>
             </Style>
 
@@ -511,7 +518,7 @@
             <Style x:Key="CompItem" TargetType="ListBoxItem">
                 <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
                 <Setter Property="Cursor" Value="Hand"/>
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ListBoxItem">
@@ -523,13 +530,13 @@
                             </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="b" Property="Background" Value="{StaticResource Track}"/>
+                                    <Setter TargetName="b" Property="Background" Value="{DynamicResource Track}"/>
                                 </Trigger>
                                 <Trigger Property="IsSelected" Value="True">
-                                    <Setter TargetName="b" Property="Background" Value="{StaticResource RedTint}"/>
-                                    <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                                    <Setter TargetName="b" Property="Background" Value="{DynamicResource RedTint}"/>
+                                    <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Accent}"/>
                                     <Setter TargetName="sep" Property="Visibility" Value="Hidden"/>
-                                    <Setter Property="Foreground" Value="{StaticResource RedHover}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource RedHover}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -544,7 +551,7 @@
 
             <!-- ============ Флажок: квадрат, при выборе залит тушью ============ -->
             <Style TargetType="CheckBox">
-                <Setter Property="Foreground" Value="{StaticResource Ink1}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
                 <Setter Property="Cursor" Value="Hand"/>
                 <Setter Property="FocusVisualStyle" Value="{StaticResource FocusDash}"/>
@@ -552,21 +559,21 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="CheckBox">
                             <Grid Background="Transparent">
-                                <Rectangle x:Name="box" Width="16" Height="16" Stroke="{StaticResource Ink2}" StrokeThickness="1" Fill="Transparent" SnapsToDevicePixels="True"/>
-                                <Path x:Name="tick" Width="16" Height="16" Data="M 3.5,8 L 6.7,11 L 12.5,4.5" Stroke="{StaticResource Base}" StrokeThickness="1.8" Visibility="Collapsed"
+                                <Rectangle x:Name="box" Width="16" Height="16" Stroke="{DynamicResource Ink2}" StrokeThickness="1" Fill="Transparent" SnapsToDevicePixels="True"/>
+                                <Path x:Name="tick" Width="16" Height="16" Data="M 3.5,8 L 6.7,11 L 12.5,4.5" Stroke="{DynamicResource Base}" StrokeThickness="1.8" Visibility="Collapsed"
                                       StrokeStartLineCap="Square" StrokeEndLineCap="Square"/>
                             </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="box" Property="Stroke" Value="{StaticResource Ink1}"/>
+                                    <Setter TargetName="box" Property="Stroke" Value="{DynamicResource Ink1}"/>
                                 </Trigger>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="box" Property="Fill" Value="{StaticResource Ink1}"/>
-                                    <Setter TargetName="box" Property="Stroke" Value="{StaticResource Ink1}"/>
+                                    <Setter TargetName="box" Property="Fill" Value="{DynamicResource Ink1}"/>
+                                    <Setter TargetName="box" Property="Stroke" Value="{DynamicResource Ink1}"/>
                                     <Setter TargetName="tick" Property="Visibility" Value="Visible"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter TargetName="box" Property="Stroke" Value="{StaticResource Ink4}"/>
+                                    <Setter TargetName="box" Property="Stroke" Value="{DynamicResource Ink4}"/>
                                     <Setter TargetName="box" Property="StrokeDashArray" Value="2 2"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
@@ -584,18 +591,18 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="CheckBox">
                             <Grid Width="36" Height="18" Background="Transparent" SnapsToDevicePixels="True">
-                                <Rectangle x:Name="track" Stroke="{StaticResource Ink2}" StrokeThickness="1"/>
-                                <Rectangle x:Name="on" Fill="{StaticResource Ink1}" Opacity="0"/>
-                                <Rectangle x:Name="thumbOff" Width="12" Height="12" Stroke="{StaticResource Ink2}" StrokeThickness="1" HorizontalAlignment="Left" Margin="3,0,0,0">
+                                <Rectangle x:Name="track" Stroke="{DynamicResource Ink2}" StrokeThickness="1"/>
+                                <Rectangle x:Name="on" Fill="{DynamicResource Ink1}" Opacity="0"/>
+                                <Rectangle x:Name="thumbOff" Width="12" Height="12" Stroke="{DynamicResource Ink2}" StrokeThickness="1" HorizontalAlignment="Left" Margin="3,0,0,0">
                                     <Rectangle.RenderTransform><TranslateTransform/></Rectangle.RenderTransform>
                                 </Rectangle>
-                                <Rectangle x:Name="thumbOn" Width="12" Height="12" Fill="{StaticResource Base}" HorizontalAlignment="Left" Margin="3,0,0,0" Opacity="0">
+                                <Rectangle x:Name="thumbOn" Width="12" Height="12" Fill="{DynamicResource Base}" HorizontalAlignment="Left" Margin="3,0,0,0" Opacity="0">
                                     <Rectangle.RenderTransform><TranslateTransform/></Rectangle.RenderTransform>
                                 </Rectangle>
                             </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="track" Property="Stroke" Value="{StaticResource Ink1}"/>
+                                    <Setter TargetName="track" Property="Stroke" Value="{DynamicResource Ink1}"/>
                                 </Trigger>
                                 <Trigger Property="IsChecked" Value="True">
                                     <Trigger.EnterActions>
@@ -630,10 +637,10 @@
                                     </Trigger.ExitActions>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter TargetName="track" Property="Stroke" Value="{StaticResource Ink4}"/>
+                                    <Setter TargetName="track" Property="Stroke" Value="{DynamicResource Ink4}"/>
                                     <Setter TargetName="track" Property="StrokeDashArray" Value="2 2"/>
-                                    <Setter TargetName="thumbOff" Property="Stroke" Value="{StaticResource Ink4}"/>
-                                    <Setter TargetName="on" Property="Fill" Value="{StaticResource Ink4}"/>
+                                    <Setter TargetName="thumbOff" Property="Stroke" Value="{DynamicResource Ink4}"/>
+                                    <Setter TargetName="on" Property="Fill" Value="{DynamicResource Ink4}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -650,18 +657,18 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="ScrollBar">
                             <Grid Background="Transparent">
-                                <Rectangle Width="1" Fill="{StaticResource Line}" HorizontalAlignment="Center"/>
+                                <Rectangle Width="1" Fill="{DynamicResource Line}" HorizontalAlignment="Center"/>
                                 <Track x:Name="PART_Track" IsDirectionReversed="True">
                                     <Track.Thumb>
                                         <Thumb>
                                             <Thumb.Template>
                                                 <ControlTemplate TargetType="Thumb">
                                                     <Border Background="Transparent">
-                                                        <Rectangle x:Name="t" Width="3" Fill="{StaticResource Ink3}" Opacity="0.6" HorizontalAlignment="Center"/>
+                                                        <Rectangle x:Name="t" Width="3" Fill="{DynamicResource Ink3}" Opacity="0.6" HorizontalAlignment="Center"/>
                                                     </Border>
                                                     <ControlTemplate.Triggers>
                                                         <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter TargetName="t" Property="Fill" Value="{StaticResource Ink2}"/>
+                                                            <Setter TargetName="t" Property="Fill" Value="{DynamicResource Ink2}"/>
                                                             <Setter TargetName="t" Property="Width" Value="4"/>
                                                             <Setter TargetName="t" Property="Opacity" Value="1"/>
                                                         </Trigger>

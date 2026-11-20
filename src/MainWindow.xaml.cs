@@ -47,15 +47,16 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        WindowFit.AttachMain(this, settings);
 
         pages = new FrameworkElement[] { PageOverview, PageSessions, PageHistory, PageNet, PageDiag, PageClean, PageTweaks, PageSystem, PageHelp };
         foreach (var p in pages) p.RenderTransform = new TranslateTransform();
 
         Motion.Init(this);
         Motion.Changed += UpdateActivity;
-        AdminText.Text = admin ? "" : "только просмотр";
+        AdminText.Text = admin ? "" : L.T("только просмотр");
         AdminBadge.Visibility = admin ? Visibility.Collapsed : Visibility.Visible;
-        AdminBadge.ToolTip = admin ? null : "Программа запущена без прав администратора: показывает, но ничего не меняет.";
+        AdminBadge.ToolTip = admin ? null : L.T("Программа запущена без прав администратора: показывает, но ничего не меняет.");
         LiveDot.Opacity = 0.35;
 
         for (int i = 0; i < 6; i++) procs.Add(new ProcVm());
@@ -129,6 +130,10 @@ public partial class MainWindow : Window
         UpdateSheetNo();
         InitOverview();
         InitUpkeep();
+        InitCustomGames();
+        InitTitleButtons();
+        sessions.CollectionChanged += (_, _) => { UpdateRateBar(); UpdateCleanSessions(); };
+        UpdateCleanSessions();
         InitSystem();
         // F1 — справка, откуда угодно в окне.
         PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.F1) { ShowHelp(); e.Handled = true; } };
@@ -163,7 +168,7 @@ public partial class MainWindow : Window
             settings.FirstScanDone = true; settings.Save();
             // После самого первого осмотра — одна подсказка, где искать справку.
             if (first && settings.AlertsEnabled)
-                tray.Notify("Как пользоваться программой", "Справка — кнопка «?» вверху окна или клавиша F1. Нажмите, чтобы открыть.", false, () => { ShowFromTray(); ShowHelp(); });
+                tray.Notify(L.T("Как пользоваться программой"), L.T("Справка — кнопка «?» вверху окна или клавиша F1. Нажмите, чтобы открыть."), false, () => { ShowFromTray(); ShowHelp(); });
         };
         w.Show();
     }
@@ -222,7 +227,7 @@ public partial class MainWindow : Window
         if (!settings.TrayHintShown)
         {
             settings.TrayHintShown = true; settings.Save();
-            tray.Notify("Пульс ПК продолжает работать", "Значок — у часов, игры записываются в фоне. Чтобы выйти, нажмите на значок правой кнопкой мыши.");
+            tray.Notify(L.T("Пульс ПК продолжает работать"), L.T("Значок — у часов, игры записываются в фоне. Чтобы выйти, нажмите на значок правой кнопкой мыши."));
         }
     }
 
@@ -297,10 +302,10 @@ public partial class MainWindow : Window
     /// <summary>Штамп в подвале: номер листа, а в подробном виде детали — ещё и буква вида.</summary>
     private void UpdateSheetNo()
     {
-        SheetNo.Text = Ink.Track($"ЛИСТ {page + 1}/{pages.Length}", 2);
+        SheetNo.Text = Ink.Track(L.F("ЛИСТ {0}/{1}", page + 1, pages.Length), 2);
         bool view = page == PgOverview && detail;
         StampViewCell.Visibility = view ? Visibility.Visible : Visibility.Collapsed;
-        if (view) StampView.Text = Ink.Track("ВИД " + ViewLetter(comp), 2);
+        if (view) StampView.Text = Ink.Track(L.F("ВИД {0}", ViewLetter(comp)), 2);
     }
 
     private void MoveTabLine(bool animate)
@@ -308,7 +313,7 @@ public partial class MainWindow : Window
         // На листе «Справка» вкладки не выбраны: черта под вкладками убирается.
         if (page >= Tabs.Children.Count) { TabLine.Width = 0; return; }
         if (Tabs.Children[page] is not RadioButton tab || tab.ActualWidth <= 0) return;
-        const double pad = 14;   // отступ текста вкладки
+        double pad = tabIcons.Count > 0 ? 11 : 14;   // отступ текста вкладки (в узком окне вкладки плотнее)
         double x = tab.TranslatePoint(new Point(pad, 0), TabBar).X;
         TabLine.Width = Math.Max(0, tab.ActualWidth - 2 * pad);
         var shift = (TranslateTransform)TabLine.RenderTransform;
@@ -318,7 +323,14 @@ public partial class MainWindow : Window
 
     // ================================================================== линия занятости
     private void BeginBusy() { busy++; UpdateActivity(); }
-    private void EndBusy() { busy = Math.Max(0, busy - 1); UpdateActivity(); }
+    private void EndBusy()
+    {
+        busy = Math.Max(0, busy - 1);
+        UpdateActivity();
+        // Кнопки «Очистить», «Играть», «Только закрыть» выключены, пока идёт работа (busy > 0), а сами пересчитываются только
+        // по своим событиям: закончилась работа в другом месте (замер, раздел «Системы») — включить их обратно здесь.
+        if (busy == 0) { UpdateAppsButton(); UpdateCleanSelection(); }
+    }
 
     private void UpdateActivity()
     {
@@ -419,9 +431,9 @@ public partial class MainWindow : Window
         alerts.Check(gpuOk ? gpu.Temp : double.NaN, avail);
         double liveFps = recorder.LiveFps;
         tray.SetTooltip(gpuOk
-            ? $"Пульс ПК · видеокарта {(double.IsNaN(gpu.Temp) ? $"{gpu.Load:0} %" : $"{gpu.Temp:0} °C")} · свободно {avail:0.0} ГБ"
-              + (recorder.IsRecording ? double.IsNaN(liveFps) ? " · запись сессии" : $" · {liveFps:0} FPS" : "")
-            : $"Пульс ПК · свободно {avail:0.0} ГБ");
+            ? L.F("Пульс ПК · видеокарта {0} · свободно {1:0.0} ГБ", double.IsNaN(gpu.Temp) ? gpu.Load.ToString("0") + L.Pick(" %", "%") : $"{gpu.Temp:0} °C", avail)
+              + (recorder.IsRecording ? double.IsNaN(liveFps) ? L.T(" · запись сессии") : $" · {liveFps:0} FPS" : "")
+            : L.F("Пульс ПК · свободно {0:0.0} ГБ", avail));
 
         // Графики копят показания всегда, а двигаются только когда их видно.
         bool onOverview = page == PgOverview && !Hidden;
@@ -465,10 +477,10 @@ public partial class MainWindow : Window
             LivePanel.Visibility = Visibility.Visible;
             LiveGame.Text = recorder.CurrentGame;
             double fps = recorder.LiveFps;
-            LiveTime.Text = "записано " + Fmt.Duration(recorder.Recorded) + (double.IsNaN(fps) ? "" : $" · сейчас {fps:0} FPS");
+            LiveTime.Text = L.F("записано {0}", Fmt.Duration(recorder.Recorded)) + (double.IsNaN(fps) ? "" : L.F(" · сейчас {0:0} FPS", fps));
             SessionsHint.Visibility = Visibility.Collapsed;
             var len = recorder.Recorded;     // записанное время: сон компьютера посреди игры не считается
-            FooterRec.Text = $"●  запись · {recorder.CurrentGame} · {(int)len.TotalHours:00}:{len.Minutes:00}:{len.Seconds:00}";
+            FooterRec.Text = L.F("●  запись · {0} · {1:00}:{2:00}:{3:00}", recorder.CurrentGame, (int)len.TotalHours, len.Minutes, len.Seconds);
             FooterRec.Visibility = Visibility.Visible;
             // Точка записи — единственный бесконечный цикл в программе; без фокуса окна стоит.
             if (Motion.On && !recBlinking)
@@ -503,8 +515,8 @@ public partial class MainWindow : Window
             var top = ProcessMemory.Top(3, pid);
             OnUi(() =>
             {
-                string who = top.Count > 0 ? " Больше всего занимают: " + ProcessMemory.Describe(top) + "." : "";
-                tray.Notify($"Мало памяти для {game}", $"Свободно {free:0.0} ГБ.{who} Нажмите, чтобы выбрать, что закрыть.", true,
+                string who = top.Count > 0 ? L.F(" Больше всего занимают: {0}.", ProcessMemory.Describe(top)) : "";
+                tray.Notify(L.F("Мало памяти для {0}", game), L.F("Свободно {0:0.0} ГБ.{1} Нажмите, чтобы выбрать, что закрыть.", free, who), true,
                     () => { ShowFromTray(); SelectTab(PgTweaks); });
             });
         });
@@ -517,12 +529,20 @@ public partial class MainWindow : Window
         UpdateSessionLive();
         // Новая игра или новые данные о том, что её ограничивает: пересчитать рекомендации настроек.
         LoadTunes(notify: true);
-        if (settings.AlertsEnabled)
-            tray.Notify("Сессия записана", $"{session.Game}, {Fmt.Duration(session.Duration)}. Отчёт — на вкладке «Сессии».");
+        if (session.SaveError != null)
+            // Отчёт виден до выхода из программы, но на диск не лёг — говорим об этом сразу, а не «Сессия записана».
+            tray.Notify(L.T("Сессия не сохранена"), L.F("{0}: отчёт есть на вкладке «Сессии», но не сохранился на диск ({1}) и пропадёт после перезапуска.",
+                session.Game, session.SaveError), true, () => { ShowFromTray(); SelectTab(PgSessions); });
+        else if (settings.AlertsEnabled)
+            tray.Notify(L.T("Сессия записана"), L.F("{0}, {1}. Отчёт — на вкладке «Сессии».", session.Game, Fmt.Duration(session.Duration)));
     }
 
     private void SessionList_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
         ShowSession(SessionList.SelectedItem as GameSession);
+
+    /// <summary>Списку сессий — не меньше ~150 точек по высоте: всё, что выше него в колонке, при нехватке места прокручивается.</summary>
+    private void SessionsBody_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        SessionsSide.MaxHeight = Math.Max(120, e.NewSize.Height - 48 - 150);     // 48 — поля колонки сверху и снизу
 
     private void ShowSession(GameSession s)
     {
@@ -538,7 +558,7 @@ public partial class MainWindow : Window
         WeekReport.Visibility = Visibility.Collapsed;
         SessionReport.Visibility = Visibility.Visible;
         SessGame.Text = s.Game;
-        SessWhen.Text = $"{s.Start:d MMMM, HH:mm} – {s.End:HH:mm} · {Fmt.Duration(s.Duration)}";
+        SessWhen.Text = $"{s.Start.ToString(L.Pick("d MMMM, HH:mm", "MMMM d, HH:mm"))} – {s.End:HH:mm} · {Fmt.Duration(s.Duration)}";
 
         // Та же игра в прошлые разы: с предыдущей сессией сравниваются числа, остальные идут в таблицу внизу.
         var same = sessions.Where(x => x.Game == s.Game).OrderByDescending(x => x.Start).ToList();
@@ -562,15 +582,15 @@ public partial class MainWindow : Window
             SessLow1.Value = s.Low1Fps ?? double.NaN;
             SessLow1.Foreground = s.Low1Fps < 0.5 * s.AvgFps ? Palette.Warn : Palette.Ink1;
             SessLow01.Value = s.Low01Fps ?? double.NaN;
-            SessFpsCap.Text = "в среднем" + Delta(s.AvgFps, prev?.AvgFps, 1, "0");
-            SessLow1Cap.Text = "в худшем 1 % кадров" + Delta(s.Low1Fps, prev?.Low1Fps, 1, "0");
+            SessFpsCap.Text = L.T("в среднем") + Delta(s.AvgFps, prev?.AvgFps, 1, "0");
+            SessLow1Cap.Text = L.T("в худшем 1 % кадров") + Delta(s.Low1Fps, prev?.Low1Fps, 1, "0");
             SessFpsChart.SetData(s.FpsSeries);
         }
         else
         {
             SessNoFps.Text = SessionRecorder.SkipsFps(s.Game)
-                ? "FPS в этой игре не записывается: её античит работает на уровне ядра, и рисковать аккаунтом незачем."
-                : "FPS в этой сессии не записывался.";
+                ? L.T("FPS в этой игре не записывается: её античит работает на уровне ядра, и рисковать аккаунтом незачем.")
+                : L.T("FPS в этой сессии не записывался.");
         }
 
         SessMaxTemp.Value = s.MaxTemp;
@@ -580,21 +600,21 @@ public partial class MainWindow : Window
         SessMinRam.Value = s.MinRamGb;
         SessMinRam.Foreground = s.MinRamGb < 1.0 ? Palette.Warn : Palette.Ink1;
         SessMaxVram.Value = s.MaxVramGb;
-        SessMaxTempCap.Text = "макс. температура видеокарты" + Delta(s.MaxTemp, prev?.MaxTemp, 1, "0", "°");
-        SessAvgGpuCap.Text = "видеокарта в среднем" + Delta(s.AvgGpu, prev?.AvgGpu, 2, "0", " %");
-        SessAvgCpuCap.Text = "процессор в среднем" + Delta(s.AvgCpu, prev?.AvgCpu, 2, "0", " %");
-        SessMinRamCap.Text = "минимум свободной памяти" + Delta(s.MinRamGb, prev?.MinRamGb, 0.2, "0.0", " ГБ");
+        SessMaxTempCap.Text = L.T("макс. температура видеокарты") + Delta(s.MaxTemp, prev?.MaxTemp, 1, "0", "°");
+        SessAvgGpuCap.Text = L.T("видеокарта в среднем") + Delta(s.AvgGpu, prev?.AvgGpu, 2, "0", L.Pick(" %", "%"));
+        SessAvgCpuCap.Text = L.T("процессор в среднем") + Delta(s.AvgCpu, prev?.AvgCpu, 2, "0", L.Pick(" %", "%"));
+        SessMinRamCap.Text = L.T("минимум свободной памяти") + Delta(s.MinRamGb, prev?.MinRamGb, 0.2, "0.0", " " + Fmt.GbUnit);
 
         SessCompareBlock.Visibility = same.Count >= 2 ? Visibility.Visible : Visibility.Collapsed;
         SessCompare.ItemsSource = same.Count < 2 ? null : same.Take(8).Select(x => new CompareRow
         {
-            When = x.Start.ToString("d MMM, HH:mm"),
+            When = x.Start.ToString(L.Pick("d MMM, HH:mm", "MMM d, HH:mm")),
             Length = Fmt.Duration(x.Duration),
             Fps = x.AvgFps > 0 ? x.AvgFps.Value.ToString("0") : "—",
             Low = x.Low1Fps > 0 ? x.Low1Fps.Value.ToString("0") : "—",
             Temp = x.MaxTemp > 0 ? x.MaxTemp.ToString("0") : "—",
-            Gpu = x.AvgGpu > 0 ? x.AvgGpu.ToString("0") + " %" : "—",
-            Ram = x.MinRamGb > 0 ? x.MinRamGb.ToString("0.0") + " ГБ" : "—",
+            Gpu = x.AvgGpu > 0 ? x.AvgGpu.ToString("0") + L.Pick(" %", "%") : "—",
+            Ram = x.MinRamGb > 0 ? x.MinRamGb.ToString("0.0") + " " + Fmt.GbUnit : "—",
             Ink = ReferenceEquals(x, s) ? Palette.Ink1 : Palette.Ink2,
             Weight = ReferenceEquals(x, s) ? FontWeights.SemiBold : FontWeights.Normal,
         }).ToList();
@@ -611,7 +631,7 @@ public partial class MainWindow : Window
 
         SessChart.SetData(s.CpuSeries, s.GpuSeries);
         SessTempChart.SetData(s.TempSeries);
-        SessNotes.ItemsSource = s.Notes;
+        SessNotes.ItemsSource = s.Notes?.Select(L.T).ToList();     // старые сессии хранят выводы по-русски
         ShowSessionAnalysis(s);
         SessionScroll.ScrollToTop();
         if (page == PgSessions) Motion.Reveal(SessionReport, 0, 8);
@@ -623,7 +643,7 @@ public partial class MainWindow : Window
         if (now is not > 0 || before is not > 0) return "";
         double d = now.Value - before.Value;
         if (Math.Abs(d) < min) return "";
-        return $"\n{(d > 0 ? "+" : "−")}{Math.Abs(d).ToString(format)}{unit} к прошлой сессии";
+        return "\n" + L.F("{0}{1}{2} к прошлой сессии", d > 0 ? "+" : "−", Math.Abs(d).ToString(format), unit);
     }
 
     // ================================================================== история
@@ -631,7 +651,7 @@ public partial class MainWindow : Window
     {
         if (sender is RadioButton { Tag: string tag } && int.TryParse(tag, out int minutes)) histMinutes = minutes;
         if (HdrHistory != null)
-            HdrHistory.Line2 = histMinutes switch { 60 => "ЗА ЧАС", 360 => "ЗА 6 ЧАСОВ", 1440 => "ЗА СУТКИ", _ => "ЗА ДВОЕ СУТОК" };
+            HdrHistory.Line2 = histMinutes switch { 60 => L.T("ЗА ЧАС"), 360 => L.T("ЗА 6 ЧАСОВ"), 1440 => L.T("ЗА СУТКИ"), _ => L.T("ЗА ДВОЕ СУТОК") };
         // Масштаб работает внутри выбранного диапазона: новый диапазон открывается целиком.
         HistLoadChart?.Zoom?.Reset(false);
         if (pages != null) UpdateHistoryPage(reveal: true);
@@ -645,12 +665,12 @@ public partial class MainWindow : Window
     {
         var z = HistLoadChart.Zoom;
         if (z == null || histFrom == default) return;
-        static string At(DateTime t) => t.ToString(t.Date == DateTime.Today ? "HH:mm" : "d MMM, HH:mm");
+        static string At(DateTime t) => t.ToString(t.Date == DateTime.Today ? "HH:mm" : L.Pick("d MMM, HH:mm", "MMM d, HH:mm"));
         double minutes = histMinutes;
         DateTime from = histFrom.AddMinutes(minutes * z.Start), to = histFrom.AddMinutes(minutes * (z.Start + z.Span));
         HistFrom.Text = At(from);
         HistMid.Text = At(from.AddMinutes(minutes * z.Span / 2));
-        HistTo.Text = z.Start + z.Span >= 0.999 ? "сейчас" : At(to);
+        HistTo.Text = z.Start + z.Span >= 0.999 ? L.T("сейчас") : At(to);
     }
 
     private void OpenHistory()
@@ -687,10 +707,10 @@ public partial class MainWindow : Window
         HistAvgCpu.Value = cpuOk.Average();
         HistAvgGpu.Value = gpuOkList.Count > 0 ? gpuOkList.Average() : double.NaN;
         HistMaxRam.Value = ramOk.Count > 0 ? ramOk.Max() : double.NaN;
-        HistMaxRamCap.Text = total > 0 ? $"пик занятой памяти из {total:0.0} ГБ" : "пик занятой памяти";
+        HistMaxRamCap.Text = total > 0 ? L.F("пик занятой памяти из {0:0.0} ГБ", total) : L.T("пик занятой памяти");
 
         double ramTop = Math.Max(1, Math.Round(total));
-        HistRamLabel.Source = $"ЗАНЯТАЯ ПАМЯТЬ, 0–{ramTop:0} ГБ";
+        HistRamLabel.Source = L.F("ЗАНЯТАЯ ПАМЯТЬ, 0–{0:0} ГБ", ramTop);
         HistRamChart.Max = ramTop;
         if (HistLoadChart.Zoom != null) HistLoadChart.Zoom.Full = TimeSpan.FromMinutes(histMinutes);
         HistTempChart.SetData(w.Temp, null, reveal);
@@ -719,7 +739,7 @@ public partial class MainWindow : Window
                 if (messages is { Count: > 0 } && settings.AlertsEnabled)
                 {
                     string text = string.Join(" ", messages);
-                    tray.Notify("Сторож: с прошлой проверки есть изменения", text, true,
+                    tray.Notify(L.T("Сторож: с прошлой проверки есть изменения"), text, true,
                         settings.RevertedTweaks.Count > 0 ? () => { ShowFromTray(); SelectTab(PgTweaks); } : null);
                 }
             });
@@ -730,8 +750,8 @@ public partial class MainWindow : Window
     {
         bool quiet = string.IsNullOrEmpty(settings.LastWatchSummary) || settings.LastWatchSummary == "изменений нет";
         WatchLast.Text = settings.LastWatch == DateTime.MinValue
-            ? "Первая проверка — через минуту после запуска."
-            : $"Последняя проверка {settings.LastWatch:d MMMM, HH:mm}: {(quiet ? "изменений нет." : settings.LastWatchSummary)}";
+            ? L.T("Первая проверка — через минуту после запуска.")
+            : L.F("Последняя проверка {0}: {1}", settings.LastWatch.ToString(L.Pick("d MMMM, HH:mm", "MMMM d, HH:mm")), quiet ? L.T("изменений нет.") : L.T(settings.LastWatchSummary));
         WatchLast.Foreground = quiet ? Palette.Ink3 : Palette.Warn;
     }
 
@@ -748,12 +768,12 @@ public partial class MainWindow : Window
         NetRouterLoss.Foreground = r.LossPct >= 1 ? Palette.Bad : Palette.Ink1;
         NetInetChart.SetLive(net.Internet.Snapshot());
         NetRouterChart.SetLive(net.Router.Snapshot());
-        NetRouterLabel.Source = net.Router.Host != null ? "РОУТЕР · " + net.Router.Host : "РОУТЕР";
+        NetRouterLabel.Source = net.Router.Host != null ? L.T("РОУТЕР") + " · " + net.Router.Host : L.T("РОУТЕР");
         NetAdapter.Text = net.AdapterText;
-        RouteRouterName.Text = net.Router.Host != null ? "роутер " + net.Router.Host : "роутер";
-        static string Ms(double v) => double.IsNaN(v) ? "" : (v < 10 ? v.ToString("0.0") : v.ToString("0")) + "\u202Fмс";
-        RouteRouter.Text = r.Count >= 3 ? (double.IsNaN(r.Avg) ? "не отвечает" : Ms(r.Avg)) : "";
-        RouteInet.Text = i.Count >= 3 ? (double.IsNaN(i.Avg) ? "нет ответа" : Ms(i.Avg)) : "";
+        RouteRouterName.Text = net.Router.Host != null ? L.F("роутер {0}", net.Router.Host) : L.T("роутер");
+        static string Ms(double v) => double.IsNaN(v) ? "" : (v < 10 ? v.ToString("0.0") : v.ToString("0")) + "\u202F" + L.Pick("мс", "ms");
+        RouteRouter.Text = r.Count >= 3 ? (double.IsNaN(r.Avg) ? L.T("не отвечает") : Ms(r.Avg)) : "";
+        RouteInet.Text = i.Count >= 3 ? (double.IsNaN(i.Avg) ? L.T("нет ответа") : Ms(i.Avg)) : "";
 
         if (i.Count < 5) return;   // для вывода нужно хотя бы десять секунд замеров
 
@@ -765,26 +785,26 @@ public partial class MainWindow : Window
         string verdict, detail;
         if (double.IsNaN(i.Avg))
         {
-            verdict = routerSilent || r.Count == 0 ? "Сети нет" : "Нет выхода в интернет";
+            verdict = routerSilent || r.Count == 0 ? L.T("Сети нет") : L.T("Нет выхода в интернет");
             detail = routerSilent || r.Count == 0
-                ? "Не отвечают ни роутер, ни интернет. Проверьте кабель и питание роутера."
-                : "Роутер отвечает, а интернет — нет. Скорее всего, проблема у провайдера.";
+                ? L.T("Не отвечают ни роутер, ни интернет. Проверьте кабель и питание роутера.")
+                : L.T("Роутер отвечает, а интернет — нет. Скорее всего, проблема у провайдера.");
         }
         else if (routerBad)
         {
-            verdict = "Проблема в домашней сети";
-            detail = $"Скачки пинга и потери начинаются уже на пути до роутера (потери {r.LossPct:0.0} %, разброс {r.Jitter:0.0} мс). Проверьте кабель, порт роутера и не перегружен ли он.";
+            verdict = L.T("Проблема в домашней сети");
+            detail = L.F("Скачки пинга и потери начинаются уже на пути до роутера (потери {0:0.0} %, разброс {1:0.0} мс). Проверьте кабель, порт роутера и не перегружен ли он.", r.LossPct, r.Jitter);
         }
         else if (inetBad)
         {
-            verdict = "Проблема за пределами дома";
-            detail = $"До роутера всё чисто, а до интернета — потери {i.LossPct:0.0} % и разброс {i.Jitter:0.0} мс. Проблема у провайдера или на линии до него.";
+            verdict = L.T("Проблема за пределами дома");
+            detail = L.F("До роутера всё чисто, а до интернета — потери {0:0.0} % и разброс {1:0.0} мс. Проблема у провайдера или на линии до него.", i.LossPct, i.Jitter);
         }
         else
         {
-            verdict = "Сеть в порядке";
-            detail = $"Пинг до интернета в среднем {i.Avg:0} мс, разброс {i.Jitter:0.0} мс, потерь нет. Если игра всё равно лагает, дело не в вашем подключении."
-                     + (routerSilent ? " Роутер на пинг не отвечает — у некоторых моделей это нормально." : "");
+            verdict = L.T("Сеть в порядке");
+            detail = L.F("Пинг до интернета в среднем {0:0} мс, разброс {1:0.0} мс, потерь нет. Если игра всё равно лагает, дело не в вашем подключении.", i.Avg, i.Jitter)
+                     + (routerSilent ? L.T(" Роутер на пинг не отвечает — у некоторых моделей это нормально.") : "");
         }
         // Виновный участок трассы выделяется: охра — разброс, кармин — потери.
         RouteRouter.Level = routerBad ? (r.LossPct >= 2 ? Severity.Bad : Severity.Warn) : Severity.Ok;
@@ -805,7 +825,7 @@ public partial class MainWindow : Window
         }
         startupLoaded = true;
         UpdateStartupCount();
-        if (!admin) StartupNote.Text = "Менять автозагрузку можно только с правами администратора — пока список только для просмотра.";
+        if (!admin) StartupNote.Text = L.T("Менять автозагрузку можно только с правами администратора — пока список только для просмотра.");
     }
 
     private void UpdateStartupCount()
@@ -821,20 +841,20 @@ public partial class MainWindow : Window
         {
             item.Write?.Invoke(item.Enabled);
             Motion.SetText(StartupNote, item.Enabled
-                ? $"«{item.Title}» снова запускается вместе с Windows."
-                : $"«{item.Title}» больше не запускается вместе с Windows. Саму программу это не удаляет.");
+                ? L.F("«{0}» снова запускается вместе с Windows.", item.Title)
+                : L.F("«{0}» больше не запускается вместе с Windows. Саму программу это не удаляет.", item.Title));
         }
         catch (Exception ex)
         {
             item.SetSilently(!item.Enabled);
-            Motion.SetText(StartupNote, $"Не удалось изменить «{item.Title}»: {ex.Message}");
+            Motion.SetText(StartupNote, L.F("Не удалось изменить «{0}»: {1}", item.Title, ex.Message));
         }
         UpdateStartupCount();
     }
 
     private static string ShortCpu(string name)
     {
-        if (string.IsNullOrWhiteSpace(name)) return "процессор";
+        if (string.IsNullOrWhiteSpace(name)) return L.T("процессор");
         foreach (var junk in new[] { "(R)", "(TM)", "Intel", "Core", "AMD", "Processor", "CPU" }) name = name.Replace(junk, "");
         var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(p => !p.EndsWith("Gen", StringComparison.OrdinalIgnoreCase) && !p.EndsWith("th")).ToArray();
         return parts.Length > 0 ? string.Join(" ", parts) : name.Trim();
@@ -869,7 +889,7 @@ public partial class MainWindow : Window
                 var vm = drives.FirstOrDefault(x => x.Letter == letter);
                 if (vm == null) { vm = new DriveVm { Letter = letter }; drives.Add(vm); }
                 double freePct = 100.0 * d.AvailableFreeSpace / d.TotalSize;
-                vm.FreeText = Fmt.Size(d.AvailableFreeSpace) + " свободно";
+                vm.FreeText = L.F("{0} свободно", Fmt.Size(d.AvailableFreeSpace));
                 vm.Fraction = 1 - freePct / 100.0;
                 vm.BarBrush = freePct < 10 ? Palette.Bad : freePct < 15 ? Palette.Warn : Palette.Ink2;
             }
@@ -884,7 +904,7 @@ public partial class MainWindow : Window
         var disks = metrics.Disks;
         if (disks.Count == 0)
         {
-            DiskHealth.Text = "Температуру и состояние дисков программа видит только с правами администратора.";
+            DiskHealth.Text = L.T("Температуру и состояние дисков программа видит только с правами администратора.");
             DiskWarn.Visibility = Visibility.Collapsed;
             return;
         }
@@ -893,14 +913,14 @@ public partial class MainWindow : Window
         int healthy = disks.Count(d => d.Health == "Healthy");
         string head = healthy == disks.Count
             ? Fmt.Plural(disks.Count, "диск исправен", "диска исправны", "дисков исправны")
-            : $"исправны {healthy} из {disks.Count} дисков";
+            : L.F("исправны {0} из {1} дисков", healthy, disks.Count);
         var temps = disks.Where(d => d.Temp != null).Select(d => $"{Short(d.Name)} {d.Temp:0} °C").ToList();
         DiskHealth.Text = temps.Count > 0 ? head + " · " + string.Join(" · ", temps) : head;
 
         var problems = disks.Where(d => d.Health != "Healthy" || d.ReadErrors > 0)
             .Select(d => d.Health != "Healthy"
-                ? $"{Short(d.Name)}: {(d.Health == "Unhealthy" ? "Windows считает диск неисправным" : d.Health == "Warning" ? "Windows предупреждает о проблемах с диском" : $"состояние «{d.Health}»")} — скопируйте важные данные"
-                : $"{Short(d.Name)}: ошибок чтения — {d.ReadErrors:0}, наработка {d.Hours:N0} ч — не храните на нём важное").ToList();
+                ? L.F("{0}: {1} — скопируйте важные данные", Short(d.Name), d.Health == "Unhealthy" ? L.T("Windows считает диск неисправным") : d.Health == "Warning" ? L.T("Windows предупреждает о проблемах с диском") : L.F("состояние «{0}»", d.Health))
+                : L.F("{0}: ошибок чтения — {1:0}, наработка {2:N0} ч — не храните на нём важное", Short(d.Name), d.ReadErrors, d.Hours)).ToList();
         DiskWarn.Text = string.Join("\n", problems);
         DiskWarn.Visibility = problems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -916,7 +936,7 @@ public partial class MainWindow : Window
         diagRunning = true;
         metrics.RequestDiskRefresh();       // сведения о дисках обновляются раз в 30 минут — к проверке освежить
         BtnDiag.IsEnabled = false;
-        BtnDiag.Content = "Проверяю…";
+        BtnDiag.Content = L.T("Проверяю…");
         BtnDiagSeen.IsEnabled = BtnDiagUnseen.IsEnabled = false;
         BeginBusy();
         try
@@ -940,30 +960,30 @@ public partial class MainWindow : Window
             DiagScroll.ScrollToTop();
 
             int bad = items.Count(i => i.Level == Severity.Bad), warn = items.Count(i => i.Level == Severity.Warn);
-            Motion.SetText(DiagVerdict, bad > 0 ? "Есть серьёзные проблемы" : warn > 0 ? "Серьёзных проблем нет, но есть замечания" : "Всё в порядке");
+            Motion.SetText(DiagVerdict, bad > 0 ? L.T("Есть серьёзные проблемы") : warn > 0 ? L.T("Серьёзных проблем нет, но есть замечания") : L.T("Всё в порядке"));
             DiagVerdict.Foreground = bad > 0 ? Palette.Bad : Palette.Ink1;
             bool marked = LogMarks.Any(settings);
-            Motion.SetText(DiagNote, $"Проверены журналы Windows за {Diagnostics.Days} дней, диски, память, видеокарта и настройки."
-                                     + (marked ? " Просмотренные записи не учитываются — только новые." : ""));
+            Motion.SetText(DiagNote, L.F("Проверены журналы Windows за {0} дней, диски, память, видеокарта и настройки.", Diagnostics.Days)
+                                     + (marked ? L.T(" Просмотренные записи не учитываются — только новые.") : ""));
             UpdateDiagSeen(items);
             DiagTally.Visibility = Visibility.Visible;
             TallyAttention.Value = bad + warn;
             TallyAttention.Foreground = bad > 0 ? Palette.Bad : warn > 0 ? Palette.Warn : Palette.Ink1;
             TallyInfo.Value = diagInfo.Count;
             TallyOk.Value = diagOk.Count;
-            DiagTime.Text = "проверено в " + DateTime.Now.ToString("HH:mm");
+            DiagTime.Text = L.F("проверено в {0:HH:mm}", DateTime.Now);
 
             // Находки появляются по одной: читается как отдельные результаты, а не как стена текста.
             _ = Dispatcher.BeginInvoke(new Action(() => RevealRows(DiagAttention, DiagInfo, DiagOk)), DispatcherPriority.Loaded);
         }
         catch (Exception ex)
         {
-            Motion.SetText(DiagNote, "Проверка не удалась: " + ex.Message);
+            Motion.SetText(DiagNote, L.F("Проверка не удалась: {0}", ex.Message));
         }
         finally
         {
             EndBusy();
-            BtnDiag.Content = "Проверить снова";
+            BtnDiag.Content = L.T("Проверить снова");
             BtnDiag.IsEnabled = true;
             BtnDiagSeen.IsEnabled = BtnDiagUnseen.IsEnabled = true;
             diagRunning = false;
@@ -978,7 +998,7 @@ public partial class MainWindow : Window
         BtnDiagSeen.Visibility = canHide ? Visibility.Visible : Visibility.Collapsed;
         DiagUnseenRow.Visibility = marks.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         DiagSeenWhen.Text = marks.Count == 0 ? ""
-            : "Последняя отметка — " + marks.Max().ToString("d MMMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("ru-RU")) + ".";
+            : L.F("Последняя отметка — {0}.", marks.Max().ToString(L.Pick("d MMMM, HH:mm", "MMMM d, HH:mm"), L.Culture));
         DiagSeenBlock.Visibility = canHide || marks.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -1039,13 +1059,13 @@ public partial class MainWindow : Window
         long sum = known.Where(i => i.Selected).Sum(i => i.Bytes);
         bool unknownSelected = cleanAll.Any(i => i.SizeUnknown && i.Selected);
 
-        CleanLabel.Source = "ВЫБРАНО К УДАЛЕНИЮ";
+        CleanLabel.Source = L.T("ВЫБРАНО К УДАЛЕНИЮ");
         CleanHero.Value = sum / Fmt.Gib;
         var ordered = known.OrderByDescending(i => i.Bytes).ToList();
         CleanBar.SetSegments(ordered.Select(i => ((double)i.Bytes, i.Selected)));
         // Легенда: у каждой строки образец той же штриховки, что у её участка полосы.
         for (int i = 0; i < ordered.Count; i++) ordered[i].Swatch = SegmentBar.Pattern(i, ordered[i].Selected);
-        BtnClean.Content = sum > 0 ? "Очистить " + Fmt.Size(sum) : "Очистить";
+        BtnClean.Content = sum > 0 ? L.F("Очистить {0}", Fmt.Size(sum)) : L.T("Очистить");
         BtnClean.IsEnabled = admin && busy == 0 && (sum > 0 || unknownSelected);
     }
 
@@ -1056,7 +1076,7 @@ public partial class MainWindow : Window
         foreach (var item in cleanAll.Where(i => !i.IsEmpty).OrderBy(i => i.SizeUnknown ? 1 : 0).ThenByDescending(i => i.Bytes))
             cleanShown.Add(item);
         foreach (var item in cleanAll.Where(i => i.IsEmpty)) { item.Selected = false; cleanEmpty.Add(item); }
-        CleanEmptyHdr.Text = $"ПУСТО ({cleanEmpty.Count})";
+        CleanEmptyHdr.Text = L.F("ПУСТО ({0})", cleanEmpty.Count);
         CleanEmptyHdr.Visibility = cleanEmpty.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -1087,7 +1107,7 @@ public partial class MainWindow : Window
             foreach (var item in cleanAll) cleanShown.Add(item);
             CleanEmptyHdr.Visibility = Visibility.Collapsed;
             CleanScroll.ScrollToTop();
-            Motion.SetText(CleanSummary, "Считаю, сколько занимает каждая категория. Это может занять до минуты.");
+            Motion.SetText(CleanSummary, L.T("Считаю, сколько занимает каждая категория. Это может занять до минуты."));
 
             scanned = true;
             await ScanAllAsync();
@@ -1095,11 +1115,11 @@ public partial class MainWindow : Window
 
             long total = cleanAll.Where(i => !i.SizeUnknown).Sum(i => Math.Max(0, i.Bytes));
             Motion.SetText(CleanSummary, !admin
-                ? $"Всего найдено {Fmt.Size(total)}. Удаление доступно только с правами администратора."
-                : total > 0 ? $"Всего найдено {Fmt.Size(total)}. Отметьте, что удалить; удаление необратимо."
-                : "Мусора не найдено.");
+                ? L.F("Всего найдено {0}. Удаление доступно только с правами администратора.", Fmt.Size(total))
+                : total > 0 ? L.F("Всего найдено {0}. Отметьте, что удалить; удаление необратимо.", Fmt.Size(total))
+                : L.T("Мусора не найдено."));
             BtnScan.Style = (Style)FindResource("Outline");
-            BtnScan.Content = "Найти заново";
+            BtnScan.Content = L.T("Найти заново");
             BtnClean.Visibility = Visibility.Visible;
         }
         finally
@@ -1116,10 +1136,10 @@ public partial class MainWindow : Window
         if (selected.Count == 0) return;
 
         long known = selected.Where(i => !i.SizeUnknown).Sum(i => i.Bytes);
-        string list = string.Join("\n", selected.Select(i => "  • " + i.Title + (i.SizeUnknown ? "" : " — " + Fmt.Size(i.Bytes))));
+        string list = string.Join("\n", selected.Select(i => "  • " + i.TitleText + (i.SizeUnknown ? "" : " — " + Fmt.Size(i.Bytes))));
         var answer = MessageBox.Show(this,
-            $"Будет удалено:\n\n{list}\n\nВсего около {Fmt.Size(known)}. Удаление необратимо.\n\nПродолжить?",
-            "Очистка", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+            L.F("Будет удалено:\n\n{0}\n\nВсего около {1}. Удаление необратимо.\n\nПродолжить?", list, Fmt.Size(known)),
+            L.T("Очистка"), MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (answer != MessageBoxResult.Yes) return;
 
         BtnScan.IsEnabled = false; BtnClean.IsEnabled = false;
@@ -1129,14 +1149,14 @@ public partial class MainWindow : Window
         {
             foreach (var item in selected)
             {
-                Motion.SetText(CleanSummary, "Очищаю: " + item.Title + "…");
+                Motion.SetText(CleanSummary, L.F("Очищаю: {0}…", item.TitleText));
                 item.Pending = true;
                 await Task.Run(() => { try { item.Clean(); } catch { } });
             }
             await ScanAllAsync();
             ArrangeCleanLists();
             long gained = Math.Max(0, Cleaner.SystemDriveFree() - before);
-            Motion.SetText(CleanSummary, $"Готово. На системном диске прибавилось {Fmt.Size(gained)}.");
+            Motion.SetText(CleanSummary, L.F("Готово. На системном диске прибавилось {0}.", Fmt.Size(gained)));
             UpdateDrives();
         }
         finally
@@ -1162,8 +1182,8 @@ public partial class MainWindow : Window
         TweakCount.Value = applied;
         TweakCells.Target = applied;
         if (string.IsNullOrEmpty(TweakNote.Text))
-            TweakNote.Text = !admin ? "Менять настройки можно только с правами администратора."
-                : applied == tweaks.Count ? "Все настройки применены." : "Осталось применить: " + Fmt.Plural(tweaks.Count - applied, "настройку", "настройки", "настроек") + ".";
+            TweakNote.Text = !admin ? L.T("Менять настройки можно только с правами администратора.")
+                : applied == tweaks.Count ? L.T("Все настройки применены.") : L.F("Осталось применить: {0}.", Fmt.Plural(tweaks.Count - applied, "настройку", "настройки", "настроек"));
         UpdatePending();
     }
 
@@ -1174,7 +1194,7 @@ public partial class MainWindow : Window
         var shift = (TranslateTransform)PendingBar.RenderTransform;
         if (changed == 0) { PendingBar.Visibility = Visibility.Collapsed; return; }
 
-        PendingText.Text = "Изменений: " + changed;
+        PendingText.Text = L.F("Изменений: {0}", changed);
         if (PendingBar.Visibility != Visibility.Visible)
         {
             PendingBar.Visibility = Visibility.Visible;
@@ -1198,7 +1218,7 @@ public partial class MainWindow : Window
         // Настройка, которая на секунды обрывает сеть, во время игры не применяется.
         if (recorder.IsRecording && changed.Any(t => t.DropsNetwork))
         {
-            Motion.SetText(TweakNote, "Сейчас идёт игра. Сетевая настройка применится после неё, чтобы интернет не пропал посреди матча.");
+            Motion.SetText(TweakNote, L.T("Сейчас идёт игра. Сетевая настройка применится после неё, чтобы интернет не пропал посреди матча."));
             TweakNote.Foreground = Palette.Warn;
             changed = changed.Where(t => !t.DropsNetwork).ToList();
             if (changed.Count == 0) return;
@@ -1214,7 +1234,7 @@ public partial class MainWindow : Window
                 foreach (var t in changed)
                 {
                     try { if (t.Desired) t.Apply(); else t.Revert(); }
-                    catch (Exception ex) { errors.Add(t.Title + ": " + ex.Message); }
+                    catch (Exception ex) { errors.Add(t.TitleText + ": " + ex.Message); }
                 }
             });
             TweakNote.Text = "";
@@ -1230,9 +1250,9 @@ public partial class MainWindow : Window
             settings.Save();
             UpdateRevertedBar();
 
-            Motion.SetText(TweakNote, errors.Count > 0 ? "Не всё удалось изменить: " + string.Join("; ", errors)
-                : changed.Any(t => t.NeedsReboot) ? "Готово. Часть изменений вступит в силу после перезагрузки."
-                : "Готово.");
+            Motion.SetText(TweakNote, errors.Count > 0 ? L.F("Не всё удалось изменить: {0}", string.Join("; ", errors))
+                : changed.Any(t => t.NeedsReboot) ? L.T("Готово. Часть изменений вступит в силу после перезагрузки.")
+                : L.T("Готово."));
             TweakNote.Foreground = errors.Count > 0 ? Palette.Warn : Palette.Ink2;
 
             // Подсветить строки, которые изменились: после нажатия видно, что именно сработало.
@@ -1272,7 +1292,7 @@ public partial class MainWindow : Window
     {
         var selected = apps.Where(a => a.Selected).ToList();
         long sum = selected.Sum(a => a.Bytes);
-        BtnCloseApps.Content = selected.Count > 0 ? "Только закрыть · " + Fmt.Size(sum) : "Только закрыть";
+        BtnCloseApps.Content = selected.Count > 0 ? L.F("Только закрыть · {0}", Fmt.Size(sum)) : L.T("Только закрыть");
         BtnCloseApps.IsEnabled = selected.Count > 0 && busy == 0;
         BtnPlay.IsEnabled = GameList.SelectedItem != null && busy == 0;
         BtnRestoreApps.Visibility = closedApps.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -1284,7 +1304,7 @@ public partial class MainWindow : Window
         var (_, before) = Metrics.ReadRam();
         foreach (var app in selected)
         {
-            Motion.SetText(AppsSummary, "Закрываю: " + app.Title + "…");
+            Motion.SetText(AppsSummary, L.F("Закрываю: {0}…", app.Title));
             string target = await Task.Run(() =>
             {
                 string restore = null;
@@ -1307,7 +1327,7 @@ public partial class MainWindow : Window
         var selected = apps.Where(a => a.Selected).ToList();
         if (selected.Count == 0) return;
 
-        if (MessageBox.Show(this, $"Закрыть программы?\n\n{AppLines(selected)}\n\nНесохранённые данные в них могут быть потеряны.", "Перед игрой",
+        if (MessageBox.Show(this, L.F("Закрыть программы?\n\n{0}\n\nНесохранённые данные в них могут быть потеряны.", AppLines(selected)), L.T("Перед игрой"),
                 MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
         BeginBusy();
@@ -1315,7 +1335,7 @@ public partial class MainWindow : Window
         try
         {
             double freed = await CloseAppsAsync(selected);
-            Motion.SetText(AppsSummary, $"Освобождено {Fmt.Gb(freed)} памяти. Можно запускать игру.");
+            Motion.SetText(AppsSummary, L.F("Освобождено {0} памяти. Можно запускать игру.", Fmt.Gb(freed)));
         }
         finally
         {
@@ -1356,7 +1376,7 @@ public partial class MainWindow : Window
         var selected = apps.Where(a => a.Selected).ToList();
 
         if (selected.Count > 0 && MessageBox.Show(this,
-                $"Закрыть программы и запустить «{game.Title}»?\n\n{AppLines(selected)}\n\nНесохранённые данные в них могут быть потеряны.", "Играть",
+                L.F("Закрыть программы и запустить «{0}»?\n\n{1}\n\nНесохранённые данные в них могут быть потеряны.", game.Title, AppLines(selected)), L.T("Играть"),
                 MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
         BeginBusy();
@@ -1368,13 +1388,13 @@ public partial class MainWindow : Window
             settings.LastGame = game.Title;
             settings.Save();
 
-            string text = selected.Count > 0 ? $"Освобождено {Fmt.Gb(freed)} памяти. «{game.Title}» запускается." : $"«{game.Title}» запускается.";
-            if (closedApps.Count > 0 && settings.RestoreApps) text += " Закрытые программы откроются снова, когда выйдете из игры.";
+            string text = selected.Count > 0 ? L.F("Освобождено {0} памяти. «{1}» запускается.", Fmt.Gb(freed), game.Title) : L.F("«{0}» запускается.", game.Title);
+            if (closedApps.Count > 0 && settings.RestoreApps) text += L.T(" Закрытые программы откроются снова, когда выйдете из игры.");
             Motion.SetText(AppsSummary, text);
         }
         catch (Exception ex)
         {
-            Motion.SetText(AppsSummary, $"Не удалось запустить «{game.Title}»: {ex.Message}");
+            Motion.SetText(AppsSummary, L.F("Не удалось запустить «{0}»: {1}", game.Title, ex.Message));
         }
         finally
         {
@@ -1396,8 +1416,8 @@ public partial class MainWindow : Window
             try { GameLibrary.OpenAsUser(target); opened++; } catch { }
         }
         Motion.SetText(AppsSummary, opened > 0
-            ? "Открыто снова: " + Fmt.Plural(opened, "программа", "программы", "программ") + "."
-            : "Не удалось снова открыть программы.");
+            ? L.F("Открыто снова: {0}.", Fmt.Plural(opened, "программа", "программы", "программ"))
+            : L.T("Не удалось снова открыть программы."));
         UpdateAppsButton();
     }
 }

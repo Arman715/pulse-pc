@@ -106,7 +106,7 @@ public static class SelfTest
             if (!fans.StartsWith("OK")) failed++;
 
             // --- Откат настроек Windows и сетевой карты: разбор копий, кавычки PowerShell (чистые функции, система не трогается) ---
-            foreach (var (name, run) in new (string, Func<string>)[] { ("Настройки Windows", Tweaks.SelfTest), ("Сетевая карта", NetPower.SelfTest) })
+            foreach (var (name, run) in new (string, Func<string>)[] { ("Настройки Windows", Tweaks.SelfTest), ("Сетевая карта", NetPower.SelfTest), ("Игры, добавленные вручную", GameDetector.SelfTest), ("Пинг и сохранение сессий", SessionChecks.SelfTest) })
             {
                 string res = run();
                 log.AppendLine().AppendLine(name + ": " + res.Replace("\n", "\n  "));

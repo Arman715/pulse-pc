@@ -15,7 +15,7 @@ public class TuneChange : Notifier
     public string Why { get; set; } = "";
     public string FromText { get; set; } = "";  // как показать значения человеку
     public string ToText { get; set; } = "";
-    public string Line => $"сейчас: {FromText} → станет: {ToText}";
+    public string Line => L.F("сейчас: {0} → станет: {1}", FromText, ToText);
 
     private bool selected = true;
     public bool Selected { get => selected; set => Set(ref selected, value); }
@@ -36,9 +36,9 @@ public class GameTune
     public bool HasBackup { get; set; }
 
     public string Title => Game;
-    public string Caption => !CanEdit ? $"{Engine} · {(Note.Length > 0 ? "только советы" : "настройки не найдены")}"
-        : Changes.Count == 0 ? $"{Engine} · настройки в порядке"
-        : $"{Engine} · {Fmt.Plural(Changes.Count, "рекомендация", "рекомендации", "рекомендаций")}";
+    public string Caption => !CanEdit ? Engine + " · " + (Note.Length > 0 ? L.T("только советы") : L.T("настройки не найдены"))
+        : Changes.Count == 0 ? Engine + " · " + L.T("настройки в порядке")
+        : Engine + " · " + Fmt.Plural(Changes.Count, "рекомендация", "рекомендации", "рекомендаций");
 }
 
 /// <summary>Что известно о прошлых сессиях игры: на что она опиралась на этом ПК.</summary>
@@ -174,20 +174,20 @@ public static class GameTuning
     // ------------------------------------------------------------------ определение движка и файла
     private static GameTune Inspect(string game, string dir, GameProfile profile, int cap)
     {
-        var t = new GameTune { Game = game, InstallDir = dir, Engine = "движок не определён" };
+        var t = new GameTune { Game = game, InstallDir = dir, Engine = L.T("движок не определён") };
         if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
         {
-            t.Note = "Папка игры не найдена.";
+            t.Note = L.T("Папка игры не найдена.");
             return t;
         }
 
         if (game.Equals("VALORANT", StringComparison.OrdinalIgnoreCase))
         {
             t.Engine = "Unreal Engine";
-            t.Note = "VALORANT хранит настройки на серверах Riot и при входе перезаписывает файл, поэтому программа его не меняет. "
-                     + "Поставьте в самой игре: «Вертикальная синхронизация» — выкл., " + (CapInDriver ? "" : "«Ограничение FPS» — " + cap + ", ") + (IsNvidia ? "NVIDIA Reflex — «Вкл. + усиление», " : "") + "размытие — выкл."
+            t.Note = L.T("VALORANT хранит настройки на серверах Riot и при входе перезаписывает файл, поэтому программа его не меняет. Поставьте в самой игре: «Вертикальная синхронизация» — выкл., ")
+                     + (CapInDriver ? "" : L.F("«Ограничение FPS» — {0}, ", cap)) + (IsNvidia ? L.T("NVIDIA Reflex — «Вкл. + усиление», ") : "") + L.T("размытие — выкл.")
                      + (CapInDriver ? " " + CapNote(cap) : "")
-                     + (GpuVendors.MainVendor == "AMD" ? " Задержку от мыши до экрана снизит Radeon Anti-Lag — он включается в AMD Software, в профиле игры." : "");
+                     + (GpuVendors.MainVendor == "AMD" ? L.T(" Задержку от мыши до экрана снизит Radeon Anti-Lag — он включается в AMD Software, в профиле игры.") : "");
             return t;
         }
 
@@ -198,7 +198,7 @@ public static class GameTuning
             var video = SafeDirs(gameDir).Select(d => Path.Combine(d, "cfg", "video.txt")).FirstOrDefault(File.Exists);
             t.Engine = "Source 2";
             if (video != null) { t.ConfigPath = video; t.Format = "kv"; Recommend(t, profile, cap); }
-            else t.Note = "Файл настроек не найден: он появится после первого запуска игры.";
+            else t.Note = L.T("Файл настроек не найден: он появится после первого запуска игры.");
             return t;
         }
 
@@ -206,8 +206,8 @@ public static class GameTuning
         if (File.Exists(Path.Combine(dir, "UnityPlayer.dll")) || SafeDirs(dir).Any(d => d.EndsWith("_Data", StringComparison.OrdinalIgnoreCase)))
         {
             t.Engine = "Unity";
-            t.Note = "Игры на Unity хранят настройки каждая по-своему, поэтому программа их не меняет. Поставьте в самой игре: вертикальная синхронизация — выкл., "
-                     + (CapInDriver ? "размытие в движении — выкл. " + CapNote(cap) : $"лимит FPS — {cap}, размытие в движении — выкл.");
+            t.Note = L.T("Игры на Unity хранят настройки каждая по-своему, поэтому программа их не меняет. Поставьте в самой игре: вертикальная синхронизация — выкл., ")
+                     + (CapInDriver ? L.T("размытие в движении — выкл. ") + CapNote(cap) : L.F("лимит FPS — {0}, размытие в движении — выкл.", cap));
             return t;
         }
 
@@ -231,12 +231,12 @@ public static class GameTuning
                 .Where(p => p.IndexOf(@"\WindowsEditor\", StringComparison.OrdinalIgnoreCase) < 0)     // настройки редактора Unreal, не игры
                 .OrderByDescending(File.GetLastWriteTime).FirstOrDefault();
             if (ini != null) { t.ConfigPath = ini; t.Format = "ini"; Recommend(t, profile, cap); }
-            else t.Note = "Файл настроек не найден: он появится после первого запуска игры.";
+            else t.Note = L.T("Файл настроек не найден: он появится после первого запуска игры.");
             return t;
         }
 
-        t.Note = "Программа не знает, как эта игра хранит настройки. Поставьте в самой игре: вертикальная синхронизация — выкл."
-                 + (CapInDriver ? " " + CapNote(cap) : ", лимит FPS — " + cap + ".");
+        t.Note = L.T("Программа не знает, как эта игра хранит настройки. Поставьте в самой игре: вертикальная синхронизация — выкл.")
+                 + (CapInDriver ? " " + CapNote(cap) : L.F(", лимит FPS — {0}.", cap));
         return t;
     }
 
@@ -261,19 +261,19 @@ public static class GameTuning
         bool cpu = p?.CpuBound >= 40 && p.CpuBound >= (p.GpuBound ?? 0);
         bool gpu = p?.GpuBound >= 50;
         t.Basis = p == null || p.Sessions == 0 || (p.CpuBound == null && p.GpuBound == null)
-            ? $"Записанных сессий этой игры ещё нет, поэтому советы общие — под монитор {Refresh()} Гц. После первой игры программа увидит, что ограничивает FPS, и уточнит советы."
-            : cpu ? $"В ваших сессиях FPS упирался в процессор ({p.CpuBound:0} % времени), поэтому снижаем то, что считает процессор: дальность, растительность, тени, эффекты."
-            : gpu ? $"В ваших сессиях FPS упирался в видеокарту ({p.GpuBound:0} % времени), поэтому снижаем самое тяжёлое для неё: тени, постобработку, освещение."
-            : "В ваших сессиях запас был и у процессора, и у видеокарты — графику снижать незачем, советы только общие.";
+            ? L.F("Записанных сессий этой игры ещё нет, поэтому советы общие — под монитор {0} Гц. После первой игры программа увидит, что ограничивает FPS, и уточнит советы.", Refresh())
+            : cpu ? L.F("В ваших сессиях FPS упирался в процессор ({0:0} % времени), поэтому снижаем то, что считает процессор: дальность, растительность, тени, эффекты.", p.CpuBound)
+            : gpu ? L.F("В ваших сессиях FPS упирался в видеокарту ({0:0} % времени), поэтому снижаем самое тяжёлое для неё: тени, постобработку, освещение.", p.GpuBound)
+            : L.T("В ваших сессиях запас был и у процессора, и у видеокарты — графику снижать незачем, советы только общие.");
 
         if (t.Format == "ini") RecommendUnreal(t, text, cpu, gpu, p?.VramFull == true, cap);
         else if (t.Format == "kv") RecommendSource(t, text, cpu, gpu);
         else if (t.Format == "mc") RecommendMinecraft(t, text, cpu, cap);
     }
 
-    private const string WhyVsync = "Вертикальная синхронизация добавляет задержку. Плавную картинку без задержки даёт лимит FPS чуть ниже частоты монитора вместе с G-SYNC / FreeSync, если монитор их поддерживает.";
-    private static string WhyCap(int cap) => $"Чуть ниже частоты монитора ({Refresh()} Гц): кадры идут ровно, задержка минимальна, а видеокарта не греется впустую.";
-    private const string WhyBlur = "Размытие смазывает картинку при поворотах камеры и мешает замечать противников. На FPS почти не влияет.";
+    private static string WhyVsync => L.T("Вертикальная синхронизация добавляет задержку. Плавную картинку без задержки даёт лимит FPS чуть ниже частоты монитора вместе с G-SYNC / FreeSync, если монитор их поддерживает.");
+    private static string WhyCap(int cap) => L.F("Чуть ниже частоты монитора ({0} Гц): кадры идут ровно, задержка минимальна, а видеокарта не греется впустую.", Refresh());
+    private static string WhyBlur => L.T("Размытие смазывает картинку при поворотах камеры и мешает замечать противников. На FPS почти не влияет.");
 
     private static void RecommendUnreal(GameTune t, string text, bool cpu, bool gpu, bool vram, int cap)
     {
@@ -291,43 +291,43 @@ public static class GameTuning
                     t.Changes.Add(new TuneChange { Section = section, Key = key, Title = title, From = value, To = max.ToString(), FromText = Quality(v), ToText = Quality(max), Why = why });
         }
 
-        Bool("bUseVSync", "False", "Вертикальная синхронизация", WhyVsync);
+        Bool("bUseVSync", "False", L.T("Вертикальная синхронизация"), WhyVsync);
         // Свой ограничитель кадров у игры (как у PUBG) — тогда стандартный ключ движка не трогаем.
         bool ownLimiter = ini.Any(x => x.Key.Contains("FrameRateLimitType", StringComparison.OrdinalIgnoreCase));
         // Видеокарта NVIDIA: лимит один — в профиле драйвера; в файле игры его не предлагаем, чтобы не было двух лимитов сразу.
         if (CapInDriver) t.Note = CapNote(cap);
-        else if (ownLimiter) t.Note = $"У этой игры свой лимит FPS, он задаётся в её меню: выберите «Свой» и {cap}. Программа эту настройку не меняет.";
+        else if (ownLimiter) t.Note = L.F("У этой игры свой лимит FPS, он задаётся в её меню: выберите «Свой» и {0}. Программа эту настройку не меняет.", cap);
         if (!ownLimiter && !CapInDriver)
             foreach (var (section, value) in ini.Where(x => x.Key == "FrameRateLimit").Select(x => (x.Section, x.Value)))
                 if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v) && (v == 0 || v > cap + 1))
-                    t.Changes.Add(new TuneChange { Section = section, Key = "FrameRateLimit", Title = "Лимит FPS", From = value, To = cap + ".000000",
-                        FromText = v == 0 ? "без лимита" : v.ToString("0"), ToText = cap.ToString(), Why = WhyCap(cap) });
-        Bool("bMotionBlur", "False", "Размытие в движении", WhyBlur);
+                    t.Changes.Add(new TuneChange { Section = section, Key = "FrameRateLimit", Title = L.T("Лимит FPS"), From = value, To = cap + ".000000",
+                        FromText = v == 0 ? L.T("без лимита") : v.ToString("0"), ToText = cap.ToString(), Why = WhyCap(cap) });
+        Bool("bMotionBlur", "False", L.T("Размытие в движении"), WhyBlur);
         foreach (var (section, value) in ini.Where(x => x.Key == "r.MotionBlur.Amount").Select(x => (x.Section, x.Value)))
             if (value.Trim() != "0")
-                t.Changes.Add(new TuneChange { Section = section, Key = "r.MotionBlur.Amount", Title = "Размытие в движении", From = value, To = "0", FromText = "вкл.", ToText = "выкл.", Why = WhyBlur });
+                t.Changes.Add(new TuneChange { Section = section, Key = "r.MotionBlur.Amount", Title = L.T("Размытие в движении"), From = value, To = "0", FromText = L.T("вкл."), ToText = L.T("выкл."), Why = WhyBlur });
 
         if (cpu)
         {
-            Max("sg.ViewDistanceQuality", 2, "Дальность прорисовки", "Каждый дальний объект процессор готовит к отрисовке отдельно — это главная нагрузка на него.");
-            Max("sg.FoliageQuality", 2, "Растительность", "Трава и кусты — тысячи объектов для процессора.");
-            Max("sg.GrassQuality", 2, "Трава", "Тысячи мелких объектов для процессора.");
-            Max("sg.ShadowQuality", 2, "Тени", "Тени рисуются заново для каждого источника света — это нагрузка и на процессор.");
-            Max("sg.EffectsQuality", 2, "Эффекты", "Частицы, дым и взрывы просчитывает процессор.");
+            Max("sg.ViewDistanceQuality", 2, L.T("Дальность прорисовки"), L.T("Каждый дальний объект процессор готовит к отрисовке отдельно — это главная нагрузка на него."));
+            Max("sg.FoliageQuality", 2, L.T("Растительность"), L.T("Трава и кусты — тысячи объектов для процессора."));
+            Max("sg.GrassQuality", 2, L.T("Трава"), L.T("Тысячи мелких объектов для процессора."));
+            Max("sg.ShadowQuality", 2, L.T("Тени"), L.T("Тени рисуются заново для каждого источника света — это нагрузка и на процессор."));
+            Max("sg.EffectsQuality", 2, L.T("Эффекты"), L.T("Частицы, дым и взрывы просчитывает процессор."));
         }
         if (gpu)
         {
-            Max("sg.ShadowQuality", 2, "Тени", "Самая тяжёлая для видеокарты настройка, а на «высоких» тени выглядят почти так же.");
-            Max("sg.PostProcessQuality", 2, "Постобработка", "Размытие и эффекты камеры поверх готового кадра — заметная нагрузка на видеокарту без пользы для игры.");
-            Max("sg.GlobalIlluminationQuality", 2, "Глобальное освещение", "Просчёт отражённого света — одна из самых тяжёлых настроек Unreal Engine 5.");
-            Max("sg.ReflectionQuality", 2, "Отражения", "Тяжёлая настройка для видеокарты, а в динамичной игре отражений почти не видно.");
-            if (IsNvidia) Bool("bNvidiaDLSS", "True", "DLSS", "Видеокарта рисует кадр в меньшем разрешении, а нейросеть дорисовывает его до разрешения экрана — FPS заметно выше при почти той же картинке.");
+            Max("sg.ShadowQuality", 2, L.T("Тени"), L.T("Самая тяжёлая для видеокарты настройка, а на «высоких» тени выглядят почти так же."));
+            Max("sg.PostProcessQuality", 2, L.T("Постобработка"), L.T("Размытие и эффекты камеры поверх готового кадра — заметная нагрузка на видеокарту без пользы для игры."));
+            Max("sg.GlobalIlluminationQuality", 2, L.T("Глобальное освещение"), L.T("Просчёт отражённого света — одна из самых тяжёлых настроек Unreal Engine 5."));
+            Max("sg.ReflectionQuality", 2, L.T("Отражения"), L.T("Тяжёлая настройка для видеокарты, а в динамичной игре отражений почти не видно."));
+            if (IsNvidia) Bool("bNvidiaDLSS", "True", "DLSS", L.T("Видеокарта рисует кадр в меньшем разрешении, а нейросеть дорисовывает его до разрешения экрана — FPS заметно выше при почти той же картинке."));
             if (IsNvidia) foreach (var (section, value) in ini.Where(x => x.Key == "r.NGX.DLSS.Enable").Select(x => (x.Section, x.Value)))
                 if (value.Trim() == "0")
-                    t.Changes.Add(new TuneChange { Section = section, Key = "r.NGX.DLSS.Enable", Title = "DLSS", From = value, To = "1", FromText = "выкл.", ToText = "вкл.", Why = "Нейросеть дорисовывает кадр до разрешения экрана — FPS выше при почти той же картинке." });
+                    t.Changes.Add(new TuneChange { Section = section, Key = "r.NGX.DLSS.Enable", Title = "DLSS", From = value, To = "1", FromText = L.T("выкл."), ToText = L.T("вкл."), Why = L.T("Нейросеть дорисовывает кадр до разрешения экрана — FPS выше при почти той же картинке.") });
         }
         if (vram)
-            Max("sg.TextureQuality", 3, "Качество текстур", "Видеопамять в ваших сессиях заполнялась почти полностью — отсюда подгрузки и рывки.");
+            Max("sg.TextureQuality", 3, L.T("Качество текстур"), L.T("Видеопамять в ваших сессиях заполнялась почти полностью — отсюда подгрузки и рывки."));
 
         // Одна и та же настройка могла попасть дважды (тени — и для процессора, и для видеокарты).
         t.Changes = t.Changes.GroupBy(c => c.Section + "|" + c.Key).Select(g => g.First()).ToList();
@@ -344,16 +344,16 @@ public static class GameTuning
         static bool On(string v) => v == "1" || v.Equals("true", StringComparison.OrdinalIgnoreCase);
         static int N(string v) => int.TryParse(v, out int n) ? n : 0;
 
-        Set("setting.mat_vsync", On, "0", "Вертикальная синхронизация", "вкл.", "выкл.", WhyVsync);
-        if (IsNvidia) Set("setting.r_low_latency", v => v == "0", "1", "NVIDIA Reflex", "выкл.", "вкл.", "Убирает очередь кадров между процессором и видеокартой: задержка от мыши до экрана заметно ниже.");
-        Set("setting.r_citadel_motion_blur", v => N(v) > 0, "0", "Размытие в движении", "вкл.", "выкл.", WhyBlur);
-        Set("setting.r_depth_of_field", On, "false", "Глубина резкости", "вкл.", "выкл.", "Размывает всё, что не в фокусе камеры, — дальних противников видно хуже.");
+        Set("setting.mat_vsync", On, "0", L.T("Вертикальная синхронизация"), L.T("вкл."), L.T("выкл."), WhyVsync);
+        if (IsNvidia) Set("setting.r_low_latency", v => v == "0", "1", "NVIDIA Reflex", L.T("выкл."), L.T("вкл."), L.T("Убирает очередь кадров между процессором и видеокартой: задержка от мыши до экрана заметно ниже."));
+        Set("setting.r_citadel_motion_blur", v => N(v) > 0, "0", L.T("Размытие в движении"), L.T("вкл."), L.T("выкл."), WhyBlur);
+        Set("setting.r_depth_of_field", On, "false", L.T("Глубина резкости"), L.T("вкл."), L.T("выкл."), L.T("Размывает всё, что не в фокусе камеры, — дальних противников видно хуже."));
         if (cpu || gpu)
-            Set("setting.r_citadel_shadow_quality", v => N(v) > 2, "2", "Тени", null, "2", "Тени — тяжёлая настройка и для процессора, и для видеокарты; разница с максимальными почти незаметна.");
+            Set("setting.r_citadel_shadow_quality", v => N(v) > 2, "2", L.T("Тени"), null, "2", L.T("Тени — тяжёлая настройка и для процессора, и для видеокарты; разница с максимальными почти незаметна."));
         if (gpu)
         {
-            Set("setting.r_citadel_ssao_quality", v => N(v) > 2, "2", "Затенение (SSAO)", null, "2", "Тяжёлый эффект для видеокарты, в бою почти не виден.");
-            Set("setting.r_citadel_fog_quality", v => N(v) > 1, "1", "Туман", null, "1", "Объёмный туман дорого обходится видеокарте.");
+            Set("setting.r_citadel_ssao_quality", v => N(v) > 2, "2", L.T("Затенение (SSAO)"), null, "2", L.T("Тяжёлый эффект для видеокарты, в бою почти не виден."));
+            Set("setting.r_citadel_fog_quality", v => N(v) > 1, "1", L.T("Туман"), null, "1", L.T("Объёмный туман дорого обходится видеокарте."));
         }
     }
 
@@ -362,15 +362,15 @@ public static class GameTuning
         var map = text.Split('\n').Select(l => l.Trim()).Where(l => l.Contains(':'))
             .Select(l => (Key: l[..l.IndexOf(':')], Value: l[(l.IndexOf(':') + 1)..])).GroupBy(x => x.Key).ToDictionary(g => g.Key, g => g.First().Value);
         if (map.TryGetValue("enableVsync", out var vs) && vs == "true")
-            t.Changes.Add(new TuneChange { Key = "enableVsync", Title = "Вертикальная синхронизация", From = vs, To = "false", FromText = "вкл.", ToText = "выкл.", Why = WhyVsync });
+            t.Changes.Add(new TuneChange { Key = "enableVsync", Title = L.T("Вертикальная синхронизация"), From = vs, To = "false", FromText = L.T("вкл."), ToText = L.T("выкл."), Why = WhyVsync });
         if (map.TryGetValue("maxFps", out var fps) && int.TryParse(fps, out int f) && f > cap + 1)
-            t.Changes.Add(new TuneChange { Key = "maxFps", Title = "Лимит FPS", From = fps, To = cap.ToString(), FromText = f >= 260 ? "без лимита" : fps, ToText = cap.ToString(), Why = WhyCap(cap) });
+            t.Changes.Add(new TuneChange { Key = "maxFps", Title = L.T("Лимит FPS"), From = fps, To = cap.ToString(), FromText = f >= 260 ? L.T("без лимита") : fps, ToText = cap.ToString(), Why = WhyCap(cap) });
         if (cpu && map.TryGetValue("renderDistance", out var rd) && int.TryParse(rd, out int r) && r > 12)
-            t.Changes.Add(new TuneChange { Key = "renderDistance", Title = "Дальность прорисовки", From = rd, To = "12", FromText = rd + " чанков", ToText = "12 чанков", Why = "Каждый чанк процессор строит и обновляет, а в ваших сессиях FPS упирался именно в него." });
+            t.Changes.Add(new TuneChange { Key = "renderDistance", Title = L.T("Дальность прорисовки"), From = rd, To = "12", FromText = L.F("{0} чанков", rd), ToText = L.F("{0} чанков", 12), Why = L.T("Каждый чанк процессор строит и обновляет, а в ваших сессиях FPS упирался именно в него.") });
     }
 
-    private static string OnOff(string v) => v.Equals("True", StringComparison.OrdinalIgnoreCase) || v == "1" ? "вкл." : "выкл.";
-    private static string Quality(double v) => v switch { <= 0 => "низкое", 1 => "среднее", 2 => "высокое", 3 => "очень высокое", _ => "максимальное" };
+    private static string OnOff(string v) => v.Equals("True", StringComparison.OrdinalIgnoreCase) || v == "1" ? L.T("вкл.") : L.T("выкл.");
+    private static string Quality(double v) => v switch { <= 0 => L.T("низкое"), 1 => L.T("среднее"), 2 => L.T("высокое"), 3 => L.T("очень высокое"), _ => L.T("максимальное") };
 
     // ------------------------------------------------------------------ чтение форматов
     private static List<(string Section, string Key, string Value)> IniValues(string text)
@@ -400,8 +400,8 @@ public static class GameTuning
     public static string Apply(GameTune t, IEnumerable<TuneChange> changes)
     {
         var list = changes.ToList();
-        if (!t.CanEdit || list.Count == 0) return "Менять нечего.";
-        if (GameDetector.IsRunningFrom(t.InstallDir)) return $"Закройте {t.Game}: при выходе игра перезапишет файл своими настройками.";
+        if (!t.CanEdit || list.Count == 0) return L.T("Менять нечего.");
+        if (GameDetector.IsRunningFrom(t.InstallDir)) return L.F("Закройте {0}: при выходе игра перезапишет файл своими настройками.", t.Game);
 
         string text = ReadText(t.ConfigPath, out var encoding);
         string backup = Backup(t);
@@ -416,7 +416,7 @@ public static class GameTuning
             };
         }
         WriteText(t.ConfigPath, text, encoding);
-        return $"Готово: изменено {Fmt.Plural(list.Count, "значение", "значения", "значений")}. Копия прежнего файла сохранена — кнопка «Вернуть как было» отменит изменения.";
+        return L.F("Готово: изменено {0}. Копия прежнего файла сохранена — кнопка «Вернуть как было» отменит изменения.", Fmt.Plural(list.Count, "значение", "значения", "значений"));
     }
 
     /// <summary>
@@ -426,10 +426,10 @@ public static class GameTuning
     public static string Restore(GameTune t)
     {
         string backup = LatestBackup(t);
-        if (backup == null) return "Копии нет — программа этот файл не меняла.";
-        if (GameDetector.IsRunningFrom(t.InstallDir)) return $"Закройте {t.Game}: при выходе игра перезапишет файл.";
+        if (backup == null) return L.T("Копии нет — программа этот файл не меняла.");
+        if (GameDetector.IsRunningFrom(t.InstallDir)) return L.F("Закройте {0}: при выходе игра перезапишет файл.", t.Game);
         if (File.GetAttributes(backup).HasFlag(FileAttributes.ReparsePoint) || File.GetAttributes(Path.GetDirectoryName(backup)).HasFlag(FileAttributes.ReparsePoint))
-            return "Копия подменена ссылкой — файл не тронут.";
+            return L.T("Копия подменена ссылкой — файл не тронут.");
         var attrs = File.GetAttributes(t.ConfigPath);
         File.SetAttributes(t.ConfigPath, attrs & ~FileAttributes.ReadOnly);
         File.Copy(backup, t.ConfigPath, true);
@@ -438,7 +438,7 @@ public static class GameTuning
         {
             try { if (File.Exists(f)) { File.SetAttributes(f, FileAttributes.Normal); File.Delete(f); } } catch { }
         }
-        return "Готово: файл настроек вернулся к виду до изменений программы.";
+        return L.T("Готово: файл настроек вернулся к виду до изменений программы.");
     }
 
     private static string SetIni(string text, string section, string key, string value)
@@ -554,7 +554,7 @@ public static class GameTuning
     public static bool CapInDriver => IsNvidia;
 
     private static string CapNote(int cap) =>
-        $"С видеокартой NVIDIA лимит FPS ({cap}) ставится в одном месте — в профиле драйвера: вкладка «Система», раздел «{GpuVendors.SectionTitle("NVIDIA")}». В самой игре его ставить не нужно.";
+        L.F("С видеокартой NVIDIA лимит FPS ({0}) ставится в одном месте — в профиле драйвера: вкладка «Система», раздел «{1}». В самой игре его ставить не нужно.", cap, L.T(GpuVendors.SectionTitle("NVIDIA")));
 
     /// <summary>Лимит FPS под переменную частоту: формула, по которой его выставляет NVIDIA Reflex (165 Гц → 157).</summary>
     public static int FrameCap() => FrameCapFor(Refresh());

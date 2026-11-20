@@ -56,7 +56,6 @@ public static class MemoryBoost
     public const int DefaultThreshold = 4;
     /// <summary>Меньше этого программы рабочий набор не сжимается: выигрыша нет, а программа зря подгружается заново.</summary>
     public const long MinTrimBytes = 64L << 20;
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
 
     private static PanelHost host;
     private static bool inited;
@@ -114,7 +113,7 @@ public static class MemoryBoost
         {
             h.Settings.Set(KNotified, DateTime.Today.ToString("yyyy-MM-dd"));
             h.Settings.Save();
-            h.Ui(() => h.Notify("Память освобождена перед игрой", Describe(r), false, () => h.Open("sys:Память в игре")));
+            h.Ui(() => h.Notify(L.T("Память освобождена перед игрой"), Describe(r), false, () => h.Open("sys:Память в игре")));
         }
     }
 
@@ -235,10 +234,10 @@ public static class MemoryBoost
     public static BoostResult Boost(bool trim, int gamePid, string game, bool auto)
     {
         var r = new BoostResult { Auto = auto, Game = game ?? "", At = DateTime.Now };
-        if (Interlocked.Exchange(ref running, 1) == 1) { r.Error = "Очистка уже идёт."; return r; }
+        if (Interlocked.Exchange(ref running, 1) == 1) { r.Error = L.T("Очистка уже идёт."); return r; }
         try
         {
-            if (!Shell.IsAdmin()) { r.Error = "Нужны права администратора."; return r; }
+            if (!Shell.IsAdmin()) { r.Error = L.T("Нужны права администратора."); return r; }
             var before = Read();
             r.FreeBefore = before.FreeGb; r.AvailBefore = before.AvailGb; r.StandbyBefore = before.StandbyGb;
 
@@ -261,7 +260,7 @@ public static class MemoryBoost
                 int command = MemoryPurgeStandbyList;
                 int status = NtSetSystemInformation(SystemMemoryListInformation, ref command, sizeof(int));
                 if (status == 0) r.Purged = true;
-                else r.Error = status == unchecked((int)0xC0000061) ? "Windows не дала права очищать кэш (нет привилегии)." : $"Windows отказала: код 0x{status:X8}.";
+                else r.Error = status == unchecked((int)0xC0000061) ? L.T("Windows не дала права очищать кэш (нет привилегии).") : L.F("Windows отказала: код 0x{0:X8}.", status);
             }
             Thread.Sleep(300);
             var after = Read();
@@ -291,27 +290,27 @@ public static class MemoryBoost
     public static string Describe(BoostResult r)
     {
         if (r == null) return "";
-        if (!r.Ok) return "Память не освобождена: " + (r.Error.Length > 0 ? r.Error.TrimEnd('.') : "неизвестная ошибка") + ".";
+        if (!r.Ok) return L.F("Память не освобождена: {0}.", r.Error.Length > 0 ? r.Error.TrimEnd('.') : L.T("неизвестная ошибка"));
         var sb = new StringBuilder();
         double gained = r.FreeAfter - r.FreeBefore;
         if (!double.IsNaN(gained))
         {
-            sb.Append(gained >= 0.05 ? $"Освобождено {Gb(gained)}" : "Освобождать почти нечего");
-            sb.Append($": пустой памяти было {Num(r.FreeBefore)} → стало {Gb(r.FreeAfter)}.");
+            sb.Append(gained >= 0.05
+                ? L.F("Освобождено {0}: пустой памяти было {1} → стало {2}.", Gb(gained), Num(r.FreeBefore), Gb(r.FreeAfter))
+                : L.F("Освобождать почти нечего: пустой памяти было {0} → стало {1}.", Num(r.FreeBefore), Gb(r.FreeAfter)));
         }
-        else sb.Append("Кэш ожидания очищен.");
+        else sb.Append(L.T("Кэш ожидания очищен."));
         if (r.Trimmed > 0)
-            sb.Append($" Фоновых программ сжато: {r.Trimmed}");
-        if (r.Trimmed > 0 && !double.IsNaN(r.AvailBefore) && !double.IsNaN(r.AvailAfter))
-            sb.Append($", доступно было {Num(r.AvailBefore)} → стало {Gb(r.AvailAfter)}.");
-        else if (r.Trimmed > 0) sb.Append('.');
-        if (!r.Purged && r.Error.Length > 0) sb.Append(" Кэш не очищен: " + r.Error);
-        if (r.Auto && r.Game.Length > 0) sb.Insert(0, $"Перед запуском {r.Game}. ");
+            sb.Append(!double.IsNaN(r.AvailBefore) && !double.IsNaN(r.AvailAfter)
+                ? L.F(" Фоновых программ сжато: {0}, доступно было {1} → стало {2}.", r.Trimmed, Num(r.AvailBefore), Gb(r.AvailAfter))
+                : L.F(" Фоновых программ сжато: {0}.", r.Trimmed));
+        if (!r.Purged && r.Error.Length > 0) sb.Append(L.F(" Кэш не очищен: {0}", r.Error));
+        if (r.Auto && r.Game.Length > 0) sb.Insert(0, L.F("Перед запуском {0}. ", r.Game));
         return sb.ToString();
     }
 
-    public static string Gb(double v) => double.IsNaN(v) ? "—" : v.ToString("0.0", Ru) + Nb + "ГБ";
-    public static string Num(double v) => double.IsNaN(v) ? "—" : v.ToString("0.0", Ru);
+    public static string Gb(double v) => double.IsNaN(v) ? "—" : v.ToString("0.0", L.Culture) + Nb + Fmt.GbUnit;
+    public static string Num(double v) => double.IsNaN(v) ? "—" : v.ToString("0.0", L.Culture);
 
     // ================================================================== статистика сессий
     public const double ShortGb = 1.0;
@@ -377,11 +376,15 @@ public static class MemoryBoost
         Check("порог: 6 ГБ читается", Threshold(s) == 6);
 
         string d = Describe(new BoostResult { Ok = true, Purged = true, FreeBefore = 1.1, FreeAfter = 3.5, AvailBefore = 4.0, AvailAfter = 4.1 });
+        // Тексты итога сверяются по-русски; в английском интерфейсе проверяется только, что итог есть.
+        if (L.En) Check("итог по-английски не пустой и без кириллицы: " + d, d.Length > 10 && !System.Text.RegularExpressions.Regex.IsMatch(d, "[А-Яа-яЁё]"));
+        else {
         Check("итог: «Освобождено 2,4 ГБ: пустой памяти было 1,1 → стало 3,5 ГБ.»", d == $"Освобождено 2,4{Nb}ГБ: пустой памяти было 1,1 → стало 3,5{Nb}ГБ.");
         string d2 = Describe(new BoostResult { Ok = true, Purged = true, Trimmed = 3, FreeBefore = 0.4, FreeAfter = 2.0, AvailBefore = 1.2, AvailAfter = 2.9, Auto = true, Game = "PUBG" });
         Check("итог со сжатием и игрой: доступно было 1,2 → стало 2,9 — " + d2, d2.StartsWith("Перед запуском PUBG.", StringComparison.Ordinal) && d2.Contains("Фоновых программ сжато: 3,") &&d2.Contains($"доступно было 1,2 → стало 2,9{Nb}ГБ"));
         Check("итог при отказе — причина", Describe(new BoostResult { Error = "Нужны права администратора." }) == "Память не освобождена: Нужны права администратора.");
         Check("итог: ничего не освободилось — честно", Describe(new BoostResult { Ok = true, Purged = true, FreeBefore = 2.0, FreeAfter = 2.02 }).StartsWith("Освобождать почти нечего"));
+        }
 
         var sess = new[]
         {
@@ -423,13 +426,13 @@ public static class MemoryBoost
     private static bool EnablePrivilege(string name, out string why)
     {
         why = "";
-        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr token)) { why = "Не открылся маркер доступа программы."; return false; }
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr token)) { why = L.T("Не открылся маркер доступа программы."); return false; }
         try
         {
-            if (!LookupPrivilegeValue(null, name, out long luid)) { why = "Windows не знает нужной привилегии."; return false; }
+            if (!LookupPrivilegeValue(null, name, out long luid)) { why = L.T("Windows не знает нужной привилегии."); return false; }
             var tp = new TOKEN_PRIVILEGES { PrivilegeCount = 1, Luid = luid, Attributes = SE_PRIVILEGE_ENABLED };
-            if (!AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero)) { why = "Привилегия не включилась."; return false; }
-            if (Marshal.GetLastWin32Error() == 1300) { why = "Нужны права администратора."; return false; }   // ERROR_NOT_ALL_ASSIGNED
+            if (!AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero)) { why = L.T("Привилегия не включилась."); return false; }
+            if (Marshal.GetLastWin32Error() == 1300) { why = L.T("Нужны права администратора."); return false; }   // ERROR_NOT_ALL_ASSIGNED
             return true;
         }
         finally { CloseHandle(token); }

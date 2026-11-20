@@ -46,14 +46,14 @@ public static class Watchdog
                 }
                 var left = reverted.Except(restored).ToList();
                 if (restored.Count > 0)
-                    messages.Add("Обновление Windows сбросило настройки: " + string.Join("; ", restored) + ". Программа их вернула.");
+                    messages.Add(L.F("Обновление Windows сбросило настройки: {0}. Программа их вернула.", string.Join("; ", restored.Select(L.T))));
                 if (left.Count > 0)
                 {
                     int inSystem = left.Count(t => Tweaks.HomeOf(t) != "");
-                    string where = inSystem == 0 ? "на вкладке «Оптимизация»"
-                        : inSystem == left.Count ? "в разделах вкладки «Система»"
-                        : "на вкладке «Оптимизация» и в разделах вкладки «Система»";
-                    messages.Add("Сбросились настройки: " + string.Join("; ", left) + ". Вернуть их можно " + where + ".");
+                    string where = inSystem == 0 ? L.T("на вкладке «Оптимизация»")
+                        : inSystem == left.Count ? L.T("в разделах вкладки «Система»")
+                        : L.T("на вкладке «Оптимизация» и в разделах вкладки «Система»");
+                    messages.Add(L.F("Сбросились настройки: {0}. Вернуть их можно {1}.", string.Join("; ", left.Select(L.T)), where));
                 }
                 settings.RevertedTweaks = left;
                 // Невозвращённые остаются «известными», чтобы напоминать о них, пока их не вернут или не выключат вручную.
@@ -71,7 +71,7 @@ public static class Watchdog
                 DateTime since = settings.LastWatch;
                 if (LogMarks.Seen(kind, settings) is DateTime seen && seen > since) since = seen;
                 int n = Diagnostics.CountSince(kind, since);
-                if (n > 0) messages.Add(Fmt.Plural(n, one, few, many) + " с прошлой проверки.");
+                if (n > 0) messages.Add(L.F("{0} с прошлой проверки.", Fmt.Plural(n, one, few, many)));
             }
             Check(LogMarks.Bsod, "синий экран", "синих экрана", "синих экранов");
             Check(LogMarks.Gpu, "сбой драйвера видеокарты", "сбоя драйвера видеокарты", "сбоев драйвера видеокарты");
@@ -113,9 +113,9 @@ public static class Watchdog
             if (was != null)
             {
                 if (d.Health != "Healthy" && was.Health == "Healthy")
-                    messages.Add($"Диск {name}: Windows сменила его состояние на «{d.Health}». Скопируйте важное на другой диск.");
+                    messages.Add(L.F("Диск {0}: Windows сменила его состояние на «{1}». Скопируйте важное на другой диск.", name, d.Health));
                 else if (errors > was.ReadErrors)
-                    messages.Add($"Диск {name}: новые ошибки чтения ({was.ReadErrors:0} → {errors:0}). Диск изнашивается: сделайте копию и не храните на нём важное.");
+                    messages.Add(L.F("Диск {0}: новые ошибки чтения ({1:0} → {2:0}). Диск изнашивается: сделайте копию и не храните на нём важное.", name, was.ReadErrors, errors));
             }
             // Под замком настроек: их в это же время может сохранять другой поток.
             lock (AppSettings.SyncRoot) settings.DiskStates[key] = new DiskState { Health = d.Health, ReadErrors = errors, Hours = d.Hours ?? 0, Checked = DateTime.Now };

@@ -235,7 +235,7 @@ public static class FanControl
             Monitor.TryEnter(Gate, 3000, ref locked);
             if (locked)
             {
-                if (applied >= 0) Release("Программа закрыта — вентиляторы у драйвера.");
+                if (applied >= 0) Release(L.T("Программа закрыта — вентиляторы у драйвера."));
             }
             else if (Volatile.Read(ref applied) >= 0)
             {
@@ -337,10 +337,16 @@ public static class FanControl
                     int target = testing ? maxLevel
                         : Decide(CurrentMode(s), GameHooks.InGame || live.Recording, s.GetBool(KGames), s.GetBool(KStop, true),
                                  CurrentCurve(s), CurrentFixed(s), smooth, minLevel, maxLevel, applied >= 0, out reason);
-                    if (testing) reason = "Проверка: полная скорость на несколько секунд.";
+                    if (testing) reason = L.T("Проверка: полная скорость на несколько секунд.");
                     Apply(target);
                 }
-                else reason = "";
+                else
+                {
+                    reason = "";
+                    // Программа держит вентиляторы, а состояние их каналов больше не читается (сбой или перезапуск драйвера):
+                    // защита выше (84 °C, потеря температуры) здесь не работает — вентиляторы отдаются драйверу.
+                    if (applied >= 0) Release(L.T("Вентиляторы снова у драйвера."));
+                }
             }
             // Пыль: сравнение с опорным периодом — раз в полчаса (только чтение статистики и запись в настройки программы).
             if ((DateTime.Now - dustChecked).TotalMinutes >= 30) { dustChecked = DateTime.Now; Dust(notify: true); }
@@ -367,26 +373,26 @@ public static class FanControl
     public static int Decide(Mode mode, bool inGame, bool gamesOnly, bool stopCold, FanPoint[] curve, int fixedLevel,
                              double t, int min, int max, bool holding, out string why)
     {
-        if (mode == Mode.Driver) { why = "Скоростью управляет драйвер видеокарты."; return -1; }
-        if (double.IsNaN(t)) { why = "Температура видеокарты не читается — скоростью управляет драйвер."; return -1; }
-        if (t >= SafeTemp) { why = $"Видеокарта нагрелась до {t:0} °C — вентиляторы на полной скорости."; return max; }
-        if (gamesOnly && !inGame) { why = "Игра не запущена — скоростью управляет драйвер."; return -1; }
+        if (mode == Mode.Driver) { why = L.T("Скоростью управляет драйвер видеокарты."); return -1; }
+        if (double.IsNaN(t)) { why = L.T("Температура видеокарты не читается — скоростью управляет драйвер."); return -1; }
+        if (t >= SafeTemp) { why = L.F("Видеокарта нагрелась до {0:0} °C — вентиляторы на полной скорости.", t); return max; }
+        if (gamesOnly && !inGame) { why = L.T("Игра не запущена — скоростью управляет драйвер."); return -1; }
 
         if (mode == Mode.Fixed)
         {
             int f = Math.Clamp(fixedLevel, min, max);
-            why = $"Постоянная скорость {f} %.";
+            why = L.F("Постоянная скорость {0} %.", f);
             return f;
         }
 
         var c = Normalize(curve);
         if (stopCold && t < c[0].T - (holding ? 3 : 0))
         {
-            why = $"Видеокарта холодная ({t:0} °C) — вентиляторы может остановить драйвер.";
+            why = L.F("Видеокарта холодная ({0:0} °C) — вентиляторы может остановить драйвер.", t);
             return -1;
         }
         int l = Math.Clamp((int)Math.Round(Interpolate(c, t)), min, max);
-        why = $"По кривой: {t:0} °C → {l} %.";
+        why = L.F("По кривой: {0:0} °C → {1} %.", t, l);
         return l;
     }
 
@@ -451,24 +457,27 @@ public static class FanControl
         if (shuttingDown && target >= 0) return;     // при выходе вентиляторы только отпускаются
         if (target < 0)
         {
-            if (applied >= 0) Release("Вентиляторы снова у драйвера.");
+            if (applied >= 0) Release(L.T("Вентиляторы снова у драйвера."));
             return;
         }
         // Мелкие изменения не отправляются: шаг в 2 % на слух не отличить, а драйвер лишний раз не дёргается.
         if (applied >= 0 && Math.Abs(target - applied) < 2 && !(target == maxLevel && applied != maxLevel)) return;
+        bool first = applied < 0;
+        // Отметка «держит» — до того, как вентиляторы перейдут в ручной режим: если программа упадёт сразу после,
+        // следующий запуск вернёт их драйверу.
+        bool marked = false;
+        if (first && host != null && !host.Settings.GetBool(KHeld)) { host.Settings.SetBool(KHeld, true); host.Settings.Save(); marked = true; }
         int st = Nv.SetLevel(target, manual: true);
         if (st == 0)
         {
-            bool first = applied < 0;
             applied = target;
-            if (first)
-            {
-                host?.Settings.SetBool(KHeld, true);
-                host?.Settings.Save();
-                Note($"Программа взяла вентиляторы: {target} %.");
-            }
+            if (first) Note(L.F("Программа взяла вентиляторы: {0} %.", target));
         }
-        else Note("Драйвер не принял скорость вентиляторов: " + Nv.Error(st) + ".");
+        else
+        {
+            if (marked) { host.Settings.SetBool(KHeld, false); host.Settings.Save(); }
+            Note(L.F("Драйвер не принял скорость вентиляторов: {0}.", Nv.Error(st)));
+        }
     }
 
     /// <summary>
@@ -486,7 +495,7 @@ public static class FanControl
             Note(note);
             return true;
         }
-        Note("Драйвер не принял возврат вентиляторов: " + Nv.Error(st) + ". Программа попробует ещё раз; перезагрузка тоже вернёт их драйверу.");
+        Note(L.F("Драйвер не принял возврат вентиляторов: {0}. Программа попробует ещё раз; перезагрузка тоже вернёт их драйверу.", Nv.Error(st)));
         return false;
     }
 
@@ -497,7 +506,7 @@ public static class FanControl
     {
         if ((DateTime.Now - staleTried).TotalSeconds < 60) return;
         staleTried = DateTime.Now;
-        Release("Вентиляторы вернулись драйверу: в прошлый раз программа закрылась, не успев их отпустить.");
+        Release(L.T("Вентиляторы вернулись драйверу: в прошлый раз программа закрылась, не успев их отпустить."));
     }
 
     private static void Note(string text) { lastAction = text; lastActionAt = DateTime.Now; }
@@ -528,9 +537,9 @@ public static class FanControl
                 Ready = readOnce,
             };
             v.Why = v.CanControl ? ""
-                : vendor == "AMD" ? "У видеокарт AMD скоростью вентиляторов управляет AMD Software: «Производительность» → «Настройка» → «Вентиляторы»."
-                : vendor == "Intel" ? "У видеокарт Intel скорость вентиляторов задаёт Intel Graphics Software или программа производителя карты."
-                : nv ? "Драйвер NVIDIA не отдаёт управление вентиляторами этой видеокарты. Так бывает у ноутбуков: там вентиляторами управляет сам ноутбук."
+                : vendor == "AMD" ? L.T("У видеокарт AMD скоростью вентиляторов управляет AMD Software: «Производительность» → «Настройка» → «Вентиляторы».")
+                : vendor == "Intel" ? L.T("У видеокарт Intel скорость вентиляторов задаёт Intel Graphics Software или программа производителя карты.")
+                : nv ? L.T("Драйвер NVIDIA не отдаёт управление вентиляторами этой видеокарты. Так бывает у ноутбуков: там вентиляторами управляет сам ноутбук.")
                 : why;
             return v;
         }
@@ -790,23 +799,24 @@ public static class FanControl
 
     private static string DustText(DustView v)
     {
-        const string nb = " ";
         if (!v.BaseReady)
         {
             int m = Math.Min(v.Base.Minutes, DustMinMinutes);
             return v.BaseDay <= DustDays
-                ? $"Программа запоминает, как охлаждается видеокарта сейчас: день {v.BaseDay} из {DustDays}, набрано {m} из {DustMinMinutes} минут игры под полной нагрузкой. Потом будет с чем сравнивать."
-                : $"Программа запоминает, как охлаждается видеокарта сейчас: набрано {m} из {DustMinMinutes} минут игры под полной нагрузкой. Как только наберётся, будет с чем сравнивать.";
+                ? L.F("Программа запоминает, как охлаждается видеокарта сейчас: день {0} из {1}, набрано {2} из {3} минут игры под полной нагрузкой. Потом будет с чем сравнивать.", v.BaseDay, DustDays, m, DustMinMinutes)
+                : L.F("Программа запоминает, как охлаждается видеокарта сейчас: набрано {0} из {1} минут игры под полной нагрузкой. Как только наберётся, будет с чем сравнивать.", m, DustMinMinutes);
         }
         if (!v.Now.Enough)
-            return $"Как охлаждалась видеокарта раньше, программа запомнила. Для сравнения нужно ещё {DustMinMinutes - v.Now.Minutes} минут игры под полной нагрузкой за последние {DustDays} дней.";
-        string fans = v.FansFree ? $", а вентиляторы крутятся быстрее на {v.FanRise:0}{nb}п.{nb}п" : "";
+            return L.F("Как охлаждалась видеокарта раньше, программа запомнила. Для сравнения нужно ещё {0} минут игры под полной нагрузкой за последние {1} дней.", DustMinMinutes - v.Now.Minutes, DustDays);
         if (v.Dusty)
-            return $"Похоже, пора почистить компьютер от пыли: при той же нагрузке видеокарта в играх стала горячее на {v.TempRise:0}{nb}°C{fans}.";
+            return v.FansFree
+                ? L.F("Похоже, пора почистить компьютер от пыли: при той же нагрузке видеокарта в играх стала горячее на {0:0} °C, а вентиляторы крутятся быстрее на {1:0} п. п.", v.TempRise, v.FanRise)
+                : L.F("Похоже, пора почистить компьютер от пыли: при той же нагрузке видеокарта в играх стала горячее на {0:0} °C.", v.TempRise);
         if (v.Heavier && v.TempRise >= DustTempRise)
-            return $"Видеокарта в играх стала горячее на {v.TempRise:0}{nb}°C, но и работает тяжелее: потребление выросло с {v.Base.Watts:0} до {v.Now.Watts:0}{nb}Вт. Это скорее игры, чем пыль.";
-        string rise = Math.Abs(v.TempRise) < 0.5 ? "та же" : v.TempRise > 0 ? $"выше на {v.TempRise:0}{nb}°C" : $"ниже на {-v.TempRise:0}{nb}°C";
-        return $"Охлаждение работает как раньше: температура в играх за вычетом простоя {rise}, чем в опорный период.";
+            return L.F("Видеокарта в играх стала горячее на {0:0} °C, но и работает тяжелее: потребление выросло с {1:0} до {2:0} Вт. Это скорее игры, чем пыль.", v.TempRise, v.Base.Watts, v.Now.Watts);
+        return Math.Abs(v.TempRise) < 0.5 ? L.T("Охлаждение работает как раньше: температура в играх за вычетом простоя та же, что в опорный период.")
+            : v.TempRise > 0 ? L.F("Охлаждение работает как раньше: температура в играх за вычетом простоя выше на {0:0} °C, чем в опорный период.", v.TempRise)
+            : L.F("Охлаждение работает как раньше: температура в играх за вычетом простоя ниже на {0:0} °C, чем в опорный период.", -v.TempRise);
     }
 
     /// <summary>
@@ -830,9 +840,10 @@ public static class FanControl
             {
                 s.Set(KDustNote, DateTime.Now.ToString("o", System.Globalization.CultureInfo.InvariantCulture));
                 changed = true;
-                string fans = v.FansFree ? $", а вентиляторы крутятся быстрее на {v.FanRise:0} п. п" : "";
-                h.Ui(() => h.Notify("Похоже, пора почистить компьютер от пыли",
-                    $"При той же нагрузке видеокарта в играх стала горячее на {v.TempRise:0} °C{fans}. Подробности — в разделе «Вентиляторы».",
+                string body = v.FansFree
+                    ? L.F("При той же нагрузке видеокарта в играх стала горячее на {0:0} °C, а вентиляторы крутятся быстрее на {1:0} п. п. Подробности — в разделе «Вентиляторы».", v.TempRise, v.FanRise)
+                    : L.F("При той же нагрузке видеокарта в играх стала горячее на {0:0} °C. Подробности — в разделе «Вентиляторы».", v.TempRise);
+                h.Ui(() => h.Notify(L.T("Похоже, пора почистить компьютер от пыли"), body,
                     true, () => h.Open("sys:Вентиляторы")));
             }
         }
@@ -889,7 +900,7 @@ public static class FanControl
                 {
                     tried = true;
                     try { ready = Load(); }
-                    catch (Exception ex) { ready = false; why = "Драйвер NVIDIA не отвечает (" + ex.Message + ")."; }
+                    catch (Exception ex) { ready = false; why = L.F("Драйвер NVIDIA не отвечает ({0}).", ex.Message); }
                 }
                 reason = why;
                 return ready;
@@ -899,14 +910,14 @@ public static class FanControl
         private static bool Load()
         {
             string dll = Path.Combine(Environment.SystemDirectory, "nvapi64.dll");
-            if (!Environment.Is64BitProcess || !File.Exists(dll)) { why = "Видеокарты NVIDIA нет или её драйвер не установлен."; return false; }
+            if (!Environment.Is64BitProcess || !File.Exists(dll)) { why = L.T("Видеокарты NVIDIA нет или её драйвер не установлен."); return false; }
             if (!NativeLibrary.TryLoad(dll, out IntPtr lib) || !NativeLibrary.TryGetExport(lib, "nvapi_QueryInterface", out IntPtr entry))
-            { why = "Библиотека драйвера NVIDIA не загрузилась. Переустановите драйвер."; return false; }
+            { why = L.T("Библиотека драйвера NVIDIA не загрузилась. Переустановите драйвер."); return false; }
             var query = Marshal.GetDelegateForFunctionPointer<QueryInterface>(entry);
             T Fn<T>(uint id) where T : Delegate { IntPtr p = query(id); return p == IntPtr.Zero ? null : Marshal.GetDelegateForFunctionPointer<T>(p); }
 
             var init = Fn<Plain>(0x0150E828);                   // NvAPI_Initialize
-            if (init == null || init() != 0) { why = "Драйвер NVIDIA не отвечает."; return false; }
+            if (init == null || init() != 0) { why = L.T("Драйвер NVIDIA не отвечает."); return false; }
             var enumGpus = Fn<EnumGpus>(0xE5AC921F);            // NvAPI_EnumPhysicalGPUs
             getStatus = Fn<OnGpu>(0x35AED5E8);                  // NvAPI_GPU_ClientFanCoolersGetStatus
             getControl = Fn<OnGpu>(0x814B209F);                 // NvAPI_GPU_ClientFanCoolersGetControl
@@ -914,10 +925,10 @@ public static class FanControl
             thermal = Fn<Thermal>(0xE3640A56);                  // NvAPI_GPU_GetThermalSettings
             errorText = Fn<ErrorMessage>(0x6C2D048C);           // NvAPI_GetErrorMessage
             if (enumGpus == null || getStatus == null || getControl == null || setControl == null)
-            { why = "В установленном драйвере NVIDIA нет функций управления вентиляторами. Обновите драйвер."; return false; }
+            { why = L.T("В установленном драйвере NVIDIA нет функций управления вентиляторами. Обновите драйвер."); return false; }
 
             var handles = new IntPtr[64];
-            if (enumGpus(handles, out int n) != 0 || n < 1) { why = "Драйвер NVIDIA не нашёл видеокарту."; return false; }
+            if (enumGpus(handles, out int n) != 0 || n < 1) { why = L.T("Драйвер NVIDIA не нашёл видеокарту."); return false; }
             gpu = handles[0];       // основная видеокарта; у ПК с двумя картами NVIDIA вторая не управляется
             return true;
         }
@@ -1013,12 +1024,12 @@ public static class FanControl
                 try
                 {
                     Marshal.WriteByte(buf, 0, 0);
-                    if (errorText(status, buf) == 0) { string t = Marshal.PtrToStringAnsi(buf); if (!string.IsNullOrEmpty(t)) return t + ", код " + status; }
+                    if (errorText(status, buf) == 0) { string t = Marshal.PtrToStringAnsi(buf); if (!string.IsNullOrEmpty(t)) return t + ", " + L.F("код {0}", status); }
                 }
                 catch { }
                 finally { Marshal.FreeHGlobal(buf); }
             }
-            return "код " + status;
+            return L.F("код {0}", status);
         }
 
         private static IntPtr Alloc(int size)
@@ -1145,12 +1156,12 @@ public static class FanControl
         var st = new AppSettings();
         var baseMins = Days(d0, 8, 70, 40, 55, 150);
         DustStep(st, baseMins, d0.AddDays(3).AddHours(12), "driver", false, out var early);
-        Check("пыль: на 4-й день опорный период ещё копится", !early.BaseReady && early.Base.Minutes == 90 && early.BaseDay == 4 && early.Text.Contains("день 4 из 7"));
+        Check("пыль: на 4-й день опорный период ещё копится", !early.BaseReady && early.Base.Minutes == 90 && early.BaseDay == 4 && early.Text.Contains(L.Pick("день 4 из 7", "day 4 of 7")));
         DustStep(st, baseMins, d0.AddDays(8).AddHours(12), "driver", false, out var ready);
         Check("пыль: через 7 дней и 240 минут опорный период готов", ready.BaseReady && ready.Base.Minutes == 240 && Math.Abs(ready.Base.Delta - 30) < 0.01);
         var all = baseMins.Concat(Days(d0.AddDays(8), 7, 77, 40, 67, 150)).ToList();
         DustStep(st, all, d0.AddDays(15).AddHours(12), "driver", false, out var later);
-        Check("пыль: последние 7 дней сравниваются с опорными — пора чистить", later.BaseReady && later.Now.Enough && later.Dusty && later.Text.StartsWith("Похоже, пора почистить"));
+        Check("пыль: последние 7 дней сравниваются с опорными — пора чистить", later.BaseReady && later.Now.Enough && later.Dusty && later.Text.StartsWith(L.T("Похоже, пора почистить компьютер от пыли")));
         DustStep(st, all, d0.AddDays(15).AddHours(13), "curve:" + FormatCurve(Balanced), false, out var reset);
         Check("пыль: смена режима вентиляторов — опорный период заново", !reset.BaseReady && reset.Base.Minutes == 0 && reset.BaseDay == 1);
         var hist = History();

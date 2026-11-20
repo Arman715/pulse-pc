@@ -61,9 +61,9 @@ public partial class InputPanel : UserControl, ISystemPanel
         SetMark(ToggleMark, ToggleWord, readable, hot?.Toggle == true);
         BtnHotOff.IsEnabled = host.Admin && !busy && readable && hot.Count > 0;
         BtnHotRestore.IsEnabled = host.Admin && !busy && backup;
-        if (!readable) HotResult.Text = "Windows не отдала настройки специальных возможностей. Откройте раздел ещё раз.";
+        if (!readable) HotResult.Text = L.T("Windows не отдала настройки специальных возможностей. Откройте раздел ещё раз.");
 
-        SpeedValue.Text = pointer.Ok ? $"{pointer.Speed} из 20" : "—";
+        SpeedValue.Text = pointer.Ok ? L.F("{0} из 20", pointer.Speed) : "—";
         if (!accelBusy)
         {
             AccelOff.IsChecked = pointer.Ok && !pointer.Acceleration;
@@ -78,29 +78,33 @@ public partial class InputPanel : UserControl, ISystemPanel
     {
         mark.Visibility = readable ? Visibility.Visible : Visibility.Collapsed;
         mark.Level = active ? Severity.Info : Severity.Ok;
-        word.Text = !readable ? "—" : active ? "срабатывает" : "отключено";
+        word.Text = !readable ? "—" : active ? L.T("срабатывает") : L.T("отключено");
     }
 
     /// <summary>Фраза вверху раздела и подпись под переключателем клавиши Win.</summary>
     private void ShowState()
     {
         bool winLock = WinLock.IsChecked == true;
-        if (hotkeys == null || !hotkeys.Readable) State.Text = "Сочетания прочитать не удалось";
+        if (hotkeys == null || !hotkeys.Readable) State.Text = L.T("Сочетания прочитать не удалось");
         else if (hotkeys.Count > 0)
-            State.Text = $"В игре {(hotkeys.Count == 1 ? "может" : "могут")} помешать {Fmt.Plural(hotkeys.Count, "сочетание", "сочетания", "сочетаний")}"
-                         + (winLock ? "" : " и клавиша Win");
-        else State.Text = winLock ? "Сочетания отключены, клавиша Win в игре блокируется" : "Сочетания отключены, клавиша Win в игре работает";
+        {
+            string count = Fmt.Plural(hotkeys.Count, "сочетание", "сочетания", "сочетаний");
+            State.Text = hotkeys.Count == 1
+                ? (winLock ? L.F("В игре может помешать {0}", count) : L.F("В игре может помешать {0} и клавиша Win", count))
+                : (winLock ? L.F("В игре могут помешать {0}", count) : L.F("В игре могут помешать {0} и клавиша Win", count));
+        }
+        else State.Text = winLock ? L.T("Сочетания отключены, клавиша Win в игре блокируется") : L.T("Сочетания отключены, клавиша Win в игре работает");
 
-        WinNote.Text = !winLock ? "Сейчас блокировка выключена: клавиша Win работает везде."
-            : InputTuning.WinLockActive ? $"Клавиша Win заблокирована: идёт игра{(GameHooks.Game.Length > 0 ? " «" + GameHooks.Game + "»" : "")}."
-            : GameHooks.InGame ? "Блокировка включена, но заблокировать клавишу не удалось. Выключите и снова включите переключатель."
-            : "Блокировка включена. Клавиша Win заблокируется, когда программа увидит запущенную игру, и снова заработает, когда игра закроется.";
+        WinNote.Text = !winLock ? L.T("Сейчас блокировка выключена: клавиша Win работает везде.")
+            : InputTuning.WinLockActive ? (GameHooks.Game.Length > 0 ? L.F("Клавиша Win заблокирована: идёт игра «{0}».", GameHooks.Game) : L.T("Клавиша Win заблокирована: идёт игра."))
+            : GameHooks.InGame ? L.T("Блокировка включена, но заблокировать клавишу не удалось. Выключите и снова включите переключатель.")
+            : L.T("Блокировка включена. Клавиша Win заблокируется, когда программа увидит запущенную игру, и снова заработает, когда игра закроется.");
     }
 
     // ---------- Сочетания ----------
 
-    private void HotOff_Click(object sender, RoutedEventArgs e) => RunHotkeys("Отключаю…", InputTuning.DisableHotkeys);
-    private void HotRestore_Click(object sender, RoutedEventArgs e) => RunHotkeys("Возвращаю…", InputTuning.RestoreHotkeys);
+    private void HotOff_Click(object sender, RoutedEventArgs e) => RunHotkeys(L.T("Отключаю…"), InputTuning.DisableHotkeys);
+    private void HotRestore_Click(object sender, RoutedEventArgs e) => RunHotkeys(L.T("Возвращаю…"), InputTuning.RestoreHotkeys);
 
     private void RunHotkeys(string progress, Func<(bool Ok, string Message)> action)
     {
@@ -115,7 +119,7 @@ public partial class InputPanel : UserControl, ISystemPanel
             HotkeyState hot = null;
             (bool Ok, int Speed, bool Acceleration) pointer = default;
             try { message = action().Message; }
-            catch (Exception ex) { message = "Не удалось: " + ex.Message; }
+            catch (Exception ex) { message = L.F("Не удалось: {0}", ex.Message); }
             try { hot = InputTuning.ReadHotkeys(); pointer = InputTuning.ReadPointer(); } catch { }
             bool backup = InputTuning.HasHotkeyBackup;
             host.Ui(() =>
@@ -151,10 +155,10 @@ public partial class InputPanel : UserControl, ISystemPanel
             {
                 if (off) item.Apply(); else item.Revert();
                 applied = item.Check();
-                message = off == applied ? (off ? "Ускорение выключено." : "Ускорение включено, как в Windows по умолчанию.")
-                                         : "Windows не приняла изменение. Попробуйте ещё раз.";
+                message = off == applied ? (off ? L.T("Ускорение выключено.") : L.T("Ускорение включено, как в Windows по умолчанию."))
+                                         : L.T("Windows не приняла изменение. Попробуйте ещё раз.");
             }
-            catch (Exception ex) { message = "Не удалось: " + ex.Message; }
+            catch (Exception ex) { message = L.F("Не удалось: {0}", ex.Message); }
             // Сторож следит только за тем, что выключено по выбору пользователя.
             Tweaks.Remember(host.Settings, Tweaks.MouseTitle, off && applied);
             var values = host.Settings.Values;
@@ -166,7 +170,7 @@ public partial class InputPanel : UserControl, ISystemPanel
                 accelBusy = false;
                 AccelOff.IsChecked = pointer.Ok ? !pointer.Acceleration : applied;
                 AccelOff.IsEnabled = host.Admin;
-                PointerNote.Text = message + " Если обновление Windows снова включит ускорение, программа выключит его сама.";
+                PointerNote.Text = message + L.T(" Если обновление Windows снова включит ускорение, программа выключит его сама.");
             });
         });
     }
@@ -193,18 +197,18 @@ public partial class InputPanel : UserControl, ISystemPanel
         if (measureSource != null) return;
         if (GameHooks.InGame)
         {
-            RateNote.Text = "Идёт игра. Замер сделайте после неё: он на три секунды забирает мышь на себя.";
+            RateNote.Text = L.T("Идёт игра. Замер сделайте после неё: он на три секунды забирает мышь на себя.");
             return;
         }
         var source = PresentationSource.FromVisual(this) as HwndSource;
         if (source == null || source.Handle == IntPtr.Zero)
         {
-            RateNote.Text = "Замер недоступен: раздел не подключён к окну программы.";
+            RateNote.Text = L.T("Замер недоступен: раздел не подключён к окну программы.");
             return;
         }
         if (!InputTuning.BeginMouseCapture(source.Handle))
         {
-            RateNote.Text = "Windows не разрешила читать отчёты мыши. Попробуйте ещё раз.";
+            RateNote.Text = L.T("Windows не разрешила читать отчёты мыши. Попробуйте ещё раз.");
             return;
         }
 
@@ -215,13 +219,13 @@ public partial class InputPanel : UserControl, ISystemPanel
         BtnMeasure.IsEnabled = false;
         ShowRate(null);
         RateWhen.Visibility = RateCompare.Visibility = Visibility.Collapsed;
-        RateEmpty.Text = "идёт замер";
-        RateNote.Text = "Водите мышью кругами, быстро и без остановок… 3 с";
+        RateEmpty.Text = L.T("идёт замер");
+        RateNote.Text = L.F("Водите мышью кругами, быстро и без остановок… {0:0}\u00A0с", InputTuning.MeasureSeconds);
         measureTimer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(100) };
         measureTimer.Tick += (_, _) =>
         {
             double left = InputTuning.MeasureSeconds - Stopwatch.GetElapsedTime(measureStart).TotalSeconds;
-            if (left > 0) RateNote.Text = $"Водите мышью кругами, быстро и без остановок… {Math.Ceiling(left):0} с";
+            if (left > 0) RateNote.Text = L.F("Водите мышью кругами, быстро и без остановок… {0:0}\u00A0с", Math.Ceiling(left));
             else FinishMeasure();
         };
         measureTimer.Start();
@@ -262,8 +266,8 @@ public partial class InputPanel : UserControl, ISystemPanel
         {
             ShowMouse();                      // прежний замер остаётся на месте
             RateNote.Text = rate.Reports == 0
-                ? "Мышь не прислала ни одного отчёта. Окно программы должно быть активным; нажмите «Измерить» и сразу водите мышью."
-                : "Мало данных: мышь двигалась слишком мало. Нажмите «Измерить» и все три секунды водите мышью без остановок.";
+                ? L.T("Мышь не прислала ни одного отчёта. Окно программы должно быть активным; нажмите «Измерить» и сразу водите мышью.")
+                : L.T("Мало данных: мышь двигалась слишком мало. Нажмите «Измерить» и все три секунды водите мышью без остановок.");
             return;
         }
         // Какая мышь прислала отчёты: по ней — марка, совет и сравнение с прошлым замером.
@@ -282,7 +286,7 @@ public partial class InputPanel : UserControl, ISystemPanel
         ShowMouse();
         RateCompare.Text = compare;
         RateCompare.Visibility = compare.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        RateNote.Text = InputTuning.RateVerdict(rate.Rounded) + $" Получено отчётов: {rate.Reports}. Если водить мышью медленно, число выйдет заниженным.";
+        RateNote.Text = InputTuning.RateVerdict(rate.Rounded) + L.F(" Получено отчётов: {0}. Если водить мышью медленно, число выйдет заниженным.", rate.Reports);
     }
 
     // ---------- Модель мыши, последний замер, совет ----------
@@ -297,8 +301,8 @@ public partial class InputPanel : UserControl, ISystemPanel
         if (host == null) return;
         var last = InputTuning.LastMeasure(host.Settings);
         bool many = mice.Count(m => m.Vid >= 0) > 1;
-        MiceList.ItemsSource = mice.Select(m => new MouseRow(m.Title, m.Caption.Length > 0 ? m.Caption : "кодов производителя нет",
-            many && last.Id.Length > 0 && m.Id == last.Id ? "замер по ней" : "")).ToList();
+        MiceList.ItemsSource = mice.Select(m => new MouseRow(m.Title, m.Caption.Length > 0 ? m.Caption : L.T("кодов производителя нет"),
+            many && last.Id.Length > 0 && m.Id == last.Id ? L.T("замер по ней") : "")).ToList();
         MiceNote.Visibility = many ? Visibility.Visible : Visibility.Collapsed;
 
         if (measureSource != null) return;          // идёт замер: число и совет покажет его итог
@@ -307,33 +311,32 @@ public partial class InputPanel : UserControl, ISystemPanel
             ShowRate(null);
             RateWhen.Visibility = Visibility.Collapsed;
             RaiseBlock.Visibility = Visibility.Collapsed;
-            BtnMeasure.Content = "Измерить";
+            BtnMeasure.Content = L.T("Измерить");
             return;
         }
-        ShowRate($"около {last.Hz}{Nb}Гц");
-        RateWhen.Text = last.At == default ? "" : last.At.Date == DateTime.Today ? $"сегодня, {last.At:HH:mm}"
-            : last.At.ToString("d MMMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
+        ShowRate(L.F("около {0}\u00A0Гц", last.Hz));
+        RateWhen.Text = last.At == default ? "" : last.At.Date == DateTime.Today ? L.F("сегодня, {0:HH:mm}", last.At)
+            : last.At.ToString(L.Pick("d MMMM, HH:mm", "MMMM d, HH:mm"), L.Culture);
         RateWhen.Visibility = RateWhen.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        BtnMeasure.Content = "Измерить ещё раз";
+        BtnMeasure.Content = L.T("Измерить ещё раз");
 
         if (last.Hz > InputTuning.LowRate) { RaiseBlock.Visibility = Visibility.Collapsed; return; }
         // Совет — для той мыши, по которой был замер; если она неизвестна, а мышь одна — для неё.
         var known = mice.Where(m => m.Vid >= 0).ToList();
         var mouse = mice.FirstOrDefault(m => last.Id.Length > 0 && m.Id == last.Id) ?? (known.Count == 1 ? known[0] : null);
         string brand = mouse?.Brand ?? "";
-        RaiseTitle.Text = $"{last.Hz}{Nb}Гц — мало для игр. Как поднять частоту" + (brand.Length > 0 ? $" у мыши {brand}" : "");
+        RaiseTitle.Text = brand.Length > 0 ? L.F("{0}\u00A0Гц — мало для игр. Как поднять частоту у мыши {1}", last.Hz, brand)
+                                    : L.F("{0}\u00A0Гц — мало для игр. Как поднять частоту", last.Hz);
         RaiseText.Text = InputTuning.RaiseAdvice(mouse?.Vid ?? -1, mouse?.Product ?? "", mouse?.Bluetooth == true);
         RaiseBlock.Visibility = Visibility.Visible;
     }
-
-    private const string Nb = " ";
 
     /// <summary>Число справа в строке замера; null — замера ещё нет.</summary>
     private void ShowRate(string text)
     {
         RateValue.Text = text ?? "";
         RateValue.Visibility = text != null ? Visibility.Visible : Visibility.Collapsed;
-        RateEmpty.Text = "не измерено";
+        RateEmpty.Text = L.T("не измерено");
         RateEmpty.Visibility = text != null ? Visibility.Collapsed : Visibility.Visible;
     }
 }

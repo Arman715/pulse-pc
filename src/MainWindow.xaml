@@ -64,7 +64,7 @@
                         <Border Width="22" Height="14" BorderBrush="{StaticResource Ink2}" BorderThickness="1" Background="{Binding Swatch}" Margin="12,0,0,0"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1">
-                        <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding TitleText}" Style="{StaticResource RowTitle}"/>
                         <TextBlock Text="{Binding Hint}" Style="{StaticResource Body}" Margin="0,2,0,0"/>
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Visibility="{Binding Irreversible, Converter={StaticResource BoolToVis}}">
                             <local:StateMarker Level="Warn" Margin="0,0,8,0"/>
@@ -88,8 +88,8 @@
         <DataTemplate x:Key="CleanEmptyRow">
             <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="30,8,2,8">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Right" Text="пусто" Style="{StaticResource Caption}" Margin="16,0,0,0"/>
-                    <TextBlock Text="{Binding Title}" Foreground="{StaticResource Ink3}"/>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding SizeText}" Style="{StaticResource Caption}" Margin="16,0,0,0"/>
+                    <TextBlock Text="{Binding TitleText}" Foreground="{StaticResource Ink3}"/>
                 </DockPanel>
             </Border>
         </DataTemplate>
@@ -105,7 +105,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                            <TextBlock Text="{Binding TitleText}" Style="{StaticResource RowTitle}"/>
                             <TextBlock Text="{Binding Hint}" Style="{StaticResource Body}" Margin="0,2,0,0"/>
                         </StackPanel>
                         <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding Desired}" VerticalAlignment="Top" Margin="24,3,2,0"/>
@@ -189,7 +189,7 @@
         </DataTemplate>
     </Window.Resources>
 
-    <Border x:Name="Root" Background="{StaticResource Base}" BorderBrush="#BDB5A6" BorderThickness="1">
+    <Border x:Name="Root" Background="{StaticResource Base}" BorderBrush="{StaticResource WindowEdge}" BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="48"/>
@@ -234,9 +234,16 @@
 
 
 
-                <!-- Справка: отдельный лист, кнопка «?» перед кнопками окна -->
-                <Button x:Name="BtnHelp" Grid.Column="3" Style="{StaticResource CaptionButton}" Content="&#xE897;" Click="Help_Click"
-                        ToolTip="Справка: как пользоваться программой" AutomationProperties.Name="Справка" FontSize="15" Margin="0,0,8,0"/>
+                <!-- Язык, тема, обратная связь и справка — маленькие кнопки перед кнопками окна -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="0,0,8,0">
+                    <Button x:Name="BtnLang" Style="{StaticResource CaptionButton}" Width="36" Click="Lang_Click"
+                            FontFamily="{StaticResource Din}" FontSize="12" FontWeight="SemiBold"/>
+                    <Button x:Name="BtnTheme" Style="{StaticResource CaptionButton}" Width="36" FontSize="14" Click="Theme_Click"/>
+                    <Button x:Name="BtnFeedback" Style="{StaticResource CaptionButton}" Width="36" FontSize="15" Content="&#xED15;" Click="Feedback_Click"
+                            ToolTip="Сообщить о проблеме, оставить отзыв" AutomationProperties.Name="Обратная связь"/>
+                    <Button x:Name="BtnHelp" Style="{StaticResource CaptionButton}" Width="36" Content="&#xE897;" Click="Help_Click"
+                            ToolTip="Справка: как пользоваться программой" AutomationProperties.Name="Справка" FontSize="15"/>
+                </StackPanel>
 
                 <StackPanel Grid.Column="4" Orientation="Horizontal">
                     <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="Minimize_Click" ToolTip="Свернуть"/>
@@ -465,7 +472,7 @@
             <Grid x:Name="PageSessions" Grid.Row="2" Visibility="Collapsed">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <local:SheetHeader x:Name="HdrSessions" Title="ПРОТОКОЛ" Line1="ИГРОВЫЕ СЕССИИ" Line2="ОТЧЁТ О ЗАПИСИ" Margin="32,20,32,6"/>
-                <Grid x:Name="SessionsBody" Grid.Row="1">
+                <Grid x:Name="SessionsBody" Grid.Row="1" SizeChanged="SessionsBody_SizeChanged">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="312"/>
                         <ColumnDefinition Width="1"/>
@@ -473,7 +480,10 @@
                     </Grid.ColumnDefinitions>
 
                     <DockPanel Margin="32,24,0,24">
-                        <StackPanel DockPanel.Dock="Top" Margin="0,0,28,0">
+                        <!-- Верх колонки прокручивается сам, если не помещается (низкое окно, игры добавлены вручную, просьба об оценке):
+                             иначе он вытеснял бы список сессий целиком. Высоту ограничивает SessionsBody_SizeChanged. -->
+                        <ScrollViewer x:Name="SessionsSide" DockPanel.Dock="Top" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                        <StackPanel Margin="0,0,28,0">
                             <bp:BlueprintView x:Name="PadDrawing" Scene="Gamepad" Height="110" Margin="0,0,0,14"/>
                         <local:TrackedText Source="ИГРОВЫЕ СЕССИИ" Style="{StaticResource Label}"/>
                             <StackPanel x:Name="LivePanel" Visibility="Collapsed" Margin="0,12,0,0">
@@ -492,8 +502,38 @@
                                     <TextBlock Text="Сводка за неделю"/>
                                 </StackPanel>
                             </Button>
+                            <Button x:Name="BtnAddGame" Style="{StaticResource Link}" HorizontalAlignment="Left" Margin="0,8,0,0" Click="BtnAddGame_Click"
+                                    ToolTip="Игра не записывается сама? Укажите её файл .exe — программа будет узнавать её при запуске">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="+" Width="14" Margin="0,0,8,0" TextAlignment="Center" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Добавить игру вручную"/>
+                                </StackPanel>
+                            </Button>
+                            <StackPanel x:Name="CustomGamesPanel" Margin="0,6,0,0"/>
+                            <Button x:Name="BtnCleanSessions" Style="{StaticResource Link}" HorizontalAlignment="Left" Margin="0,8,0,0" Click="CleanSessions_Click"
+                                    ToolTip="Удалить старые или все сессии, чтобы список не разрастался">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="−" Width="14" Margin="0,0,8,0" TextAlignment="Center" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Очистить список сессий…"/>
+                                </StackPanel>
+                            </Button>
+                            <!-- Просьба оценить программу: после нескольких игр, один раз (см. Feedback.ShouldAskRating) -->
+                            <Border x:Name="RateBar" Visibility="Collapsed" Background="{StaticResource Raised}" BorderBrush="{StaticResource Line}" BorderThickness="1"
+                                    Padding="14,12" Margin="0,14,16,0">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="Нравится Пульс ПК?"/>
+                                    <TextBlock Style="{StaticResource Caption}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                               Text="Оцените программу — это займёт минуту и поможет её улучшить."/>
+                                    <WrapPanel Margin="0,10,0,0">
+                                        <Button Style="{StaticResource Primary}" Content="Оценить" Margin="0,0,8,6" Click="RateYes_Click"/>
+                                        <Button Content="Позже" Margin="0,0,8,6" Click="RateLater_Click"/>
+                                        <Button Style="{StaticResource Link}" Content="Не спрашивать" Margin="4,0,0,6" VerticalAlignment="Center" Click="RateNever_Click"/>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
                             <Rectangle Style="{StaticResource Hairline}" Margin="0,16,0,0"/>
                         </StackPanel>
+                        </ScrollViewer>
                         <ListBox x:Name="SessionList" Background="Transparent" BorderThickness="0" Padding="0" Margin="0,0,16,0"
                                  ItemContainerStyle="{StaticResource SessionItem}" ItemTemplate="{StaticResource SessionRow}"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="SessionList_SelectionChanged"/>
@@ -524,13 +564,17 @@
                                         <TextBlock x:Name="SessWhen" Style="{StaticResource Caption}" Margin="0,4,0,0"/>
                                     </StackPanel>
                                     <!-- Карточка сессии: картинка 1080×1350 в «Изображения\Пульс ПК» и в буфер обмена -->
-                                    <Button x:Name="BtnShare" Grid.Column="1" VerticalAlignment="Top" Margin="24,0,0,0" Click="BtnShare_Click"
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="24,0,0,0">
+                                    <Button x:Name="BtnDeleteSession" Style="{StaticResource Link}" Content="Удалить" VerticalAlignment="Center" Margin="0,0,16,0"
+                                            Click="DeleteSession_Click" ToolTip="Удалить эту сессию из списка и из истории"/>
+                                    <Button x:Name="BtnShare" VerticalAlignment="Top" Click="BtnShare_Click"
                                             ToolTip="Картинка с итогами этой сессии: FPS, что его ограничивало и главные причины просадок. Сохраняется в «Изображения\Пульс ПК» и копируется, чтобы вставить в чат.">
                                         <StackPanel Orientation="Horizontal">
                                             <Path Style="{StaticResource Icon}" Data="M8.5,3.5 H2.5 V17.5 H16.5 V11.5 M10.5,9.5 L18,2 M12.5,2 H18 V7.5" Width="14" Height="14" Margin="0,0,8,0"/>
                                             <TextBlock Text="Поделиться отчётом"/>
                                         </StackPanel>
                                     </Button>
+                                    </StackPanel>
                                 </Grid>
                                 <!-- Итог «Поделиться отчётом»: где лежит картинка и «Открыть папку» -->
                                 <WrapPanel x:Name="ShareDone" Margin="0,12,0,0" Visibility="Collapsed">
@@ -1300,7 +1344,7 @@
                                     <!-- «Состояние программы»: часть программы не работает дольше 10 минут. Метка только здесь, без уведомлений. -->
                                     <local:StateMarker x:Name="HealthMark" DockPanel.Dock="Right" Level="Bad" VerticalAlignment="Center" Margin="10,0,4,0"
                                                        Visibility="Collapsed" ToolTip="Часть программы не работает больше 10 минут"/>
-                                    <TextBlock Text="{Binding Title}" Style="{StaticResource CompItemText}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding TitleText}" Style="{StaticResource CompItemText}" TextTrimming="CharacterEllipsis"/>
                                 </DockPanel>
                                 <DataTemplate.Triggers>
                                     <MultiDataTrigger>

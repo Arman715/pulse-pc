@@ -21,7 +21,7 @@ public partial class SoundPanel : UserControl, ISystemPanel
         public string Mark { get; init; } = "";
         public Brush MarkBrush { get; init; } = Palette.Ink3;
         public Visibility ButtonVisibility { get; init; }
-        public string ButtonText { get; init; } = "Сделать основным";
+        public string ButtonText { get; init; } = L.T("Сделать основным");
         public bool CanChange { get; init; }
         public string FxText { get; init; } = "";
         /// <summary>Улучшения выключены сейчас.</summary>
@@ -113,7 +113,7 @@ public partial class SoundPanel : UserControl, ISystemPanel
     {
         if (devices.Count == 0)
         {
-            State.Text = "Звуковых устройств вывода не найдено. Подключите наушники или колонки — они появятся здесь.";
+            State.Text = L.T("Звуковых устройств вывода не найдено. Подключите наушники или колонки — они появятся здесь.");
             Intro.Visibility = Visibility.Collapsed;
             NoAdmin.Visibility = Visibility.Collapsed;
             Sections.Visibility = Visibility.Collapsed;
@@ -122,7 +122,7 @@ public partial class SoundPanel : UserControl, ISystemPanel
 
         bool admin = host.Admin;
         var main = devices.FirstOrDefault(d => d.IsDefault);
-        State.Text = main != null ? $"Звук идёт на «{main.Name}»." : "Основное устройство вывода не выбрано.";
+        State.Text = main != null ? L.F("Звук идёт на «{0}».", main.Name) : L.T("Основное устройство вывода не выбрано.");
         Intro.Visibility = Visibility.Visible;
         NoAdmin.Visibility = admin ? Visibility.Collapsed : Visibility.Visible;
         Sections.Visibility = Visibility.Visible;
@@ -140,18 +140,18 @@ public partial class SoundPanel : UserControl, ISystemPanel
             {
                 Id = d.Id,
                 Name = d.Name,
-                Caption = d.Format.Length > 0 ? d.Format : "Формат прочитать не удалось",
-                Mark = d.IsDefault ? "ОСНОВНОЕ" : d.IsDefaultComm ? "ДЛЯ СВЯЗИ" : "",
+                Caption = d.Format.Length > 0 ? d.Format : L.T("Формат прочитать не удалось"),
+                Mark = d.IsDefault ? L.T("ОСНОВНОЕ") : d.IsDefaultComm ? L.T("ДЛЯ СВЯЗИ") : "",
                 MarkBrush = d.IsDefault ? Palette.Accent : Palette.Ink3,
                 ButtonVisibility = d.IsDefault && (d.IsDefaultComm || !devices.Any(x => x.IsDefaultComm)) ? Visibility.Collapsed : Visibility.Visible,
                 // Основное для программ, но звонки идут на другое устройство: кнопка переводит сюда и связь.
-                ButtonText = d.IsDefault ? "Сделать и для связи" : "Сделать основным",
+                ButtonText = d.IsDefault ? L.T("Сделать и для связи") : L.T("Сделать основным"),
                 CanChange = admin,
                 FxText = d.Enhancements switch
                 {
-                    SysFxState.On => "Улучшения включены",
-                    SysFxState.Off => "Улучшения выключены",
-                    _ => "Состояние улучшений прочитать не удалось",
+                    SysFxState.On => L.T("Улучшения включены"),
+                    SysFxState.Off => L.T("Улучшения выключены"),
+                    _ => L.T("Состояние улучшений прочитать не удалось"),
                 },
                 FxWas = d.Enhancements == SysFxState.Off,
                 FxOff = d.Enhancements == SysFxState.Off,
@@ -167,8 +167,8 @@ public partial class SoundPanel : UserControl, ISystemPanel
             .Concat(away.Select(a => new CycleRow
             {
                 Id = a.Id,
-                Name = a.Name ?? "Устройство, которого Windows больше не видит",
-                Note = " — сейчас не подключено",
+                Name = a.Name ?? L.T("Устройство, которого Windows больше не видит"),
+                Note = L.T(" — сейчас не подключено"),
                 InCycle = marked.Contains(a.Id),
                 CanChange = admin,
             })).ToList();
@@ -181,21 +181,21 @@ public partial class SoundPanel : UserControl, ISystemPanel
         BtnFxRestore.Visibility = anyToggle || backup ? Visibility.Visible : Visibility.Collapsed;
         BtnFxRestore.IsEnabled = admin && backup;
         FxNote.Text = anyToggle
-            ? "Изменение подействует, когда Windows заново запустит звук на устройстве: точно — после перезагрузки или переподключения устройства, иногда раньше — когда все программы замолчат и заиграют снова. То, что уже играет, не прерывается."
-            : "На этом компьютере Windows не даёт программам менять улучшения. Их можно выключить в свойствах устройства: вкладка «Улучшения» или «Дополнительно».";
+            ? L.T("Изменение подействует, когда Windows заново запустит звук на устройстве: точно — после перезагрузки или переподключения устройства, иногда раньше — когда все программы замолчат и заиграют снова. То, что уже играет, не прерывается.")
+            : L.T("На этом компьютере Windows не даёт программам менять улучшения. Их можно выключить в свойствах устройства: вкладка «Улучшения» или «Дополнительно».");
 
         if (mic == null)
         {
-            MicName.Text = "Микрофон не найден";
-            MicNote.Text = "Основного устройства записи в Windows сейчас нет.";
+            MicName.Text = L.T("Микрофон не найден");
+            MicNote.Text = L.T("Основного устройства записи в Windows сейчас нет.");
         }
         else
         {
             MicName.Text = mic.Name;
-            MicNote.Text = "Основное устройство записи" + (mic.Format.Length > 0 ? ", " + mic.Format : "") + ". "
+            MicNote.Text = (mic.Format.Length > 0 ? L.F("Основное устройство записи, {0}.", mic.Format) : L.T("Основное устройство записи.")) + " "
                 + (mic.Listening
-                    ? "Включено прослушивание: звук микрофона идёт в ваши наушники или колонки с задержкой. Выключается в свойствах микрофона, вкладка «Прослушать»."
-                    : "Прослушивание выключено: вы не слышите сами себя.");
+                    ? L.T("Включено прослушивание: звук микрофона идёт в ваши наушники или колонки с задержкой. Выключается в свойствах микрофона, вкладка «Прослушать».")
+                    : L.T("Прослушивание выключено: вы не слышите сами себя."));
         }
 
         ShowHotkey();
@@ -212,11 +212,14 @@ public partial class SoundPanel : UserControl, ISystemPanel
         }
         hotkeyShown = true;
 
-        HotkeyNow.Text = !active.IsEmpty ? $"Сейчас работает: {active.Text}."
-            : AudioDevices.HotkeyProblem ?? "Клавиша не включена.";
-        BtnHotkeyOn.Content = active.IsEmpty ? "Включить клавишу" : "Сохранить";
+        HotkeyNow.Text = !active.IsEmpty ? L.F("Сейчас работает: {0}.", active.Text)
+            : AudioDevices.HotkeyProblem ?? L.T("Клавиша не включена.");
+        BtnHotkeyOn.Content = active.IsEmpty ? L.T("Включить клавишу") : L.T("Сохранить");
         BtnHotkeyOff.IsEnabled = host.Admin && !active.IsEmpty;
     }
+
+    /// <summary>Имя устройства в кавычках языка интерфейса.</summary>
+    private static string Quote(string name) => L.Pick("«" + name + "»", "“" + name + "”");
 
     private static void Say(TextBlock target, string text)
     {
@@ -240,7 +243,7 @@ public partial class SoundPanel : UserControl, ISystemPanel
             h.Ui(() =>
             {
                 h.EndBusy();
-                Say(SwitchResult, ok ? $"Основное устройство теперь «{name}»." : $"Не удалось сделать «{name}» основным. {error}");
+                Say(SwitchResult, ok ? L.F("Основное устройство теперь «{0}».", name) : L.F("Не удалось сделать «{0}» основным. {1}", name, error));
                 Reload();
             });
         });
@@ -267,7 +270,7 @@ public partial class SoundPanel : UserControl, ISystemPanel
         int Place(string id) { int i = order.FindIndex(o => AudioDevices.SameId(o, id)); return i < 0 ? int.MaxValue : i; }
         var chosen = cycle.Where(c => c.InCycle).OrderBy(c => Place(c.Id)).ThenBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         if (AudioDevices.SetHotkey(hotkey, chosen.Select(c => c.Id).ToList(), out string error))
-            Say(HotkeyResult, $"Клавиша включена: {hotkey.Text}. Переключает между: {string.Join(", ", chosen.Select(c => "«" + c.Name + "»"))}.");
+            Say(HotkeyResult, L.F("Клавиша включена: {0}. Переключает между: {1}.", hotkey.Text, string.Join(", ", chosen.Select(c => Quote(c.Name)))));
         else
             Say(HotkeyResult, error);
         ShowHotkey();
@@ -277,7 +280,7 @@ public partial class SoundPanel : UserControl, ISystemPanel
     {
         if (host == null || !host.Admin) return;
         AudioDevices.ClearHotkey();
-        Say(HotkeyResult, "Клавиша отключена. Отмеченные устройства запомнены.");
+        Say(HotkeyResult, L.T("Клавиша отключена. Отмеченные устройства запомнены."));
         ShowHotkey();
     }
 
@@ -287,7 +290,7 @@ public partial class SoundPanel : UserControl, ISystemPanel
     {
         if (host == null || !host.Admin) return;
         var todo = outputs.Where(o => o.FxCanToggle && o.FxOff != o.FxWas).ToList();
-        if (todo.Count == 0) { Say(FxResult, "Менять нечего: переключатели стоят так же, как настройки устройств."); return; }
+        if (todo.Count == 0) { Say(FxResult, L.T("Менять нечего: переключатели стоят так же, как настройки устройств.")); return; }
         var h = host;
         h.BeginBusy();
         Task.Run(() =>
@@ -297,14 +300,14 @@ public partial class SoundPanel : UserControl, ISystemPanel
             foreach (var row in todo)
             {
                 if (AudioDevices.Enhancements.Set(row.Id, row.FxOff, out string error))
-                    done.Add($"«{row.Name}» — {(row.FxOff ? "выключены" : "включены")}");
-                else failed.Add($"«{row.Name}»: {error}");
+                    done.Add(row.FxOff ? L.F("«{0}» — выключены", row.Name) : L.F("«{0}» — включены", row.Name));
+                else failed.Add(Quote(row.Name) + ": " + error);
             }
             h.Ui(() =>
             {
                 h.EndBusy();
-                string text = done.Count > 0 ? "Улучшения: " + string.Join("; ", done) + ". Подействует после перезагрузки или переподключения устройства." : "";
-                if (failed.Count > 0) text += (text.Length > 0 ? " " : "") + "Не удалось: " + string.Join("; ", failed) + " Откройте свойства устройства и выключите улучшения там.";
+                string text = done.Count > 0 ? L.F("Улучшения: {0}. Подействует после перезагрузки или переподключения устройства.", string.Join("; ", done)) : "";
+                if (failed.Count > 0) text += (text.Length > 0 ? " " : "") + L.F("Не удалось: {0} Откройте свойства устройства и выключите улучшения там.", string.Join("; ", failed));
                 Say(FxResult, text);
                 Reload();
             });
@@ -322,7 +325,7 @@ public partial class SoundPanel : UserControl, ISystemPanel
             h.Ui(() =>
             {
                 h.EndBusy();
-                string text = count > 0 ? "Улучшения возвращены как были: " + Fmt.Plural(count, "устройство", "устройства", "устройств") + "." : "Возвращать нечего.";
+                string text = count > 0 ? L.F("Улучшения возвращены как были: {0}.", Fmt.Plural(count, "устройство", "устройства", "устройств")) : L.T("Возвращать нечего.");
                 Say(FxResult, error != null ? text + " " + error : text);
                 Reload();
             });
@@ -331,6 +334,6 @@ public partial class SoundPanel : UserControl, ISystemPanel
 
     private void OpenProperties_Click(object sender, RoutedEventArgs e)
     {
-        if (!AudioDevices.OpenSoundWindow()) Say(FxResult, "Не удалось открыть окно «Звук». Откройте его через «Параметры» → «Система» → «Звук».");
+        if (!AudioDevices.OpenSoundWindow()) Say(FxResult, L.T("Не удалось открыть окно «Звук». Откройте его через «Параметры» → «Система» → «Звук»."));
     }
 }

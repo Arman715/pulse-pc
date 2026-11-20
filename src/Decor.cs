@@ -28,6 +28,7 @@ public static class Ink
     public static string Track(string text, int level = 1)
     {
         if (string.IsNullOrEmpty(text)) return text;
+        text = L.T(text);           // штампы и подписи с разрядкой — на языке интерфейса
         string gap = level >= 2 ? " " : " ";
         string word = level >= 2 ? "  " : " ";
         var sb = new System.Text.StringBuilder(text.Length * 3);

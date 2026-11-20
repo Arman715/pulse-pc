@@ -198,7 +198,7 @@ public static class NetPower
             SaveBackup(left);
         }
         if (failed > 0)
-            throw new InvalidOperationException($"Сетевая карта не приняла {failed} из {saved.Count} прежних значений. Копия сохранена — можно попробовать ещё раз.");
+            throw new InvalidOperationException(L.F("Сетевая карта не приняла {0} из {1} прежних значений. Копия сохранена — можно попробовать ещё раз.", failed, saved.Count));
     }
 
     /// <summary>Включить обратно проводные адаптеры, оставшиеся выключенными после прежнего перезапуска.</summary>

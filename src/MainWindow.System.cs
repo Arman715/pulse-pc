@@ -12,7 +12,9 @@ public partial class MainWindow
     {
         /// <summary>Группа в списке и в шапке раздела: «ИГРА», «ВИДЕОКАРТА»…</summary>
         public string Group { get; init; }
+        /// <summary>Название — по-русски: по нему открывают раздел («sys:…») и узнают «Состояние программы». Показывается TitleText.</summary>
         public string Title { get; init; }
+        public string TitleText => L.T(Title);
         public Func<FrameworkElement> Create { get; init; }
         /// <summary>Для разделов, которые не реализуют ISystemPanel (автозагрузка живёт в разметке окна).</summary>
         public Action Shown { get; init; }
@@ -132,10 +134,10 @@ public partial class MainWindow
             }
             catch (Exception ex)
             {
-                s.View = new TextBlock { Text = "Не удалось открыть раздел: " + ex.Message, Style = (Style)FindResource("Body") };
+                s.View = new TextBlock { Text = L.F("Не удалось открыть раздел: {0}", ex.Message), Style = (Style)FindResource("Body") };
             }
         }
-        SysKicker.Source = s.Group + "  ·  " + s.Title.ToUpperInvariant();
+        SysKicker.Source = L.T(s.Group) + "  ·  " + s.TitleText.ToUpperInvariant();
         SysHost.Content = s.View;
         SysScroll.ScrollToTop();
         (s.View as ISystemPanel)?.Shown();
@@ -165,6 +167,7 @@ public static class SystemSections
         Section("ПРИБОРЫ", "Электричество", "PowerCostPanel"),
         Section("ПРИБОРЫ", "Панель на телефоне", "PhonePanel"),
         Section("ПРИБОРЫ", "Замер до и после", "BenchPanel"),
+        Section("ПРОЧЕЕ", "Язык · Language", "LanguagePanel"),
         Section("ПРОЧЕЕ", "Состояние программы", "StatusPanel"),
     };
 
@@ -183,7 +186,7 @@ public static class SystemSections
             var type = typeof(SystemSections).Assembly.GetType("PulsePC.Panels." + panel);
             return type != null
                 ? (FrameworkElement)Activator.CreateInstance(type)
-                : new TextBlock { Text = "Раздел ещё не подключён.", Style = (Style)Application.Current.FindResource("Body") };
+                : new TextBlock { Text = L.T("Раздел ещё не подключён."), Style = (Style)Application.Current.FindResource("Body") };
         },
     };
 

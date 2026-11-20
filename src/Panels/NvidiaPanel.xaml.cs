@@ -35,7 +35,7 @@ public partial class NvidiaPanel : UserControl, ISystemPanel
         {
             NvState state;
             try { state = Fake() ?? NvidiaProfiles.Scan(sessions); }
-            catch (Exception ex) { state = new NvState { Reason = "Не удалось прочитать профили драйвера: " + ex.Message }; }
+            catch (Exception ex) { state = new NvState { Reason = L.F("Не удалось прочитать профили драйвера: {0}", ex.Message) }; }
             host.Ui(() =>
             {
                 if (gen != generation) return;
@@ -63,13 +63,13 @@ public partial class NvidiaPanel : UserControl, ISystemPanel
     private void Show(NvState state, string keep)
     {
         Intro.Text = state.Vendor is "" or "NVIDIA"
-            ? "Это те же «Параметры 3D», что в панели управления NVIDIA: общие настройки драйвера и отдельные — для каждой игры. Они хранятся в самом драйвере: файлы игр и сами игры программа здесь не трогает."
+            ? L.T("Это те же «Параметры 3D», что в панели управления NVIDIA: общие настройки драйвера и отдельные — для каждой игры. Они хранятся в самом драйвере: файлы игр и сами игры программа здесь не трогает.")
             : GpuVendors.ControlApp(state.Vendor) is string app && app != ""
-                ? $"Задержку и лимит FPS для видеокарт {state.Vendor} меняют в приложении {app}. Программа в драйвер не пишет — только подсказывает, что и где поставить."
-                : "Программа в драйвер этой видеокарты не пишет — только подсказывает, что поставить в самих играх.";
+                ? L.F("Задержку и лимит FPS для видеокарт {0} меняют в приложении {1}. Программа в драйвер не пишет — только подсказывает, что и где поставить.", state.Vendor, app)
+                : L.T("Программа в драйвер этой видеокарты не пишет — только подсказывает, что поставить в самих играх.");
         if (!state.Available)
         {
-            State.Text = state.Reason;
+            State.Text = state.ReasonText;
             AdviceRows.ItemsSource = state.Advice;
             Fallback.Visibility = state.Advice.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             Work.Visibility = Visibility.Collapsed;
@@ -80,11 +80,12 @@ public partial class NvidiaPanel : UserControl, ISystemPanel
 
         bool common = state.Targets.Any(t => t.Global && t.Changes > 0);
         int games = state.Targets.Count(t => !t.Global && t.Changes > 0);
-        string forGames = games + " " + (games % 10 == 1 && games % 100 != 11 ? "игры" : "игр");
-        State.Text = !common && games == 0 ? "Профили драйвера в порядке — менять нечего"
-            : games == 0 ? "Есть рекомендации для общих настроек драйвера"
-            : common ? "Есть рекомендации для общих настроек и " + forGames
-            : "Есть рекомендации для " + forGames;
+        // «для 1 игры», «для 5 игр»: родительный падеж — слова «игры»/«игр» в словаре заняты под именительный, поэтому по-английски — здесь же.
+        string forGames = L.Pick(games + " " + (games % 10 == 1 && games % 100 != 11 ? "игры" : "игр"), games == 1 ? "1 game" : games + " games");
+        State.Text = !common && games == 0 ? L.T("Профили драйвера в порядке — менять нечего")
+            : games == 0 ? L.T("Есть рекомендации для общих настроек драйвера")
+            : common ? L.F("Есть рекомендации для общих настроек и {0}", forGames)
+            : L.F("Есть рекомендации для {0}", forGames);
 
         TargetList.ItemsSource = state.Targets;
         var pick = state.Targets.FirstOrDefault(t => t.Title == keep);
@@ -102,11 +103,11 @@ public partial class NvidiaPanel : UserControl, ISystemPanel
         if (current == null) return;
         foreach (var r in current.Rows) r.PropertyChanged += Row_Changed;
 
-        TargetTitle.Text = current.Title;
-        TargetCaption.Text = current.Global ? "Действуют на все игры и программы, у которых нет своего значения в профиле."
-            : current.Exe == "" ? "Запускаемый файл игры не найден."
-            : current.HasProfile ? $"Профиль драйвера «{current.ProfileName}» · файл {current.Exe}"
-            : $"Файл {current.Exe} · своего профиля нет, действуют общие настройки";
+        TargetTitle.Text = current.TitleText;
+        TargetCaption.Text = current.Global ? L.T("Действуют на все игры и программы, у которых нет своего значения в профиле.")
+            : current.Exe == "" ? L.T("Запускаемый файл игры не найден.")
+            : current.HasProfile ? L.F("Профиль драйвера «{0}» · файл {1}", current.ProfileName, current.Exe)
+            : L.F("Файл {0} · своего профиля нет, действуют общие настройки", current.Exe);
         Rows.ItemsSource = current.Rows;
         TargetNote.Text = current.Note;
         TargetNote.Visibility = current.Note == "" ? Visibility.Collapsed : Visibility.Visible;
@@ -134,7 +135,7 @@ public partial class NvidiaPanel : UserControl, ISystemPanel
     {
         if ((sender as FrameworkElement)?.Tag is not string target || target == "" || target == "demo") return;
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target) { UseShellExecute = true }); }
-        catch (Exception ex) { Result.Text = "Не удалось открыть приложение: " + ex.Message; }
+        catch (Exception ex) { Result.Text = L.F("Не удалось открыть приложение: {0}", ex.Message); }
     }
 
     private void BtnApply_Click(object sender, RoutedEventArgs e)
@@ -142,14 +143,14 @@ public partial class NvidiaPanel : UserControl, ISystemPanel
         var target = current;
         if (target == null) return;
         var rows = target.Rows.Where(r => r.CanChange && r.Selected).ToList();
-        Run(() => NvidiaProfiles.Apply(target, rows), "Записываю в профиль драйвера…");
+        Run(() => NvidiaProfiles.Apply(target, rows), L.T("Записываю в профиль драйвера…"));
     }
 
     private void BtnRestore_Click(object sender, RoutedEventArgs e)
     {
         var target = current;
         if (target == null) return;
-        Run(() => NvidiaProfiles.Restore(target), "Возвращаю прежние значения…");
+        Run(() => NvidiaProfiles.Restore(target), L.T("Возвращаю прежние значения…"));
     }
 
     private void Run(Func<string> action, string progress)
@@ -164,7 +165,7 @@ public partial class NvidiaPanel : UserControl, ISystemPanel
         {
             string message;
             try { message = action(); }
-            catch (Exception ex) { message = "Не удалось: " + ex.Message; }
+            catch (Exception ex) { message = L.F("Не удалось: {0}", ex.Message); }
             host.Ui(() =>
             {
                 host.EndBusy();

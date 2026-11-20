@@ -100,7 +100,7 @@ public sealed class GameNetMonitor : IDisposable
         bool ok = StartCore(pid);
         // Отказ при правах администратора — неисправность; без прав сеанс и не должен запускаться.
         if (ok) Health.Ok("Сеть игры");
-        else if (LastError != 5) Health.Fail("Сеть игры", $"сеанс трассировки не запустился, код {LastError}");
+        else if (LastError != 5) Health.Fail("Сеть игры", L.F("сеанс трассировки не запустился, код {0}", LastError));
         return ok;
     }
 

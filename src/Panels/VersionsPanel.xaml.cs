@@ -38,7 +38,6 @@ public sealed class VersionRowView
 /// </summary>
 public partial class VersionsPanel : UserControl, ISystemPanel
 {
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
     private PanelHost host;
     private int generation;
     private bool checkingHere, updating, feedLoaded;
@@ -89,37 +88,37 @@ public partial class VersionsPanel : UserControl, ISystemPanel
 
         bool busy = checkingHere || VersionCheck.Checking;
         var last = VersionCheck.LastChecked(s);
-        CheckedText.Text = busy ? "проверяю…" : last is DateTime t ? "проверено " + VersionCheck.When(t) : "ещё не проверялось";
+        CheckedText.Text = busy ? L.T("проверяю…") : last is DateTime t ? L.F("проверено {0}", VersionCheck.When(t)) : L.T("ещё не проверялось");
         BtnCheck.IsEnabled = !busy;
 
         bool newDriver = driver.Newer, newApp = app.Release != null && app.Diff > 0;
         bool driverKnown = driver.Checked, appKnown = app.Release != null;
         bool anyError = driver.Checkable && !driver.Checked && driver.Error != "" || app.Kind is FeedKind.Manifest or FeedKind.GitHub && app.Release == null && app.Error != "";
         State.Text =
-            newDriver && newApp ? "Вышли новый драйвер видеокарты и новая версия программы"
-            : newDriver ? $"Вышел драйвер видеокарты {driver.Latest.Version}"
-            : newApp ? $"Вышла новая версия «Пульс ПК» — {app.Release.Version}"
-            : busy && !driverKnown && !appKnown ? "Проверяю версии…"
-            : driverKnown && appKnown ? "Драйвер видеокарты и программа — последних версий"
-            : driverKnown ? "Драйвер видеокарты последней версии"
-            : appKnown ? "Программа последней версии"
-            : anyError ? "Проверить новые версии не удалось"
-            : !driver.Checkable && app.Kind == FeedKind.None ? "Новые версии — на сайтах производителей"
-            : "Новые версии ещё не проверялись";
+            newDriver && newApp ? L.T("Вышли новый драйвер видеокарты и новая версия программы")
+            : newDriver ? L.F("Вышел драйвер видеокарты {0}", driver.Latest.Version)
+            : newApp ? L.F("Вышла новая версия «Пульс ПК» — {0}", app.Release.Version)
+            : busy && !driverKnown && !appKnown ? L.T("Проверяю версии…")
+            : driverKnown && appKnown ? L.T("Драйвер видеокарты и программа — последних версий")
+            : driverKnown ? L.T("Драйвер видеокарты последней версии")
+            : appKnown ? L.T("Программа последней версии")
+            : anyError ? L.T("Проверить новые версии не удалось")
+            : !driver.Checkable && app.Kind == FeedKind.None ? L.T("Новые версии — на сайтах производителей")
+            : L.T("Новые версии ещё не проверялись");
 
         // Обновление программы
         UpdateBlock.Visibility = newApp ? Visibility.Visible : Visibility.Collapsed;
         if (newApp)
         {
-            UpdateLabel.Source = $"ПУЛЬС ПК {app.Release.Version}: ЧТО НОВОГО";
-            NotesList.ItemsSource = app.Release.Notes.Count > 0 ? app.Release.Notes : new List<string> { "Описание изменений источник не прислал." };
+            UpdateLabel.Source = L.F("ПУЛЬС ПК {0}: ЧТО НОВОГО", app.Release.Version);
+            NotesList.ItemsSource = app.Release.Notes.Count > 0 ? app.Release.Notes : new List<string> { L.T("Описание изменений источник не прислал.") };
             BtnUpdate.IsEnabled = host.Admin && !updating;
         }
 
         AutoToggle.IsChecked = VersionCheck.AutoCheck(s);
-        FeedHint.Text = "Откуда программа узнаёт о своих новых версиях: адрес файла update.json (https://…/update.json) или репозиторий GitHub в виде «владелец/репозиторий»."
-                        + $" Сам установщик скачивается всегда из официальных выпусков {VersionCheck.DefaultFeed} на GitHub и ставится, только если совпали контрольная сумма и подпись автора."
-                        + (app.Kind == FeedKind.None ? " Пока источник не задан, новые версии нужно скачивать самому." : " Чтобы убрать источник, очистите поле и сохраните.");
+        FeedHint.Text = L.T("Откуда программа узнаёт о своих новых версиях: адрес файла update.json (https://…/update.json) или репозиторий GitHub в виде «владелец/репозиторий».")
+                        + " " + L.F("Сам установщик скачивается всегда из официальных выпусков {0} на GitHub и ставится, только если совпали контрольная сумма и подпись автора.", VersionCheck.DefaultFeed)
+                        + " " + (app.Kind == FeedKind.None ? L.T("Пока источник не задан, новые версии нужно скачивать самому.") : L.T("Чтобы убрать источник, очистите поле и сохраните."));
         if (!feedLoaded || !FeedBox.IsKeyboardFocused && !BtnFeed.IsEnabled)
         {
             FeedBox.Text = VersionCheck.Feed(s);
@@ -128,30 +127,34 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         }
     }
 
-    private static string Day(DateTime? d) => d is DateTime x ? "от " + x.ToString("dd.MM.yyyy", Ru) : "";
+    private static string Day(DateTime? d) => d is DateTime x ? L.F("от {0}", Date(x)) : "";
+
+    /// <summary>Дата цифрами в культуре языка: 17.11.2026 / 11/17/2026.</summary>
+    private static string Date(DateTime d) => d.ToString("d", L.Culture);
 
     private VersionRowView DriverRow(GpuDriverInfo gpu, DriverStatus st, string nvApp)
     {
-        var row = new VersionRowView { Title = "Драйвер видеокарты" };
+        var row = new VersionRowView { Title = L.T("Драйвер видеокарты") };
         if (gpu == null)
         {
-            row.Subtitle = "видеокарта не найдена";
-            row.Verdict = "Windows не сообщила о видеокарте с драйвером производителя. Подробности — в разделе «Драйвер».";
+            row.Subtitle = L.T("видеокарта не найдена");
+            row.Verdict = L.T("Windows не сообщила о видеокарте с драйвером производителя. Подробности — в разделе «Драйвер».");
             return row;
         }
         row.Subtitle = gpu.Name;
         row.Installed = gpu.Version == "" ? "—" : gpu.Version;
         // Дата в Windows — дата сборки драйвера; NVIDIA публикует его на несколько дней позже.
-        row.InstalledNote = gpu.Date is DateTime built ? "сборка " + built.ToString("dd.MM.yyyy", Ru) : "";
+        row.InstalledNote = gpu.Date is DateTime built ? L.F("сборка {0}", Date(built)) : "";
         string page = GpuDriver.DownloadUrl(gpu.Vendor);
 
         if (!st.Checkable)
         {
-            string who = gpu.Vendor == "" ? "производителя видеокарты" : gpu.Vendor;
-            row.LatestNote = "на сайте";
-            row.Verdict = (gpu.AgeDays >= 0 ? $"Драйверу {gpu.AgeText}. " : "")
-                          + $"Новые версии программа узнаёт только у NVIDIA, у {who} открытого способа для этого нет. Сверьте номер версии на сайте производителя.";
-            if (page != "") row.Links.Add(new VersionLink { Label = "Страница драйверов " + gpu.Vendor, Url = page });
+            row.LatestNote = L.T("на сайте");
+            row.Verdict = (gpu.AgeDays >= 0 ? L.F("Драйверу {0}.", gpu.AgeText) + " " : "")
+                          + (gpu.Vendor == ""
+                              ? L.T("Новые версии программа узнаёт только у NVIDIA, у производителя видеокарты открытого способа для этого нет. Сверьте номер версии на сайте производителя.")
+                              : L.F("Новые версии программа узнаёт только у NVIDIA, у {0} открытого способа для этого нет. Сверьте номер версии на сайте производителя.", gpu.Vendor));
+            if (page != "") row.Links.Add(new VersionLink { Label = L.F("Страница драйверов {0}", gpu.Vendor), Url = page });
             return row;
         }
 
@@ -159,34 +162,35 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         {
             var l = st.Latest;
             row.Latest = l.Version;
-            row.LatestNote = (l.Date is DateTime out_ ? "вышел " + out_.ToString("dd.MM.yyyy", Ru) : "") + (l.Beta ? ", бета" : "");
-            string stale = st.Error != "" && st.CheckedAt is DateTime at ? $" Последняя проверка {VersionCheck.When(at)} не удалась ({st.Error}), здесь — прежний ответ NVIDIA." : "";
+            row.LatestNote = (l.Date is DateTime out_ ? L.F("вышел {0}", Date(out_)) : "") + (l.Beta ? L.T(", бета") : "");
+            // Причина сбоя хранится в настройках по-русски (её же проверяет самопроверка) — переводится при показе.
+            string stale = st.Error != "" && st.CheckedAt is DateTime at ? " " + L.F("Последняя проверка {0} не удалась ({1}), здесь — прежний ответ NVIDIA.", VersionCheck.When(at), L.T(st.Error)) : "";
             if (st.Newer)
             {
                 row.Level = Severity.Warn;
                 row.LatestInk = Palette.Warn;
-                row.Verdict = "Вышла новая версия. Обновлять не обязательно: стоит, если её требует игра или в ней исправили вашу проблему — это написано в «Что нового». Программа драйвер не скачивает и не ставит." + stale;
-                if (l.DetailsUrl != "") row.Links.Add(new VersionLink { Label = $"Что нового в {l.Version}", Url = l.DetailsUrl });
-                if (nvApp != null) row.Links.Add(new VersionLink { Label = "Открыть NVIDIA App", Url = nvApp });
-                row.Links.Add(new VersionLink { Label = "Скачать на сайте NVIDIA", Url = l.DownloadUrl != "" ? l.DownloadUrl : page });
+                row.Verdict = L.T("Вышла новая версия. Обновлять не обязательно: стоит, если её требует игра или в ней исправили вашу проблему — это написано в «Что нового». Программа драйвер не скачивает и не ставит.") + stale;
+                if (l.DetailsUrl != "") row.Links.Add(new VersionLink { Label = L.F("Что нового в {0}", l.Version), Url = l.DetailsUrl });
+                if (nvApp != null) row.Links.Add(new VersionLink { Label = L.T("Открыть NVIDIA App"), Url = nvApp });
+                row.Links.Add(new VersionLink { Label = L.T("Скачать на сайте NVIDIA"), Url = l.DownloadUrl != "" ? l.DownloadUrl : page });
             }
             else
             {
                 row.Level = Severity.Ok;
                 row.Verdict = (st.Diff == 0
-                    ? "Установлена последняя версия — обновлять нечего."
-                    : "Установлена версия новее той, что NVIDIA предлагает для обычной установки (например, бета). Ничего делать не нужно.") + stale;
-                if (l.DetailsUrl != "") row.Links.Add(new VersionLink { Label = $"Что нового в {l.Version}", Url = l.DetailsUrl });
+                    ? L.T("Установлена последняя версия — обновлять нечего.")
+                    : L.T("Установлена версия новее той, что NVIDIA предлагает для обычной установки (например, бета). Ничего делать не нужно.")) + stale;
+                if (l.DetailsUrl != "") row.Links.Add(new VersionLink { Label = L.F("Что нового в {0}", l.Version), Url = l.DetailsUrl });
             }
             return row;
         }
 
         if (st.Error != "")
         {
-            row.Verdict = $"Сервис NVIDIA не ответил: {st.Error}. Программа попробует снова через сутки, а можно нажать «Проверить сейчас».";
+            row.Verdict = L.F("Сервис NVIDIA не ответил: {0}. Программа попробует снова через сутки, а можно нажать «Проверить сейчас».", L.T(st.Error));
         }
-        else row.Verdict = gpu.Version == "" ? "Номер установленной версии Windows не сообщила." : "Ещё не проверялось: нажмите «Проверить сейчас».";
-        row.Links.Add(new VersionLink { Label = "Страница драйверов NVIDIA", Url = page });
+        else row.Verdict = gpu.Version == "" ? L.T("Номер установленной версии Windows не сообщила.") : L.T("Ещё не проверялось: нажмите «Проверить сейчас».");
+        row.Links.Add(new VersionLink { Label = L.T("Страница драйверов NVIDIA"), Url = page });
         return row;
     }
 
@@ -196,37 +200,42 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         var row = new VersionRowView
         {
             Title = "BIOS",
-            Subtitle = board == "" ? "модель платы не определена" : (b.Laptop ? "ноутбук " : "плата ") + board,
+            Subtitle = board == "" ? L.T("модель платы не определена") : b.Laptop ? L.F("ноутбук {0}", board) : L.F("плата {0}", board),
             Installed = b.Version == "" ? "—" : b.Version,
             InstalledNote = Day(b.Date),
-            LatestNote = "на сайте",
+            LatestNote = L.T("на сайте"),
         };
-        string age = b.Date is DateTime d ? $"Выпущен {d.ToString("d MMMM yyyy", Ru)} года" + (b.AgeDays > 0 ? $", {VersionCheck.BiosAge(b)} назад. " : ". ") : "";
-        row.Verdict = age + "Последнюю версию программа не проверяет: сайты производителей плат не отвечают программам. "
-                      + (b.Version != "" ? $"Сравните «{b.Version}» с самой новой версией на странице платы." : "Версию BIOS Windows не сообщила.");
+        string age = "";
+        if (b.Date is DateTime d)
+        {
+            string date = d.ToString(L.En ? "MMMM d, yyyy" : "d MMMM yyyy", L.Culture);
+            age = (b.AgeDays > 0 ? L.F("Выпущен {0} года, {1} назад.", date, VersionCheck.BiosAge(b)) : L.F("Выпущен {0} года.", date)) + " ";
+        }
+        row.Verdict = age + L.T("Последнюю версию программа не проверяет: сайты производителей плат не отвечают программам.") + " "
+                      + (b.Version != "" ? L.F("Сравните «{0}» с самой новой версией на странице платы.", b.Version) : L.T("Версию BIOS Windows не сообщила."));
         if (b.PageUrl != "") row.Links.Add(new VersionLink { Label = b.PageTitle, Url = b.PageUrl });
-        if (b.SearchUrl != "") row.Links.Add(new VersionLink { Label = b.PageUrl != "" ? "Найти в интернете" : "Найти страницу платы в интернете", Url = b.SearchUrl });
+        if (b.SearchUrl != "") row.Links.Add(new VersionLink { Label = b.PageUrl != "" ? L.T("Найти в интернете") : L.T("Найти страницу платы в интернете"), Url = b.SearchUrl });
         return row;
     }
 
     private static VersionRowView AppRow((FeedKind Kind, AppRelease Release, int Diff, string Error, DateTime? CheckedAt) a)
     {
-        var row = new VersionRowView { Title = "Пульс ПК", Subtitle = "эта программа", Installed = Installer.Version };
+        var row = new VersionRowView { Title = L.T("Пульс ПК"), Subtitle = L.T("эта программа"), Installed = Installer.Version };
         switch (a.Kind)
         {
             case FeedKind.None:
-                row.LatestNote = "источник не задан";
-                row.Verdict = "Источник обновлений не настроен. Пока новые версии программы нужно скачивать самому.";
+                row.LatestNote = L.T("источник не задан");
+                row.Verdict = L.T("Источник обновлений не настроен. Пока новые версии программы нужно скачивать самому.");
                 return row;
             case FeedKind.Invalid:
                 row.Level = Severity.Warn;
                 row.VerdictInk = Palette.Warn;
-                row.Verdict = "Источник обновлений записан непонятно — исправьте его ниже, в «Проверке».";
+                row.Verdict = L.T("Источник обновлений записан непонятно — исправьте его ниже, в «Проверке».");
                 return row;
         }
         if (a.Release == null)
         {
-            row.Verdict = a.Error != "" ? $"Источник обновлений не ответил: {a.Error}." : "Ещё не проверялось: нажмите «Проверить сейчас».";
+            row.Verdict = a.Error != "" ? L.F("Источник обновлений не ответил: {0}.", L.T(a.Error)) : L.T("Ещё не проверялось: нажмите «Проверить сейчас».");
             return row;
         }
         row.Latest = a.Release.Version;
@@ -235,12 +244,12 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         {
             row.Level = Severity.Warn;
             row.LatestInk = Palette.Warn;
-            row.Verdict = "Вышла новая версия. Что в ней изменилось и кнопка «Обновить» — ниже.";
+            row.Verdict = L.T("Вышла новая версия. Что в ней изменилось и кнопка «Обновить» — ниже.");
         }
         else
         {
             row.Level = Severity.Ok;
-            row.Verdict = "Установлена последняя версия.";
+            row.Verdict = L.T("Установлена последняя версия.");
         }
         return row;
     }
@@ -252,7 +261,7 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         if (checkingHere) return;
         checkingHere = true;
         BtnCheck.IsEnabled = false;
-        CheckedText.Text = "проверяю…";
+        CheckedText.Text = L.T("проверяю…");
         host.BeginBusy();
         var s = host.Settings;
         Task.Run(() =>
@@ -281,7 +290,7 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         if (host == null || !host.Admin) return;
         host.Settings.SetBool("versions.auto", AutoToggle.IsChecked == true);
         VersionCheck.SaveSettings(host.Settings);
-        Result.Text = AutoToggle.IsChecked == true ? "Программа будет проверять новые версии сама раз в сутки." : "Сама программа больше не проверяет новые версии — только по кнопке «Проверить сейчас».";
+        Result.Text = AutoToggle.IsChecked == true ? L.T("Программа будет проверять новые версии сама раз в сутки.") : L.T("Сама программа больше не проверяет новые версии — только по кнопке «Проверить сейчас».");
     }
 
     private void FeedBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -303,7 +312,7 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         var kind = VersionCheck.Classify(value, out string norm);
         if (kind == FeedKind.Invalid)
         {
-            FeedResult.Text = "Не понимаю такой источник. Нужен адрес https://…/update.json или «владелец/репозиторий» на GitHub. Файлы на диске и адреса http не принимаются.";
+            FeedResult.Text = L.T("Не понимаю такой источник. Нужен адрес https://…/update.json или «владелец/репозиторий» на GitHub. Файлы на диске и адреса http не принимаются.");
             FeedResult.Foreground = Palette.Warn;
             return;
         }
@@ -315,12 +324,12 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         FeedResult.Foreground = Palette.Ink3;
         if (kind == FeedKind.None)
         {
-            FeedResult.Text = "Источник убран: программа не будет искать свои новые версии.";
+            FeedResult.Text = L.T("Источник убран: программа не будет искать свои новые версии.");
             Shown();
         }
         else
         {
-            FeedResult.Text = "Сохранено. Проверяю источник…";
+            FeedResult.Text = L.T("Сохранено. Проверяю источник…");
             StartCheck();
         }
     }
@@ -334,7 +343,7 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         if (rel == null) return;
         if (GameHooks.InGame)
         {
-            Result.Text = "Сейчас идёт игра, и программа её записывает. Обновите после игры: при обновлении программа закроется.";
+            Result.Text = L.T("Сейчас идёт игра, и программа её записывает. Обновите после игры: при обновлении программа закроется.");
             return;
         }
         updating = true;
@@ -342,7 +351,7 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         Progress.Visibility = Visibility.Visible;
         Progress.Target = 0;
         Result.Foreground = Palette.Ink3;
-        Result.Text = "Сверяю с официальным выпуском на GitHub…";
+        Result.Text = L.T("Сверяю с официальным выпуском на GitHub…");
         host.BeginBusy();
         string folder = VersionCheck.UpdateFolder;
         Task.Run(() =>
@@ -352,50 +361,50 @@ public partial class VersionsPanel : UserControl, ISystemPanel
             {
                 if (!VersionCheck.UpdateFolderProtected)
                 {
-                    host.Ui(() => Finish("Не удалось создать защищённую папку %ProgramData%\\PulsePC — скачивать установщик в папку пользователя небезопасно. Обновите программу вручную, скачав установщик с GitHub.", Palette.Warn));
+                    host.Ui(() => Finish(L.T("Не удалось создать защищённую папку %ProgramData%\\PulsePC — скачивать установщик в папку пользователя небезопасно. Обновите программу вручную, скачав установщик с GitHub."), Palette.Warn));
                     return;
                 }
                 // Адрес и контрольную сумму берём не из settings.json (его может переписать любая программа), а заново из выпуска.
                 var official = VersionCheck.QueryOfficial(out string error);
                 if (official == null)
                 {
-                    host.Ui(() => Finish("Официальный выпуск на GitHub не ответил: " + error + ". Ничего не скачано.", Palette.Warn));
+                    host.Ui(() => Finish(L.F("Официальный выпуск на GitHub не ответил: {0}. Ничего не скачано.", L.T(error)), Palette.Warn));
                     return;
                 }
                 if (VersionCheck.CompareVersions(official.Version, Installer.Version) <= 0)
                 {
-                    host.Ui(() => Finish($"В официальном выпуске на GitHub нет версии новее установленной {Installer.Version} (там {official.Version}). Ничего не скачано.", Palette.Ink3));
+                    host.Ui(() => Finish(L.F("В официальном выпуске на GitHub нет версии новее установленной {0} (там {1}). Ничего не скачано.", Installer.Version, official.Version), Palette.Ink3));
                     return;
                 }
-                host.Ui(() => Result.Text = $"Скачиваю установщик {official.Version}…");
+                host.Ui(() => Result.Text = L.F("Скачиваю установщик {0}…", official.Version));
                 var d = VersionCheck.Download(official, folder, (done, total) =>
                 {
                     if ((DateTime.UtcNow - lastUi).TotalMilliseconds < 200) return;
                     lastUi = DateTime.UtcNow;
                     host.Ui(() =>
                     {
-                        Result.Text = total > 0 ? $"Скачано {Fmt.Size(done)} из {Fmt.Size(total)}…" : $"Скачано {Fmt.Size(done)}…";
+                        Result.Text = total > 0 ? L.F("Скачано {0} из {1}…", Fmt.Size(done), Fmt.Size(total)) : L.F("Скачано {0}…", Fmt.Size(done));
                         Progress.Target = total > 0 ? (double)done / total : 0;
                     });
                 });
                 if (!d.Ok)
                 {
-                    host.Ui(() => Finish(d.Message, Palette.Warn));
+                    host.Ui(() => Finish(L.T(d.Message), Palette.Warn));
                     return;
                 }
                 using var run = VersionCheck.Launch(d.Path, official);
                 if (!run.Started)
                 {
-                    host.Ui(() => Finish(d.Message + " " + run.Message, Palette.Warn));
+                    host.Ui(() => Finish(L.T(d.Message) + " " + L.T(run.Message), Palette.Warn));
                     return;
                 }
-                host.Ui(() => Result.Text = d.Message + " " + run.Message);
+                host.Ui(() => Result.Text = L.T(d.Message) + " " + L.T(run.Message));
                 // Выходим, только когда окно установщика открылось (он сам подаёт знак), а не через фиксированное время.
                 var wait = VersionCheck.WaitForInstaller(run);
-                host.Ui(() => Finish(d.Message + " " + wait.Message, wait.Ready ? Palette.Ink1 : Palette.Warn));
+                host.Ui(() => Finish(L.T(d.Message) + " " + L.T(wait.Message), wait.Ready ? Palette.Ink1 : Palette.Warn));
                 if (wait.Ready) VersionCheck.RequestExit();
             }
-            catch (Exception ex) { host.Ui(() => Finish("Обновление не удалось: " + ex.Message, Palette.Warn)); }
+            catch (Exception ex) { host.Ui(() => Finish(L.F("Обновление не удалось: {0}", ex.Message), Palette.Warn)); }
             finally { host.EndBusy(); }
         });
     }
@@ -415,6 +424,6 @@ public partial class VersionsPanel : UserControl, ISystemPanel
     {
         if ((sender as FrameworkElement)?.Tag is not VersionLink link || link.Url == "") return;
         try { GameLibrary.OpenAsUser(link.Url); }
-        catch { Result.Text = "Не открылось. Адрес: " + link.Url; }
+        catch { Result.Text = L.F("Не открылось. Адрес: {0}", link.Url); }
     }
 }

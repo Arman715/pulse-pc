@@ -18,12 +18,12 @@ public sealed class UpdateService
     public bool Held { get; set; }
     public string Value => State switch
     {
-        "running" => "работает",
-        "stopped" => Held ? "остановлена на время игры" : "не запущена",
-        "starting" => "запускается",
-        "stopping" => "останавливается",
-        "missing" => "нет на компьютере",
-        _ => "не удалось узнать",
+        "running" => L.T("работает"),
+        "stopped" => Held ? L.T("остановлена на время игры") : L.T("не запущена"),
+        "starting" => L.T("запускается"),
+        "stopping" => L.T("останавливается"),
+        "missing" => L.T("нет на компьютере"),
+        _ => L.T("не удалось узнать"),
     };
 }
 
@@ -65,9 +65,9 @@ public static class UpdateGuard
     // Только эти три службы. Службы «Безопасности Windows» программа не трогает и не опрашивает.
     private static readonly (string Name, string Title, string Hint)[] Targets =
     {
-        ("wuauserv", "Центр обновления Windows", "Ищет, скачивает и ставит обновления."),
-        ("DoSvc", "Оптимизация доставки", "Качает обновления Windows и приложений из Магазина, может раздавать их другим компьютерам."),
-        ("BITS", "Фоновая передача файлов", "Качает файлы в фоне, когда сеть свободна. Ею пользуются обновления Windows и некоторых программ."),
+        ("wuauserv", L.T("Центр обновления Windows"), L.T("Ищет, скачивает и ставит обновления.")),
+        ("DoSvc", L.T("Оптимизация доставки"), L.T("Качает обновления Windows и приложений из Магазина, может раздавать их другим компьютерам.")),
+        ("BITS", L.T("Фоновая передача файлов"), L.T("Качает файлы в фоне, когда сеть свободна. Ею пользуются обновления Windows и некоторых программ.")),
     };
 
     private static readonly object Gate = new();
@@ -167,14 +167,14 @@ public static class UpdateGuard
             if (!GameHooks.IsCurrent(pid)) return;
             if (!Shell.IsAdmin())
             {
-                Remember(s, $"Игра «{game}» запущена, но программа работает без прав администратора: обновления не приостановлены.");
+                Remember(s, L.F("Игра «{0}» запущена, но программа работает без прав администратора: обновления не приостановлены.", game));
             }
             else
             {
                 var done = new List<string>();
                 if (guard) done.Add(StopForGame(s));
                 if (noReboot) done.Add(ShiftHoursForGame(6));
-                Remember(s, $"Игра «{game}». " + string.Join(" ", done.Where(x => x != "")));
+                Remember(s, L.F("Игра «{0}».", game) + " " + string.Join(" ", done.Where(x => x != "")));
                 restops.Clear();
                 watch?.Dispose();
                 watch = new System.Threading.Timer(_ => Watch(), null, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(2));
@@ -188,7 +188,7 @@ public static class UpdateGuard
     {
         var held = Split(s.Get(KeyStopped));
         var running = Targets.Select(t => t.Name).Where(n => !held.Contains(n) && Query(n) == "running").ToList();
-        if (running.Count == 0) return held.Count > 0 ? "Службы обновлений уже были остановлены программой." : "Службы обновлений и так не работали.";
+        if (running.Count == 0) return held.Count > 0 ? L.T("Службы обновлений уже были остановлены программой.") : L.T("Службы обновлений и так не работали.");
 
         s.Set(KeyStopped, string.Join(",", held.Concat(running)));
         Save(s);
@@ -204,9 +204,9 @@ public static class UpdateGuard
         s.Set(KeyStopped, keep.Count > 0 ? string.Join(",", keep) : null);
         Save(s);
 
-        string text = stopped.Count > 0 ? "Остановлено на время игры: " + string.Join(", ", stopped.Select(n => "«" + TitleOf(n) + "»")) + "." : "";
+        string text = stopped.Count > 0 ? L.F("Остановлено на время игры: {0}.", string.Join(", ", stopped.Select(n => "«" + TitleOf(n) + "»"))) : "";
         // Служба не остановилась — не настаиваем: она остаётся работать, это записано.
-        if (failed.Count > 0) text += (text == "" ? "" : " ") + "Не удалось остановить: " + string.Join("; ", failed) + ".";
+        if (failed.Count > 0) text += (text == "" ? "" : " ") + L.F("Не удалось остановить: {0}.", string.Join("; ", failed));
         return text;
     }
 
@@ -215,11 +215,11 @@ public static class UpdateGuard
         try
         {
             using var hive = Machine;
-            if (ActiveHours.ManagedByPolicy(hive)) return "Период активности задан политикой организации — программа его не трогает.";
+            if (ActiveHours.ManagedByPolicy(hive)) return L.T("Период активности задан политикой организации — программа его не трогает.");
             string set = ActiveHours.Shift(hive, ActiveHours.SettingsPath, HoursBackup, DateTime.Now, needHours);
-            return set == null ? "Период активности уже покрывает время игры." : $"Период активности сдвинут: {set}.";
+            return set == null ? L.T("Период активности уже покрывает время игры.") : L.F("Период активности сдвинут: {0}.", set);
         }
-        catch (Exception ex) { return "Период активности сдвинуть не удалось: " + ex.Message; }
+        catch (Exception ex) { return L.F("Период активности сдвинуть не удалось: {0}", ex.Message); }
     }
 
     /// <summary>
@@ -269,7 +269,7 @@ public static class UpdateGuard
         if (!Shell.IsAdmin())
         {
             // Ключи не очищаем: вернём при следующем запуске с правами администратора.
-            Append(s, "После игры вернуть не удалось: у программы нет прав администратора. Запустите её с правами администратора — и всё вернётся.");
+            Append(s, L.T("После игры вернуть не удалось: у программы нет прав администратора. Запустите её с правами администратора — и всё вернётся."));
             return true;
         }
 
@@ -278,7 +278,7 @@ public static class UpdateGuard
         foreach (string name in held)
         {
             var (ok, again, error) = StartService(name);
-            if (!ok) { notes.Add($"«{TitleOf(name)}» не запустилась — {error}"); if (again) retry.Add(name); }
+            if (!ok) { notes.Add(L.F("«{0}» не запустилась — {1}", TitleOf(name), error)); if (again) retry.Add(name); }
         }
         s.Set(KeyStopped, retry.Count > 0 ? string.Join(",", retry) : null);
 
@@ -288,11 +288,11 @@ public static class UpdateGuard
             {
                 using var hive = Machine;
                 if (!ActiveHours.Restore(hive, ActiveHours.SettingsPath, HoursBackup))
-                    notes.Add("период активности за время игры изменили — он оставлен как есть");
+                    notes.Add(L.T("период активности за время игры изменили — он оставлен как есть"));
             }
-            catch (Exception ex) { notes.Add("период активности вернуть не удалось — " + ex.Message); }
+            catch (Exception ex) { notes.Add(L.F("период активности вернуть не удалось — {0}", ex.Message)); }
         }
-        Append(s, notes.Count == 0 ? "После игры всё возвращено." : "После игры: " + string.Join("; ", notes) + ".");
+        Append(s, notes.Count == 0 ? L.T("После игры всё возвращено.") : L.F("После игры: {0}.", string.Join("; ", notes)));
         return true;
     }
 
@@ -306,8 +306,13 @@ public static class UpdateGuard
     private static void Append(AppSettings s, string text)
     {
         string was = s.Get(KeyLastText);
-        int cut = was.IndexOf(" После игры", StringComparison.Ordinal);
-        if (cut >= 0) was = was[..cut];
+        // Прежний итог «после игры» заменяется новым. Текст записан на языке интерфейса того времени: ищем начало
+        // по-русски и по-английски (английские переводы «После игры…» в словаре начинаются с «After the game»).
+        foreach (string mark in new[] { " После игры", " After the game" })
+        {
+            int cut = was.IndexOf(mark, StringComparison.Ordinal);
+            if (cut >= 0) { was = was[..cut]; break; }
+        }
         s.Set(KeyLastText, (was + " " + text).Trim());
         Save(s);
     }
@@ -350,7 +355,7 @@ public static class UpdateGuard
         catch { }
 
         if (DateTime.TryParse(s.Get(KeyLast), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var last)) st.Last = last;
-        st.LastText = s.Get(KeyLastText);
+        st.LastText = L.T(s.Get(KeyLastText));     // запись на русском (из прошлых версий) переводится, если найдётся в словаре
         return st;
     }
 
@@ -526,7 +531,7 @@ public static class UpdateGuard
                 if (QueryServiceStatus(service, out st) && st.State == StateStopped) return (true, "");
                 Thread.Sleep(250);
             }
-            return (false, "не остановилась за 20 секунд");
+            return (false, L.T("не остановилась за 20 секунд"));
         }
         catch (Exception ex) { return (false, ex.Message); }
         finally
@@ -563,12 +568,12 @@ public static class UpdateGuard
 
     private static string Why(int error) => error switch
     {
-        5 => "Windows не дала доступа",
-        1051 => "от неё зависят другие работающие службы",
-        1052 => "Windows не разрешает её останавливать",
-        1058 => "служба отключена в настройках Windows",
-        1060 => "такой службы на компьютере нет",
-        _ => "ошибка Windows " + error,
+        5 => L.T("Windows не дала доступа"),
+        1051 => L.T("от неё зависят другие работающие службы"),
+        1052 => L.T("Windows не разрешает её останавливать"),
+        1058 => L.T("служба отключена в настройках Windows"),
+        1060 => L.T("такой службы на компьютере нет"),
+        _ => L.F("ошибка Windows {0}", error),
     };
 }
 
@@ -616,7 +621,7 @@ internal static class ActiveHours
     /// <summary>Период, который покрывает ближайшие часы: с начала текущего часа на Span часов вперёд.</summary>
     public static (int Start, int End) Window(DateTime now) => (now.Hour, (now.Hour + Span) % 24);
 
-    public static string Format(int? start, int? end) => start == null || end == null ? "не задан" : $"с {start:00}:00 до {end:00}:00";
+    public static string Format(int? start, int? end) => start == null || end == null ? L.T("не задан") : L.F("с {0:00}:00 до {1:00}:00", start, end);
 
     /// <summary>
     /// Сдвинуть период, если он не покрывает ближайшие needHours часов. Прежние значения сохраняются в файл (первая копия

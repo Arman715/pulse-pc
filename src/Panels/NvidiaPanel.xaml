@@ -6,7 +6,7 @@
         <!-- Строка списка: игра и состояние её профиля -->
         <DataTemplate x:Key="TargetRow">
             <StackPanel>
-                <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                <TextBlock Text="{Binding TitleText}" Style="{StaticResource RowTitle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"/>
                 <TextBlock Text="{Binding Caption}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
             </StackPanel>
@@ -40,7 +40,7 @@
         <DataTemplate x:Key="AdviceRow">
             <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
                 <StackPanel Margin="0,11">
-                    <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}"/>
+                    <TextBlock Text="{Binding TitleText}" Style="{StaticResource RowTitle}"/>
                     <TextBlock Text="{Binding Text}" Style="{StaticResource Body}" Margin="0,2,0,0"/>
                     <!-- Приложение производителя установлено: открыть его, чтобы поменять значения там. -->
                     <Button Content="{Binding LaunchText}" Tag="{Binding Launch}" HorizontalAlignment="Left" Margin="0,10,0,0"

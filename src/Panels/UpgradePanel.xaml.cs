@@ -13,12 +13,15 @@ namespace PulsePC.Panels;
 public partial class UpgradePanel : UserControl, ISystemPanel
 {
     private const string Nb = " ";
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
     private PanelHost host;
     private volatile bool reading;
     private DateTime readAt;
 
-    public UpgradePanel() => InitializeComponent();
+    public UpgradePanel()
+    {
+        InitializeComponent();
+        RamTotal.Unit = Fmt.GbUnit;
+    }
 
     public void Attach(PanelHost h) => host = h;
 
@@ -43,7 +46,7 @@ public partial class UpgradePanel : UserControl, ISystemPanel
             {
                 reading = false;
                 host.EndBusy();
-                if (input == null) { State.Text = "Не удалось прочитать железо."; return; }
+                if (input == null) { State.Text = L.T("Не удалось прочитать железо."); return; }
                 readAt = DateTime.Now;
                 last = input;
                 Show(input);
@@ -72,16 +75,16 @@ public partial class UpgradePanel : UserControl, ISystemPanel
         var advice = UpgradeAdvisor.Advise(x);
         var f = x.Facts;
         State.Text = UpgradeAdvisor.Verdict(advice, f);
-        Basis.Text = f.Count == 0 ? "Записанных игр пока нет — совет только по железу."
-            : $"Записано {Fmt.Plural(f.Count, "сессия", "сессии", "сессий")}, {Hours(f.Hours)} игры, с {f.From.ToString("d MMMM", Ru)} по {f.To.ToString("d MMMM", Ru)}.";
+        Basis.Text = f.Count == 0 ? L.T("Записанных игр пока нет — совет только по железу.")
+            : L.F("Записано {0}, {1} игры, с {2:d MMMM} по {3:d MMMM}.", Fmt.Plural(f.Count, "сессия", "сессии", "сессий"), Hours(f.Hours), f.From, f.To);
 
         var todo = advice.Where(a => !a.Fine).ToList();
         AdviceList.ItemsSource = todo.Select((a, i) => new AdviceItem
         {
             Number = $"{i + 1}.",
             Level = a.Level,
-            Title = a.Title,
-            Tag = (a.Free ? "бесплатно · " : "") + a.Part.ToLower(Ru),
+            Title = UpgradeAdvisor.TitleText(a),
+            Tag = (a.Free ? L.T("бесплатно") + " · " : "") + UpgradeAdvisor.PartName(a.Part),
             Why = a.Why,
             What = a.What,
             WhatVisible = a.What.Length > 0 ? Visibility.Visible : Visibility.Collapsed,
@@ -90,19 +93,21 @@ public partial class UpgradePanel : UserControl, ISystemPanel
         }).ToList();
         AdviceBlock.Visibility = todo.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         var fine = advice.Where(a => a.Fine).ToList();
-        FineList.ItemsSource = fine.Select(a => new AdviceItem { Title = a.Title, Why = a.Why }).ToList();
+        FineList.ItemsSource = fine.Select(a => new AdviceItem { Title = UpgradeAdvisor.TitleText(a), Why = a.Why }).ToList();
         FineBlock.Visibility = fine.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         FewNote.Visibility = f.Count < UpgradeAdvisor.MinSessions ? Visibility.Visible : Visibility.Collapsed;
-        FewText.Text = $"Чтобы судить, что ограничивает игры, нужно хотя бы {UpgradeAdvisor.MinSessions} записанные сессии, а {(f.Count == 0 ? "пока нет ни одной" : "сейчас " + f.Count)}. " +
-                       "Пока здесь только то, что видно по железу. Сыграйте ещё — совет дополнится сам.";
+        FewText.Text = (f.Count == 0
+                           ? L.F("Чтобы судить, что ограничивает игры, нужно хотя бы {0} записанные сессии, а пока нет ни одной.", UpgradeAdvisor.MinSessions)
+                           : L.F("Чтобы судить, что ограничивает игры, нужно хотя бы {0} записанные сессии, а сейчас {1}.", UpgradeAdvisor.MinSessions, f.Count))
+                       + " " + L.T("Пока здесь только то, что видно по железу. Сыграйте ещё — совет дополнится сам.");
 
         ShowRam(x.Ram);
         ShowFacts(f);
         ShowDrives(x.Drives);
     }
 
-    private static string Hours(double h) => h >= 1 ? $"{h.ToString("0", Ru)}{Nb}ч" : $"{h * 60:0}{Nb}мин";
+    private static string Hours(double h) => h >= 1 ? h.ToString("0", L.Culture) + L.Pick(" ч", " h") : (h * 60).ToString("0", L.Culture) + L.Pick(" мин", " min");
 
     // ================================================================== память
     private void ShowRam(RamInfo ram)
@@ -110,7 +115,7 @@ public partial class UpgradePanel : UserControl, ISystemPanel
         Slots.Children.Clear();
         if (!ram.Loaded || ram.Sticks.Count == 0)
         {
-            RamEmpty.Text = "Windows не сообщает, какие планки стоят.";
+            RamEmpty.Text = L.T("Windows не сообщает, какие планки стоят.");
             RamEmpty.Visibility = Visibility.Visible;
             RamBody.Visibility = Visibility.Collapsed;
             return;
@@ -120,20 +125,20 @@ public partial class UpgradePanel : UserControl, ISystemPanel
         RamTotal.Value = ram.TotalGb;
         int mts = ram.Sticks.Max(s => s.Mts);
         RamTotalCaption.Text = $"{ram.Type}{(mts > 0 ? "-" + mts : "")}{(ram.Laptop ? " SO-DIMM" : "")}".Trim();
-        SlotsCaption.Text = Ink.Track(ram.Slots > 0
-            ? $"СЛОТЫ: {ram.Slots}, СВОБОДНО {ram.FreeSlots}"
-            : "СЛОТЫ: WINDOWS НЕ СООБЩАЕТ");
+        SlotsCaption.Text = ram.Slots > 0
+            ? Ink.Track(L.F("СЛОТЫ: {0}, СВОБОДНО {1}", ram.Slots, ram.FreeSlots))
+            : Ink.Track("СЛОТЫ: WINDOWS НЕ СООБЩАЕТ");
 
         foreach (var s in ram.Sticks)
-            Slots.Children.Add(SlotRow(true, $"{s.SizeGb:0}{Nb}ГБ", $"{(s.Maker.Length > 0 ? s.Maker + " " : "")}{s.Part}".Trim(),
-                $"{s.Slot}{(s.Mts > 0 ? $" · {s.Mts}{Nb}МТ/с" : "")}"));
+            Slots.Children.Add(SlotRow(true, $"{s.SizeGb:0}{Nb}{Fmt.GbUnit}", $"{(s.Maker.Length > 0 ? s.Maker + " " : "")}{s.Part}".Trim(),
+                s.Slot + (s.Mts > 0 ? " · " + s.Mts + L.Pick(" МТ/с", " MT/s") : "")));
         for (int i = 0; i < Math.Max(0, ram.FreeSlots); i++)
-            Slots.Children.Add(SlotRow(false, "пусто", "", "свободный слот"));
+            Slots.Children.Add(SlotRow(false, L.Pick("пусто", "empty"),"", L.T("свободный слот")));
 
         var notes = new List<string>();
-        if (ram.MaxGb > 0) notes.Add($"Плата принимает до {ram.MaxGb:0}{Nb}ГБ.");
-        if (UpgradeAdvisor.Mixed(ram)) notes.Add("Планки разные: вся память работает на частоте самой медленной.");
-        else if (ram.Sticks.Count > 1) notes.Add("Планки одинаковые.");
+        if (ram.MaxGb > 0) notes.Add(L.F("Плата принимает до {0:0} ГБ.", ram.MaxGb));
+        if (UpgradeAdvisor.Mixed(ram)) notes.Add(L.T("Планки разные: вся память работает на частоте самой медленной."));
+        else if (ram.Sticks.Count > 1) notes.Add(L.T("Планки одинаковые."));
         RamNote.Text = string.Join(" ", notes);
     }
 
@@ -177,18 +182,18 @@ public partial class UpgradePanel : UserControl, ISystemPanel
         {
             Name = name, Value = value, Note = note, Ink = warn ? Palette.Warn : Palette.Ink1, MarkVisible = warn ? Visibility.Visible : Visibility.Collapsed,
         };
-        string Of(int k, int n) => n == 0 ? "нет замера" : $"{k} из {n}";
-        string Pct(double v) => double.IsNaN(v) ? "нет замера" : $"{v:0}{Nb}%";
+        string Of(int k, int n) => n == 0 ? L.T("нет замера") : string.Format(L.Culture, L.Pick("{0} из {1}", "{0} of {1}"), k, n);
+        string Pct(double v) => double.IsNaN(v) ? L.T("нет замера") : $"{v:0}" + L.Pick(Nb + "%", "%");
 
-        rows.Add(Row("Доступной памяти меньше 1 ГБ", Of(f.RamShort, f.RamMeasured),
-            f.RamMeasured > 0 ? $"меньше всего {MemoryBoost.Gb(f.RamWorst)}" : "",
+        rows.Add(Row(L.T("Доступной памяти меньше 1 ГБ"), Of(f.RamShort, f.RamMeasured),
+            f.RamMeasured > 0 ? L.Pick("меньше всего ", "lowest ") + Fmt.Gb(f.RamWorst) : "",
             f.RamMeasured > 0 && f.RamShort * 4 >= f.RamMeasured && f.RamShort > 0));
-        rows.Add(Row("Видеокарта загружена полностью", Pct(f.GpuBound), "доля времени", false));
-        rows.Add(Row("Видеопамять занята почти вся", Of(f.VramFull, f.VramN),
-            f.VramN > 0 ? $"до {MemoryBoost.Num(f.VramMax)} из {f.VramTotal:0}{Nb}ГБ" : "",
+        rows.Add(Row(L.T("Видеокарта загружена полностью"), Pct(f.GpuBound), L.T("доля времени"), false));
+        rows.Add(Row(L.T("Видеопамять занята почти вся"), Of(f.VramFull, f.VramN),
+            f.VramN > 0 ? L.F("до {0:0.0} из {1:0} ГБ", f.VramMax, f.VramTotal) : "",
             f.VramN > 0 && f.VramFull * 2 >= f.VramN && f.VramFull > 0));
-        rows.Add(Row("Видеокарта ждала процессор", Pct(f.CpuBound), f.TopCpuGame.Length > 0 && f.CpuBound >= 10 ? "больше всего — " + f.TopCpuGame : "доля времени", false));
-        rows.Add(Row("Процессор ниже базовой частоты", Pct(f.CpuSlow), "доля времени в игре", !double.IsNaN(f.CpuSlow) && f.CpuSlow >= 15));
+        rows.Add(Row(L.T("Видеокарта ждала процессор"), Pct(f.CpuBound), f.TopCpuGame.Length > 0 && f.CpuBound >= 10 ? L.Pick("больше всего — ", "most in ") + f.TopCpuGame : L.T("доля времени"), false));
+        rows.Add(Row(L.T("Процессор ниже базовой частоты"), Pct(f.CpuSlow), L.T("доля времени в игре"), !double.IsNaN(f.CpuSlow) && f.CpuSlow >= 15));
         FactList.ItemsSource = rows;
     }
 
@@ -204,14 +209,16 @@ public partial class UpgradePanel : UserControl, ISystemPanel
 
     private void ShowDrives(List<GameDrive> drives)
     {
-        DrivesEmpty.Text = "Установленных игр не найдено (программа видит Steam, Epic, Riot и Astrum).";
+        DrivesEmpty.Text = L.T("Установленных игр не найдено (программа видит Steam, Epic, Riot и Astrum).");
         DrivesEmpty.Visibility = drives.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         DriveList.ItemsSource = drives.Select(d => new DriveItem
         {
             Letter = d.Letter + ":",
-            Disk = d.Disk.Length > 0 ? d.Disk : "диск не определён",
-            Games = Fmt.Plural(d.Games.Count, "игра", "игры", "игр") + ": " + string.Join(", ", d.Games.Take(5)) + (d.Games.Count > 5 ? $" и ещё {d.Games.Count - 5}" : ""),
-            Kind = d.Kind switch { "HDD" => "жёсткий диск", "SSD" => "SSD", "NVMe" => "NVMe", "USB" => "по USB", _ => "тип неизвестен" },
+            Disk = d.Disk.Length > 0 ? d.Disk : L.T("диск не определён"),
+            Games = Fmt.Plural(d.Games.Count, "игра", "игры", "игр") + ": " + (d.Games.Count > 5
+                ? string.Format(L.Culture, L.Pick("{0} и ещё {1}", "{0} and {1} more"), string.Join(", ", d.Games.Take(5)), d.Games.Count - 5)
+                : string.Join(", ", d.Games)),
+            Kind = d.Kind switch { "HDD" => L.T("жёсткий диск"), "SSD" => "SSD", "NVMe" => "NVMe", "USB" => L.T("по USB"), _ => L.T("тип неизвестен") },
             MarkVisible = d.Kind is "HDD" or "USB" ? Visibility.Visible : Visibility.Collapsed,
         }).ToList();
     }

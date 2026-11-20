@@ -169,8 +169,8 @@ public static class PowerAuto
             }
             bool ok = ActiveIsMax();
             Tweaks.Remember(s, Tweaks.PowerTitle, ok);
-            message = ok ? "Схема максимальной производительности включена и останется вне игр. Если обновление Windows её сбросит, программа вернёт её сама."
-                         : "Windows не дала включить схему максимальной производительности. Попробуйте ещё раз или выберите её в «Панели управления» → «Электропитание».";
+            message = ok ? L.T("Схема максимальной производительности включена и останется вне игр. Если обновление Windows её сбросит, программа вернёт её сама.")
+                         : L.T("Windows не дала включить схему максимальной производительности. Попробуйте ещё раз или выберите её в «Панели управления» → «Электропитание».");
         }
         else
         {
@@ -194,10 +194,10 @@ public static class PowerAuto
             {
                 // Режим включили посреди игры: схема меняется сразу, игре это не мешает.
                 lock (Gate) SwitchForGame(GameHooks.Game, GameHooks.Pid);
-                message = "Только в игре: игра уже идёт, поэтому схема переключена сразу. После игры вернётся прежняя.";
+                message = L.T("Только в игре: игра уже идёт, поэтому схема переключена сразу. После игры вернётся прежняя.");
             }
             else if (mode == ModeGame && restored != null)
-                message = restored + " В игре программа включит схему максимальной производительности.";
+                message = restored + L.T(" В игре программа включит схему максимальной производительности.");
             else if (mode == ModeGame)
             {
                 var st = Read(s);
@@ -205,13 +205,13 @@ public static class PowerAuto
                 {
                     bool ok;
                     lock (Gate) ok = SetActive(BalancedGuid);
-                    message = ok ? $"Только в игре: сейчас включена «{st.BalancedName}», в игре включится «{st.MaxName}»."
-                                 : $"Режим выбран, но Windows не дала включить «{st.BalancedName}». В игре программа всё равно включит «{st.MaxName}».";
+                    message = ok ? L.F("Только в игре: сейчас включена «{0}», в игре включится «{1}».", st.BalancedName, st.MaxName)
+                                 : L.F("Режим выбран, но Windows не дала включить «{0}». В игре программа всё равно включит «{1}».", st.BalancedName, st.MaxName);
                 }
-                else message = "Только в игре: схема переключится при следующем запуске игры.";
+                else message = L.T("Только в игре: схема переключится при следующем запуске игры.");
             }
-            else message = restored != null ? restored + " Дальше программа схему питания не меняет."
-                                            : "Программа больше не меняет схему питания: остаётся та, что включена сейчас.";
+            else message = restored != null ? restored + L.T(" Дальше программа схему питания не меняет.")
+                                            : L.T("Программа больше не меняет схему питания: остаётся та, что включена сейчас.");
         }
         Save(s);
         Changed?.Invoke();
@@ -272,14 +272,14 @@ public static class PowerAuto
         if (back == null)
         {
             ClearOriginal();
-            return (false, "Схемы, которая была до режима «всегда», на этом компьютере больше нет, и «Сбалансированной» тоже. Схема осталась прежней.");
+            return (false, L.T("Схемы, которая была до режима «всегда», на этом компьютере больше нет, и «Сбалансированной» тоже. Схема осталась прежней."));
         }
         bool same = list.Any(x => x.Active && x.Guid == back.Guid);
         if (!same && !SetActive(back.Guid))
-            return (false, $"Windows не дала вернуть схему «{back.Name}». Включите её сами: «Панель управления» → «Электропитание».");
+            return (false, L.F("Windows не дала вернуть схему «{0}». Включите её сами: «Панель управления» → «Электропитание».", back.Name));
         ClearOriginal();
-        return (true, back.Guid == original ? $"Возвращена схема «{back.Name}», которая была до режима «всегда»."
-                                            : $"Схемы, которая была до режима «всегда», больше нет — включена «{back.Name}».");
+        return (true, back.Guid == original ? L.F("Возвращена схема «{0}», которая была до режима «всегда».", back.Name)
+                                            : L.F("Схемы, которая была до режима «всегда», больше нет — включена «{0}».", back.Name));
     }
 
     /// <summary>
@@ -291,7 +291,7 @@ public static class PowerAuto
         (bool Ok, string Message) r;
         lock (Gate)
         {
-            if (GameHooks.InGame) return (false, "Идёт игра. Схему можно сменить после неё.");
+            if (GameHooks.InGame) return (false, L.T("Идёт игра. Схему можно сменить после неё."));
             r = LoadOriginal() == "" ? (false, null) : RestoreOriginalLocked();
         }
         if (r.Message == null) return SwitchToBalanced();
@@ -323,13 +323,13 @@ public static class PowerAuto
         var s = host.Settings;
         var list = Schemes(s);
         var active = list.FirstOrDefault(x => x.Active);
-        if (active == null) { Remember(s, $"Игра «{game}» запущена, но текущую схему питания прочитать не удалось. Схема осталась прежней."); return; }
+        if (active == null) { Remember(s, L.F("Игра «{0}» запущена, но текущую схему питания прочитать не удалось. Схема осталась прежней.", game)); return; }
 
         // Схема до игры запоминается один раз: если ключ остался с прошлого раза, в нём настоящая исходная схема.
         bool fresh = s.Get(KeyBefore) == "";
         if (fresh) { s.Set(KeyBefore, active.Guid); Save(s); }
 
-        if (active.IsMax) { Remember(s, $"Игра «{game}» запущена: «{active.Name}» уже была включена."); return; }
+        if (active.IsMax) { Remember(s, L.F("Игра «{0}» запущена: «{1}» уже была включена.", game, active.Name)); return; }
 
         var target = list.FirstOrDefault(x => x.IsMax);
         if (target != null) SetActive(target.Guid);
@@ -339,12 +339,12 @@ public static class PowerAuto
         if (now == null || now.Guid == active.Guid)
         {
             if (fresh) s.Set(KeyBefore, null);
-            Remember(s, $"Игра «{game}» запущена, но Windows не дала включить схему максимальной производительности. Осталась схема «{active.Name}».");
+            Remember(s, L.F("Игра «{0}» запущена, но Windows не дала включить схему максимальной производительности. Осталась схема «{1}».", game, active.Name));
             return;
         }
         // Запоминаем созданную копию, чтобы при следующей игре включить её же, а не создавать новую.
         if (target == null && now.Guid != BalancedGuid && now.Guid != SaverGuid) s.Set(KeyMax, now.Guid);
-        Remember(s, $"Игра «{game}» запущена: «{active.Name}» → «{now.Name}».");
+        Remember(s, L.F("Игра «{0}» запущена: «{1}» → «{2}».", game, active.Name, now.Name));
     }
 
     /// <summary>Вернуть схему, которая была до игры. false — возвращать было нечего.</summary>
@@ -358,21 +358,21 @@ public static class PowerAuto
         var active = list.FirstOrDefault(x => x.Active);
         // Схему до игры могли удалить, пока шла игра: тогда возвращаемся на «Сбалансированную».
         var back = list.FirstOrDefault(x => x.Guid == before) ?? list.FirstOrDefault(x => x.Guid == BalancedGuid);
-        if (back == null) { s.Set(KeyBefore, null); Remember(s, "Игра закрыта, но схемы, которая была до игры, на этом компьютере больше нет. Схема осталась прежней."); return true; }
+        if (back == null) { s.Set(KeyBefore, null); Remember(s, L.T("Игра закрыта, но схемы, которая была до игры, на этом компьютере больше нет. Схема осталась прежней.")); return true; }
 
         if (active != null && active.Guid == back.Guid)
         {
             s.Set(KeyBefore, null);
-            Remember(s, $"Игра закрыта: осталась схема «{back.Name}», она же была до игры.");
+            Remember(s, L.F("Игра закрыта: осталась схема «{0}», она же была до игры.", back.Name));
         }
         else if (SetActive(back.Guid))
         {
             s.Set(KeyBefore, null);
-            Remember(s, $"Игра закрыта: возвращена схема «{back.Name}».");
+            Remember(s, L.F("Игра закрыта: возвращена схема «{0}».", back.Name));
         }
         else
             // Ключ не очищаем: возврат повторится при следующем запуске программы.
-            Remember(s, $"Игра закрыта, но вернуть схему «{back.Name}» не удалось. Программа попробует ещё раз при следующем запуске.");
+            Remember(s, L.F("Игра закрыта, но вернуть схему «{0}» не удалось. Программа попробует ещё раз при следующем запуске.", back.Name));
         return true;
     }
 
@@ -399,14 +399,14 @@ public static class PowerAuto
         string name;
         lock (Gate)
         {
-            if (GameHooks.InGame) return (false, "Идёт игра. Схему можно сменить после неё.");
+            if (GameHooks.InGame) return (false, L.T("Идёт игра. Схему можно сменить после неё."));
             name = Schemes(null).FirstOrDefault(x => x.Guid == BalancedGuid)?.Name;
             if (name == null)
-                return (false, "Сбалансированной схемы на этом компьютере нет. Её можно вернуть в «Панели управления» → «Электропитание».");
-            if (!SetActive(BalancedGuid)) return (false, "Windows не дала сменить схему питания. Включите её сами: «Панель управления» → «Электропитание».");
+                return (false, L.T("Сбалансированной схемы на этом компьютере нет. Её можно вернуть в «Панели управления» → «Электропитание»."));
+            if (!SetActive(BalancedGuid)) return (false, L.T("Windows не дала сменить схему питания. Включите её сами: «Панель управления» → «Электропитание»."));
         }
         Changed?.Invoke();
-        return (true, Enabled ? $"Включена схема «{name}». При запуске игры программа сама включит схему максимальной производительности." : $"Включена схема «{name}».");
+        return (true, Enabled ? L.F("Включена схема «{0}». При запуске игры программа сама включит схему максимальной производительности.", name) : L.F("Включена схема «{0}».", name));
     }
 
     // ------------------------------------------------------------------ чтение
@@ -421,16 +421,17 @@ public static class PowerAuto
         st.BalancedName = st.Schemes.FirstOrDefault(x => x.Guid == BalancedGuid)?.Name ?? "";
         st.HasBalanced = st.BalancedName != "";
         st.ActiveIsFast = st.Active != null && (st.Active.IsMax || st.Active.Guid == HighPerfGuid);
-        st.MaxName = st.Schemes.FirstOrDefault(x => x.IsMax)?.Name ?? TemplateName() ?? "Максимальная производительность";
+        st.MaxName = st.Schemes.FirstOrDefault(x => x.IsMax)?.Name ?? TemplateName() ?? L.T("Максимальная производительность");
 
         string before = s.Get(KeyBefore);
         if (before != "") st.BeforeName = st.Schemes.FirstOrDefault(x => x.Guid == before)?.Name ?? "";
 
         if (DateTime.TryParse(s.Get(KeyLast), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var last)) st.Last = last;
-        st.LastText = s.Get(KeyLastText);
+        // Текст пишется на языке программы; запись, сделанная по-русски до смены языка, переводится по шаблону.
+        st.LastText = L.T(s.Get(KeyLastText));
 
         foreach (var x in st.Schemes)
-            x.Mark = x.Active ? "включена" : st.Enabled && x.IsMax && !st.Schemes.Any(a => a.Active && a.IsMax) ? "включится в игре" : "";
+            x.Mark = x.Active ? L.T("включена") : st.Enabled && x.IsMax && !st.Schemes.Any(a => a.Active && a.IsMax) ? L.T("включится в игре") : "";
         return st;
     }
 
@@ -450,7 +451,7 @@ public static class PowerAuto
                 if (PowerEnumerate(IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, AccessScheme, i, ref id, ref size) != 0) break;
                 string guid = id.ToString("D").ToLowerInvariant();
                 string name = FriendlyName(id);
-                if (string.IsNullOrWhiteSpace(name)) name = "Схема без названия";
+                if (string.IsNullOrWhiteSpace(name)) name = L.T("Схема без названия");
                 bool max = guid == UltimateTemplate || (known != "" && guid == known)
                            || (template != null && name.Equals(template, StringComparison.OrdinalIgnoreCase))
                            || name.Equals("Максимальная производительность", StringComparison.OrdinalIgnoreCase)
@@ -464,11 +465,11 @@ public static class PowerAuto
     }
 
     private static string HintFor(string guid, bool max) =>
-        max ? "Процессор не снижает частоту и не засыпает между задачами: полная скорость, но больше нагрев и шум."
-        : guid == BalancedGuid ? "Частота процессора меняется по нагрузке: без нагрузки компьютер тише и прохладнее."
-        : guid == HighPerfGuid ? "Процессор держит высокую частоту, энергосбережение почти выключено."
-        : guid == SaverGuid ? "Процессор и экран экономят энергию, скорость ниже."
-        : "Схема производителя компьютера или созданная вручную.";
+        max ? L.T("Процессор не снижает частоту и не засыпает между задачами: полная скорость, но больше нагрев и шум.")
+        : guid == BalancedGuid ? L.T("Частота процессора меняется по нагрузке: без нагрузки компьютер тише и прохладнее.")
+        : guid == HighPerfGuid ? L.T("Процессор держит высокую частоту, энергосбережение почти выключено.")
+        : guid == SaverGuid ? L.T("Процессор и экран экономят энергию, скорость ниже.")
+        : L.T("Схема производителя компьютера или созданная вручную.");
 
     public static string ActiveGuid()
     {
@@ -598,13 +599,13 @@ public readonly struct BatteryInfo
     public static string Advice(BatteryInfo b, bool fastScheme)
     {
         if (!b.HasBattery) return "";
-        string charge = b.Percent >= 0 ? $" Заряд — {b.Percent} %." : "";
+        string charge = b.Percent >= 0 ? L.F(" Заряд — {0} %.", b.Percent) : "";
         if (b.OnBattery)
             return (fastScheme
-                ? "Ноутбук работает от батареи, а схема полной скорости держит процессор на максимуме — заряд уйдёт за час-два."
-                : "Ноутбук работает от батареи: процессор и видеокарта сейчас работают вполсилы, а в игре заряд уйдёт быстро.")
-                + charge + " Для игр подключите зарядку.";
-        return "Это ноутбук: играйте от зарядки. От батареи процессор и видеокарта работают вполсилы, а схема полной скорости быстро сажает заряд.";
+                ? L.T("Ноутбук работает от батареи, а схема полной скорости держит процессор на максимуме — заряд уйдёт за час-два.")
+                : L.T("Ноутбук работает от батареи: процессор и видеокарта сейчас работают вполсилы, а в игре заряд уйдёт быстро."))
+                + charge + L.T(" Для игр подключите зарядку.");
+        return L.T("Это ноутбук: играйте от зарядки. От батареи процессор и видеокарта работают вполсилы, а схема полной скорости быстро сажает заряд.");
     }
 
     [StructLayout(LayoutKind.Sequential)]

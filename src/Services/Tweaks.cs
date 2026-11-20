@@ -105,19 +105,19 @@ public static class Tweaks
         var items = new List<TweakItem>
         {
             Reg("Фоновая запись игр выключена",
-                "Windows не пишет видео игры в фоне (Game DVR) и не тратит на это ресурсы видеокарты и диска.", false, GameDvr),
+                L.T("Windows не пишет видео игры в фоне (Game DVR) и не тратит на это ресурсы видеокарты и диска."), false, GameDvr),
             Reg("Игровой режим включён",
-                "Windows отдаёт игре приоритет и не ставит обновления, пока вы играете.", false, GameMode),
+                L.T("Windows отдаёт игре приоритет и не ставит обновления, пока вы играете."), false, GameMode),
             Reg("Аппаратное планирование видеокарты (HAGS)",
-                "Нужно для генерации кадров DLSS и немного снижает задержку. Заработает после перезагрузки.", true, Hags),
+                L.T("Нужно для генерации кадров DLSS и немного снижает задержку. Заработает после перезагрузки."), true, Hags),
             Reg("Оптимизации оконных игр и переменная частота",
-                "Игры в окне без рамки выводят картинку так же быстро, как в полноэкранном режиме, и с переменной частотой монитора.", false, Windowed),
+                L.T("Игры в окне без рамки выводят картинку так же быстро, как в полноэкранном режиме, и с переменной частотой монитора."), false, Windowed),
             Reg("Реклама и рекомендации Windows выключены",
-                "Пропадут советы и рекомендации в «Пуске» и «Параметрах», тихая установка рекламных приложений и результаты из интернета в поиске.", false, Ads),
+                L.T("Пропадут советы и рекомендации в «Пуске» и «Параметрах», тихая установка рекламных приложений и результаты из интернета в поиске."), false, Ads),
             new()
             {
                 Title = "Энергосбережение сетевой карты выключено",
-                Hint = "Сетевая карта не «засыпает» между пакетами и не снижает скорость (Green Ethernet, Gigabit Lite, Power Saving) — меньше редких скачков пинга. Пока настройка применяется, интернет пропадёт на 2–3 секунды.",
+                Hint = L.T("Сетевая карта не «засыпает» между пакетами и не снижает скорость (Green Ethernet, Gigabit Lite, Power Saving) — меньше редких скачков пинга. Пока настройка применяется, интернет пропадёт на 2–3 секунды."),
                 Check = NetPower.IsOff,
                 Apply = NetPower.TurnOff,
                 Revert = NetPower.Restore,
@@ -161,7 +161,7 @@ public static class Tweaks
     public static TweakItem MouseAccel() => new()
     {
         Title = MouseTitle,
-        Hint = "Прицел сдвигается ровно на столько, на сколько вы сдвинули мышь, — скорость руки не важна.",
+        Hint = L.T("Прицел сдвигается ровно на столько, на сколько вы сдвинули мышь, — скорость руки не важна."),
         Check = () => Mouse.All(IsSet),
         Apply = () =>
         {
@@ -193,7 +193,7 @@ public static class Tweaks
     private static TweakItem PowerAlwaysMax() => new()
     {
         Title = PowerTitle,
-        Hint = "Задаётся в разделе «Питание»: режим «всегда максимальная».",
+        Hint = L.T("Задаётся в разделе «Питание»: режим «всегда максимальная»."),
         Check = PowerAuto.ActiveIsMax,
         Apply = PowerAuto.ApplyMax,
         // Возвращается схема, которая была до режима «всегда» (а не «Сбалансированная»).
@@ -552,7 +552,7 @@ public static class GameApps
             if (found.Count == 0) continue;
             long bytes = 0;
             foreach (var p in found) { try { bytes += p.WorkingSet64; } catch { } }
-            list.Add(new GameAppItem { Title = title, ProcessName = string.Join("|", procs), Bytes = bytes });
+            list.Add(new GameAppItem { Title = L.T(title), ProcessName = string.Join("|", procs), Bytes = bytes });
         }
 
         // Любая другая программа с окном, занимающая много памяти: на чужом ПК известного списка мало.

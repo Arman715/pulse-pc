@@ -39,6 +39,13 @@ public sealed class BenchMetric
     /// <summary>Изменение показывать разностью («−1,2 п. п.», «+0,36 мс»), а не процентами: у величин около нуля проценты бессмысленны.</summary>
     public bool AbsoluteChange { get; init; }
     public string ChangeUnit { get; init; } = "";
+
+    // Название, подсказка и единица хранятся по-русски (их нет в bench.json — там только ключ показателя);
+    // на экран — на языке интерфейса.
+    public string TitleText => L.T(Title);
+    public string HintText => L.T(Hint);
+    public string UnitText => L.T(Unit);
+    public string ChangeUnitText => L.T(ChangeUnit.Length > 0 ? ChangeUnit : Unit);
 }
 
 /// <summary>Сравнение одного показателя в двух замерах. Verdict: 1 — лучше, −1 — хуже, 0 — в пределах разброса.</summary>
@@ -134,7 +141,10 @@ public static class Bench
         }
     }
 
-    private static string TempFile => Path.Combine(SessionStore.Folder, TempName);
+    // Имя временного файла случайное на каждый замер, файл только создаётся (CreateNew): папка данных доступна пользователю на запись,
+    // и заранее подложенная там ссылка с известным именем заставила бы программу с правами администратора писать и удалять чужой файл.
+    private static string tempFile;
+    private static string TempFile => tempFile ?? Path.Combine(SessionStore.Folder, TempName);
 
     private static void DeleteTemp()
     {
@@ -187,7 +197,10 @@ public static class Bench
     // ───────────── Сравнение ─────────────
 
     public static string Format(BenchMetric m, double value) =>
-        double.IsNaN(value) ? "—" : value.ToString(m.Format, CultureInfo.CurrentCulture) + (m.Unit.Length > 0 ? " " + m.Unit : "");
+        double.IsNaN(value) ? "—" : value.ToString(m.Format, CultureInfo.CurrentCulture) + Unit(m.UnitText);
+
+    /// <summary>Единица после числа через узкий пробел; по-английски знак процента без пробела («12.5%»).</summary>
+    private static string Unit(string unit) => unit.Length == 0 ? "" : unit == "%" && L.En ? "%" : " " + unit;
 
     /// <summary>Порог «без изменений» для показателя при данном исходном значении.</summary>
     public static double Noise(BenchMetric m, double before) => Math.Max(m.NoiseAbs, m.NoiseRel * Math.Abs(before));
@@ -205,11 +218,11 @@ public static class Bench
             int verdict = Math.Abs(diff) <= Noise(m, a) ? 0 : (diff > 0) == m.HigherIsBetter ? 1 : -1;
             string change;
             if (m.AbsoluteChange || Math.Abs(a) < 1e-9)
-                change = Signed(diff, m.Format) + " " + (m.ChangeUnit.Length > 0 ? m.ChangeUnit : m.Unit);
+                change = Signed(diff, m.Format) + " " + m.ChangeUnitText;
             else
             {
                 double pct = 100 * diff / Math.Abs(a);
-                change = Signed(pct, Math.Abs(pct) < 10 ? "0.0" : "0") + " %";
+                change = Signed(pct, Math.Abs(pct) < 10 ? "0.0" : "0") + Unit("%");
             }
             list.Add(new BenchDelta { Metric = m, Before = a, After = b, Verdict = verdict, ChangeText = change });
         }
@@ -226,33 +239,42 @@ public static class Bench
     /// <summary>Вывод одной-двумя фразами простыми словами.</summary>
     public static string Summary(BenchResult before, BenchResult after, List<BenchDelta> deltas)
     {
-        if (deltas.Count == 0) return "Сравнивать нечего: в этих замерах нет общих показателей.";
+        if (deltas.Count == 0) return L.T("Сравнивать нечего: в этих замерах нет общих показателей.");
         var better = deltas.Where(d => d.Verdict > 0).ToList();
         var worse = deltas.Where(d => d.Verdict < 0).ToList();
-        static string Name(BenchDelta d) => char.ToLower(d.Metric.Title[0]) + d.Metric.Title[1..];
-        static string Items(List<BenchDelta> list) =>
-            string.Join("; ", list.Take(3).Select(d => $"{Name(d)} — {d.BeforeText} → {d.AfterText}")) + (list.Count > 3 ? $" и ещё {list.Count - 3}" : "");
+        static string Name(BenchDelta d)
+        {
+            string t = d.Metric.TitleText;
+            return t.Length > 1 && char.IsUpper(t[1]) ? t : char.ToLower(t[0], L.Culture) + t[1..];
+        }
+        static string Items(List<BenchDelta> list)
+        {
+            string shown = string.Join("; ", list.Take(3).Select(d => $"{Name(d)} — {d.BeforeText} → {d.AfterText}"));
+            return list.Count > 3 ? string.Format(L.Culture, L.Pick("{0} и ещё {1}", "{0} and {1} more"), shown, list.Count - 3) : shown;
+        }
 
         var sb = new StringBuilder();
         if (better.Count == 0 && worse.Count == 0)
-            sb.Append("Заметной разницы нет: все показатели в пределах обычного разброса между замерами.");
+            sb.Append(L.T("Заметной разницы нет: все показатели в пределах обычного разброса между замерами."));
         else if (worse.Count == 0)
-            sb.Append($"Стало лучше: {Items(better)}. Остальное не изменилось.");
+            sb.Append(L.F("Стало лучше: {0}. Остальное не изменилось.", Items(better)));
         else if (better.Count == 0)
-            sb.Append($"Стало хуже: {Items(worse)}." + (after.Disturbed ? "" : " Проверьте, не работала ли во время второго замера лишняя программа, и повторите его."));
+            sb.Append(L.F("Стало хуже: {0}.", Items(worse)) + (after.Disturbed ? "" : " " + L.T("Проверьте, не работала ли во время второго замера лишняя программа, и повторите его.")));
         else
-            sb.Append($"Лучше: {Items(better)}. Хуже: {Items(worse)}.");
+            sb.Append(L.F("Лучше: {0}. Хуже: {1}.", Items(better), Items(worse)));
 
         if (before.PowerPlan != after.PowerPlan && before.PowerPlan.Length > 0 && after.PowerPlan.Length > 0)
-            sb.Append($" Между замерами сменилась схема питания: «{before.PowerPlan}» → «{after.PowerPlan}».");
+            sb.Append(' ').Append(L.F("Между замерами сменилась схема питания: «{0}» → «{1}».", before.PowerPlan, after.PowerPlan));
         if (Math.Abs(before.OpenApps - after.OpenApps) >= 3)
-            sb.Append($" Открытых программ было {before.OpenApps}, стало {after.OpenApps} — часть разницы может быть из-за этого.");
+            sb.Append(' ').Append(L.F("Открытых программ было {0}, стало {1} — часть разницы может быть из-за этого.", before.OpenApps, after.OpenApps));
         if (before.Disturbed || after.Disturbed)
         {
-            string which = before.Disturbed && after.Disturbed ? $"обоих замеров другие программы занимали {before.OtherLoad:0} % и {after.OtherLoad:0} % процессора"
-                : before.Disturbed ? $"замера «было» другие программы занимали {before.OtherLoad:0} % процессора"
-                : $"замера «стало» другие программы занимали {after.OtherLoad:0} % процессора";
-            sb.Append($" Во время {which} — поэтому скорость процессора и памяти занижена. Если эти программы запустились случайно, повторите замер без них.");
+            string which = before.Disturbed && after.Disturbed
+                ? L.F("Во время обоих замеров другие программы занимали {0:0} % и {1:0} % процессора — поэтому скорость процессора и памяти занижена. Если эти программы запустились случайно, повторите замер без них.", before.OtherLoad, after.OtherLoad)
+                : before.Disturbed
+                    ? L.F("Во время замера «было» другие программы занимали {0:0} % процессора — поэтому скорость процессора и памяти занижена. Если эти программы запустились случайно, повторите замер без них.", before.OtherLoad)
+                    : L.F("Во время замера «стало» другие программы занимали {0:0} % процессора — поэтому скорость процессора и памяти занижена. Если эти программы запустились случайно, повторите замер без них.", after.OtherLoad);
+            sb.Append(' ').Append(which);
         }
         return sb.ToString();
     }
@@ -266,8 +288,9 @@ public static class Bench
     /// <param name="scale">Доля обычной длительности: 1 — полный замер, меньше — быстрая самопроверка.</param>
     public static BenchResult Run(string label, Action<BenchProgress> progress, CancellationToken cancel, double scale = 1, List<string> log = null)
     {
-        if (GameHooks.InGame) throw new InvalidOperationException("Идёт игра. Сделайте замер, когда она закроется.");
-        if (Interlocked.CompareExchange(ref running, 1, 0) != 0) throw new InvalidOperationException("Замер уже идёт.");
+        // Текст исключения показывается в разделе как есть — поэтому на языке интерфейса.
+        if (GameHooks.InGame) throw new InvalidOperationException(L.T("Идёт игра. Сделайте замер, когда она закроется."));
+        if (Interlocked.CompareExchange(ref running, 1, 0) != 0) throw new InvalidOperationException(L.T("Замер уже идёт."));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancel);
         active = linked;
         var ct = linked.Token;
@@ -284,7 +307,7 @@ public static class Bench
             }
             void Report(double part) => progress?.Invoke(new BenchProgress
             {
-                Stage = stage + 1, Stages = StageTitles.Length, Title = StageTitles[stage],
+                Stage = stage + 1, Stages = StageTitles.Length, Title = L.T(StageTitles[stage]),
                 Fraction = Math.Min(1, (done + StageSeconds[stage] * Math.Clamp(part, 0, 1)) / all),
             });
 
@@ -313,7 +336,7 @@ public static class Bench
             log?.Add($"  чужая нагрузка во время замера скорости (наибольшая по этапам): {r.OtherLoad.ToString("0.0", CultureInfo.InvariantCulture)} %");
             Next(); DiskSpeed(r, scale, ct, Report, log);
             ct.ThrowIfCancellationRequested();
-            progress?.Invoke(new BenchProgress { Stage = StageTitles.Length, Stages = StageTitles.Length, Title = "Готово", Fraction = 1 });
+            progress?.Invoke(new BenchProgress { Stage = StageTitles.Length, Stages = StageTitles.Length, Title = L.T("Готово"), Fraction = 1 });
             return r;
         }
         finally
@@ -568,7 +591,8 @@ public static class Bench
         SafeFileHandle file;
         try
         {
-            file = File.OpenHandle(TempFile, FileMode.Create, FileAccess.ReadWrite, FileShare.None,
+            tempFile = Path.Combine(SessionStore.Folder, "bench-" + Guid.NewGuid().ToString("N") + ".tmp");
+            file = File.OpenHandle(TempFile, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None,
                 FileOptions.WriteThrough | FileOptions.DeleteOnClose | noBuffering, limit);
         }
         catch (Exception ex) { log?.Add("  диск: временный файл не создан — " + ex.Message); return; }

@@ -37,10 +37,10 @@ public partial class ScanWindow : Window
 
     private static readonly string[] StepHints =
     {
-        "модель, ядра и частота", "модель, драйвер и видеопамять", "планки, частота и каналы", "модель и версия BIOS",
-        "диски, свободное место и состояние", "разрешение и частота обновления", "версия, схема питания и игровые настройки",
-        "Steam, Epic Games, Riot и настройки графики", "установленные программы и автозагрузка", "пинг до роутера и до интернета",
-        "временные файлы и кэш", "сбои и ошибки за 7 дней",
+        L.T("модель, ядра и частота"), L.T("модель, драйвер и видеопамять"), L.T("планки, частота и каналы"), L.T("модель и версия BIOS"),
+        L.T("диски, свободное место и состояние"), L.T("разрешение и частота обновления"), L.T("версия, схема питания и игровые настройки"),
+        L.T("Steam, Epic Games, Riot и настройки графики"), L.T("установленные программы и автозагрузка"), L.T("пинг до роутера и до интернета"),
+        L.T("временные файлы и кэш"), L.T("сбои и ошибки за 7 дней"),
     };
 
     private readonly CancellationTokenSource cancel = new();
@@ -52,11 +52,12 @@ public partial class ScanWindow : Window
     public ScanWindow()
     {
         InitializeComponent();
+        WindowFit.Attach(this);
         Motion.Init(this);
-        Header.Line2 = "ПЕРВЫЙ ЗАПУСК · " + DateTime.Now.ToString("dd.MM.yyyy");
+        Header.Line2 = L.F("ПЕРВЫЙ ЗАПУСК · {0:d}", DateTime.Now);
         for (int i = 0; i < SystemScan.StepTitles.Length; i++)
         {
-            var row = new StepRow(i, SystemScan.StepTitles[i]);
+            var row = new StepRow(i, L.T(SystemScan.StepTitles[i]));
             rows.Add(row);
             StepList.Children.Add(row.Root);
         }
@@ -92,7 +93,7 @@ public partial class ScanWindow : Window
 
         // Последний шаг и выноски должны успеть показаться, прежде чем лист сменится.
         Drawing.Highlight = Part.None;
-        NowText.Text = "Осмотр закончен";
+        NowText.Text = L.T("Осмотр закончен");
         await Task.Delay(Motion.On ? 700 : 150);
         if (cancel.IsCancellationRequested) return;
         ShowResults(report);
@@ -109,7 +110,7 @@ public partial class ScanWindow : Window
         {
             row.SetRunning();
             StepCounter.Text = $"{p.Index + 1:00} / {p.Count:00}";
-            NowText.Text = p.Title + ": " + (p.Index < StepHints.Length ? StepHints[p.Index] : "");
+            NowText.Text = L.T(p.Title) + ": " + (p.Index < StepHints.Length ? StepHints[p.Index] : "");
             Drawing.Highlight = PartOf(p.Index);
             Progress.Running = p.Index;
             return;
@@ -130,11 +131,11 @@ public partial class ScanWindow : Window
 
     private static (string Anchor, string Label) CalloutOf(int step) => step switch
     {
-        0 => ("pc.cpu", "А  Процессор"),
-        1 => ("pc.gpu", "Б  Видеокарта"),
-        2 => ("pc.ram", "В  Память"),
-        3 => ("pc.board", "Д  Материнская плата"),
-        4 => ("pc.storage", "Г  Диски"),
+        0 => ("pc.cpu", L.T("А  Процессор")),
+        1 => ("pc.gpu", L.T("Б  Видеокарта")),
+        2 => ("pc.ram", L.T("В  Память")),
+        3 => ("pc.board", L.T("Д  Материнская плата")),
+        4 => ("pc.storage", L.T("Г  Диски")),
         _ => (null, null),
     };
 
@@ -147,7 +148,7 @@ public partial class ScanWindow : Window
             0 => System.Text.RegularExpressions.Regex.Replace(summary.Split(" · ")[0], @"^(Intel|AMD)\s+", ""),
             1 => System.Text.RegularExpressions.Regex.Replace(summary, @"^(GeForce|Radeon)\s+", ""),
             3 => summary.Split(" · BIOS")[0],
-            4 => summary.Replace(" свободно ", " "),
+            4 => L.En ? summary.Replace(" free", "") : summary.Replace(" свободно ", " "),
             _ => summary,
         };
         int max = step is 2 or 3 ? 24 : 20;
@@ -158,7 +159,7 @@ public partial class ScanWindow : Window
 
     private void ShowResults(ScanReport r)
     {
-        Header.Play("ОСМОТР", "ПЕРВИЧНЫЙ · ИТОГ", $"{r.At:dd.MM.yyyy} · {Math.Max(1, (int)Math.Round(r.Duration.TotalSeconds))} С");
+        Header.Play(L.T("ОСМОТР"), L.T("ПЕРВИЧНЫЙ · ИТОГ"), L.F("{0:d} · {1} С", r.At, Math.Max(1, (int)Math.Round(r.Duration.TotalSeconds))));
         ScanPhase.Visibility = Visibility.Collapsed;
         ResultPhase.Visibility = Visibility.Visible;
 
@@ -169,7 +170,7 @@ public partial class ScanWindow : Window
         foreach (var line in r.Passport)
         {
             PassportGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var label = new TrackedText { Source = line.Label.ToUpper(CultureInfo.GetCultureInfo("ru-RU")), Margin = new Thickness(0, 11, 12, 8), VerticalAlignment = VerticalAlignment.Top };
+            var label = new TrackedText { Source = line.Label.ToUpper(L.Culture), Margin = new Thickness(0, 11, 12, 8), VerticalAlignment = VerticalAlignment.Top };
             label.SetResourceReference(StyleProperty, "Label");
             // Первая строка — главное (модель), остальные — подробности мельче и светлее.
             var value = new TextBlock { Margin = new Thickness(0, 7, 0, 8), LineHeight = 19, LineStackingStrategy = LineStackingStrategy.BlockLineHeight };
@@ -212,14 +213,43 @@ public partial class ScanWindow : Window
         Count(Severity.Warn, "важное", "важных", "важных");
         Count(Severity.Info, "к сведению", "к сведению", "к сведению");
 
+        // Шаги, которые не удалось выполнить: о них — первым делом, иначе пустой список выглядел бы как «всё в порядке».
+        var failedSteps = r.Steps.Where(s => s.Error != null).ToList();
+        if (failedSteps.Count > 0)
+        {
+            var marker = new StateMarker { Level = Severity.Warn, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(Tally.Children.Count == 0 ? 0 : 16, 0, 7, 0) };
+            var text = new TextBlock { Text = L.F("не проверено: {0}", failedSteps.Count), VerticalAlignment = VerticalAlignment.Center };
+            text.SetResourceReference(StyleProperty, "Caption");
+            Tally.Children.Add(marker);
+            Tally.Children.Add(text);
+        }
+
         // Замечания
         FindingList.Children.Clear();
+        if (failedSteps.Count > 0)
+        {
+            var row = FindingRow(new ScanFinding
+            {
+                Severity = Severity.Warn,
+                Title = Fmt.Plural(failedSteps.Count, "проверка не выполнена", "проверки не выполнены", "проверок не выполнено"),
+                Detail = L.F("Не удалось проверить: {0}. По этим пунктам итог неизвестен — повторите осмотр позже или после перезапуска программы.",
+                    string.Join(", ", failedSteps.Select(s => "«" + L.T(s.Title) + "»"))),
+            });
+            FindingList.Children.Add(row);
+            Motion.Reveal(row, 120, 6);
+        }
         if (r.Findings.Count == 0)
         {
             var empty = new StackPanel { Margin = new Thickness(0, 18, 0, 0) };
-            var t = new TextBlock { Text = "Замечаний нет" };
+            var t = new TextBlock { Text = failedSteps.Count > 0 ? L.T("В выполненных проверках замечаний нет") : L.T("Замечаний нет") };
             t.SetResourceReference(StyleProperty, "RowTitle");
-            var d = new TextBlock { Text = "Всё, что можно проверить без нагрузки, в порядке. Как ведёт себя компьютер в играх, покажут записанные сессии.", Margin = new Thickness(0, 4, 0, 0) };
+            var d = new TextBlock
+            {
+                Text = failedSteps.Count > 0
+                    ? L.T("Остальное, что можно проверить без нагрузки, в порядке. Как ведёт себя компьютер в играх, покажут записанные сессии.")
+                    : L.T("Всё, что можно проверить без нагрузки, в порядке. Как ведёт себя компьютер в играх, покажут записанные сессии."),
+                Margin = new Thickness(0, 4, 0, 0),
+            };
             d.SetResourceReference(StyleProperty, "Body");
             empty.Children.Add(t);
             empty.Children.Add(d);
@@ -235,7 +265,7 @@ public partial class ScanWindow : Window
             k++;
         }
 
-        FooterText.Text = $"Осмотр занял {Math.Max(1, (int)Math.Round(r.Duration.TotalSeconds))} с и ничего не изменил: исправления — только в программе и по вашей команде.";
+        FooterText.Text = L.F("Осмотр занял {0} с и ничего не изменил: исправления — только в программе и по вашей команде.", Math.Max(1, (int)Math.Round(r.Duration.TotalSeconds)));
         DoneButton.Visibility = Visibility.Visible;
         Motion.Reveal(DoneButton, 200, 4);
         DoneButton.Focus();
@@ -263,7 +293,7 @@ public partial class ScanWindow : Window
         {
             int page = f.TargetPage;
             string section = f.TargetSection;
-            var link = new Button { Content = f.TargetSection != "" ? $"Открыть раздел «{f.PageName}»" : $"Открыть вкладку «{f.PageName}»", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 5, 0, 0) };
+            var link = new Button { Content = f.TargetSection != "" ? L.F("Открыть раздел «{0}»", L.T(f.PageName)) : L.F("Открыть вкладку «{0}»", L.T(f.PageName)), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 5, 0, 0) };
             link.SetResourceReference(StyleProperty, "Link");
             link.SetResourceReference(Control.ForegroundProperty, "Ink1");
             link.Click += (_, _) =>
@@ -369,7 +399,7 @@ public partial class ScanWindow : Window
             title.SetResourceReference(TextBlock.ForegroundProperty, "Ink1");
             title.FontWeight = FontWeights.SemiBold;
             number.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
-            result.Text = "проверяю…";
+            result.Text = L.T("проверяю…");
             result.SetResourceReference(TextBlock.ForegroundProperty, "Ink3");
         }
 

@@ -35,7 +35,8 @@ public partial class MainWindow
             if (old == PgNet) net.Active = recorder.IsRecording;
         }
         BtnHelp.Foreground = Palette.Accent;
-        var s = section == null ? null : HelpContent.Sections.FirstOrDefault(x => x.Title == section);
+        // Заголовки разделов уже на языке интерфейса: искать и по исходному русскому названию.
+        var s = section == null ? null : HelpContent.Sections.FirstOrDefault(x => x.Title == section || x.Title == L.T(section));
         if (s != null) HelpList.SelectedItem = s;
         else if (HelpList.SelectedItem == null) HelpList.SelectedIndex = 0;
     }
@@ -52,7 +53,8 @@ public partial class MainWindow
     private void HelpList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (HelpList.SelectedItem is not HelpSection s) return;
-        HelpKicker.Source = s.Group + "  ·  " + s.Title.ToUpperInvariant();
+        // Group — русский ключ группировки (переводится только при показе), Title уже переведён.
+        HelpKicker.Source = L.T(s.Group) + "  ·  " + s.Title.ToUpperInvariant();
         HelpBody.Children.Clear();
         HelpBody.Children.Add(new TextBlock { Text = s.Title, Style = (Style)FindResource("Verdict") });
         if (s.Lead.Length > 0) HelpBody.Children.Add(Text(s.Lead, "Body", new Thickness(0, 8, 0, 0)));

@@ -61,7 +61,8 @@ public sealed class DriverEventReport
     /// <summary>Записи до этого времени отмечены как просмотренные и не учитываются; null — отметки нет (или она старше окна).</summary>
     public DateTime? SeenSince;
     /// <summary>«за 30 дней» или «после отметки 19 ноября».</summary>
-    public string Period => SeenSince != null ? LogMarks.SeenText(SeenSince.Value) : "за " + Fmt.Plural(Days, "день", "дня", "дней");
+    public string Period => SeenSince != null ? LogMarks.SeenText(SeenSince.Value)
+        : L.Pick("за " + Fmt.Plural(Days, "день", "дня", "дней"), "in the last " + Fmt.Plural(Days, "день", "дня", "дней"));     // короткий шаблон «за {0}» в словаре поймал бы чужие строки
     public List<DriverEvent> Events = new();
     public int Total => Events.Count;
     public int Resets;              // перезапуски драйвера (Display 4101)
@@ -81,7 +82,6 @@ public static class GpuDriver
 {
     public const int FreshDays = 125;       // около четырёх месяцев
     private const string DisplayClass = "{4d36e968-e325-11ce-bfc1-08002be10318}";
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
     private static PanelHost host;
 
     public static void Init(PanelHost h) => host = h;      // временных изменений служба не делает, убирать после сбоя нечего
@@ -194,7 +194,7 @@ public static class GpuDriver
     /// <summary>«11 дней», «7 месяцев», «2 года».</summary>
     public static string Age(int days)
     {
-        if (days <= 0) return "меньше дня";
+        if (days <= 0) return L.T("меньше дня");
         if (days < 45) return Fmt.Plural(days, "день", "дня", "дней");
         int months = (int)Math.Round(days / 30.44);
         if (months < 24) return Fmt.Plural(months, "месяц", "месяца", "месяцев");
@@ -214,22 +214,22 @@ public static class GpuDriver
     public static string DriverLine(GpuDriverInfo d)
     {
         if (d == null) return "";
-        if (d.Basic) return "Работает базовый драйвер Windows.";
-        var sb = new StringBuilder("Версия " + (d.Version == "" ? "неизвестна" : d.Version));
-        if (d.Date != null) sb.Append(" от " + d.Date.Value.ToString("d MMMM yyyy", Ru));
-        if (d.Installed != null) sb.Append(" · установлен " + Day(d.Installed.Value));
+        if (d.Basic) return L.T("Работает базовый драйвер Windows.");
+        string version = d.Version == "" ? L.T("неизвестна") : d.Version;
+        var sb = new StringBuilder(d.Date != null ? L.F("Версия {0} от {1}", version, LongDate(d.Date.Value)) : L.F("Версия {0}", version));
+        if (d.Installed != null) sb.Append(" · " + L.F("установлен {0}", Day(d.Installed.Value)));
         return sb.ToString();
     }
 
     public static string DriverAdvice(GpuDriverInfo d)
     {
-        if (d == null) return "Windows не сообщила ни об одной видеокарте с драйвером.";
-        string site = d.Vendor == "" ? "производителя видеокарты" : d.Vendor;
-        if (d.Basic) return $"Драйвер производителя не установлен, поэтому игры работают медленно или не запускаются. Скачайте драйвер с сайта {site} и установите его.";
-        if (d.Date == null) return "Дату выпуска драйвера Windows не сообщила, поэтому оценить его возраст нельзя. Сверьте версию с той, что на сайте производителя.";
-        string laptop = d.Integrated ? " Для встроенной графики ноутбука надёжнее брать драйвер с сайта производителя ноутбука." : "";
-        if (d.Fresh) return $"Драйверу {d.AgeText} — он свежий. Обновлять стоит, только если новую версию требует игра или в ней исправили вашу проблему." + laptop;
-        return $"Драйверу {d.AgeText} — стоит обновить: в новых версиях исправляют ошибки и добавляют поддержку свежих игр. Скачайте драйвер с сайта {site} и установите поверх нынешнего." + laptop;
+        if (d == null) return L.T("Windows не сообщила ни об одной видеокарте с драйвером.");
+        string site = d.Vendor == "" ? L.T("производителя видеокарты") : d.Vendor;
+        if (d.Basic) return L.F("Драйвер производителя не установлен, поэтому игры работают медленно или не запускаются. Скачайте драйвер с сайта {0} и установите его.", site);
+        if (d.Date == null) return L.T("Дату выпуска драйвера Windows не сообщила, поэтому оценить его возраст нельзя. Сверьте версию с той, что на сайте производителя.");
+        string laptop = d.Integrated ? " " + L.T("Для встроенной графики ноутбука надёжнее брать драйвер с сайта производителя ноутбука.") : "";
+        if (d.Fresh) return L.F("Драйверу {0} — он свежий. Обновлять стоит, только если новую версию требует игра или в ней исправили вашу проблему.", d.AgeText) + laptop;
+        return L.F("Драйверу {0} — стоит обновить: в новых версиях исправляют ошибки и добавляют поддержку свежих игр. Скачайте драйвер с сайта {1} и установите поверх нынешнего.", d.AgeText, site) + laptop;
     }
 
     /// <summary>
@@ -238,24 +238,24 @@ public static class GpuDriver
     /// </summary>
     public static string Verdict(GpuDriverInfo d, DriverEventReport r, string newer = null, bool latest = false)
     {
-        if (d == null) return "Видеокарта с драйвером не найдена";
-        if (d.Basic) return "Драйвер видеокарты не установлен";
+        if (d == null) return L.T("Видеокарта с драйвером не найдена");
+        if (d.Basic) return L.T("Драйвер видеокарты не установлен");
         bool known = r != null && r.Ok;
-        string errors = !known ? "" : r.Total == 0 ? "сбоев за месяц нет"
-            : r.OnCurrentDriver == 0 ? "на нём сбоев нет"
-            : r.Resets > 0 ? "за месяц он перезапускался " + Fmt.Plural(r.Resets, "раз", "раза", "раз")
-            : "в журнале " + Fmt.Plural(r.Total, "запись", "записи", "записей") + " о сбоях за месяц";
+        string errors = !known ? "" : r.Total == 0 ? L.T("сбоев за месяц нет")
+            : r.OnCurrentDriver == 0 ? L.T("на нём сбоев нет")
+            : r.Resets > 0 ? L.F("за месяц он перезапускался {0}", Times(r.Resets))
+            : L.F("в журнале {0} о сбоях за месяц", Fmt.Plural(r.Total, "запись", "записи", "записей"));
         bool trouble = known && r.Total > 0 && r.OnCurrentDriver != 0;
         if (!string.IsNullOrEmpty(newer))
         {
             // «на нём» здесь читалось бы как о новом драйвере — говорим о нынешнем прямо.
-            string now = known && r.Total > 0 && r.OnCurrentDriver == 0 ? "на нынешнем сбоев нет" : errors;
-            return $"Вышел драйвер {newer}" + (now == "" ? "" : trouble ? "; " + now : ", " + now);
+            string now = known && r.Total > 0 && r.OnCurrentDriver == 0 ? L.T("на нынешнем сбоев нет") : errors;
+            return L.F("Вышел драйвер {0}", newer) + (now == "" ? "" : trouble ? "; " + now : ", " + now);
         }
-        if (latest) return "Драйвер последней версии" + (errors == "" ? "" : trouble ? ", но " + errors : ", " + errors);
-        if (d.Date == null) return errors == "" ? "Возраст драйвера определить не удалось" : "Возраст драйвера неизвестен, " + errors;
-        if (d.Fresh) return errors == "" ? "Драйвер свежий" : "Драйвер свежий, " + (trouble ? "но " : "") + errors;
-        return $"Драйверу {d.AgeText} — стоит обновить" + (errors == "" ? "" : trouble ? "; " + errors : ", " + errors);
+        if (latest) return errors == "" ? L.T("Драйвер последней версии") : trouble ? L.F("Драйвер последней версии, но {0}", errors) : L.F("Драйвер последней версии, {0}", errors);
+        if (d.Date == null) return errors == "" ? L.T("Возраст драйвера определить не удалось") : L.F("Возраст драйвера неизвестен, {0}", errors);
+        if (d.Fresh) return errors == "" ? L.T("Драйвер свежий") : trouble ? L.F("Драйвер свежий, но {0}", errors) : L.F("Драйвер свежий, {0}", errors);
+        return L.F("Драйверу {0} — стоит обновить", d.AgeText) + (errors == "" ? "" : trouble ? "; " + errors : ", " + errors);
     }
 
     // ------------------------------------------------------------------ кэш шейдеров
@@ -267,9 +267,9 @@ public static class GpuDriver
         {
             ("NVIDIA · DirectX", Path.Combine(local, "NVIDIA", "DXCache")),
             ("NVIDIA · OpenGL", Path.Combine(local, "NVIDIA", "GLCache")),
-            ("NVIDIA · прежнее расположение", Path.Combine(local, "NVIDIA Corporation", "NV_Cache")),
-            ("NVIDIA · общий для всех пользователей", Path.Combine(common, "NVIDIA Corporation", "NV_Cache")),
-            ("DirectX (кэш Windows)", Path.Combine(local, "D3DSCache")),
+            (L.T("NVIDIA · прежнее расположение"), Path.Combine(local, "NVIDIA Corporation", "NV_Cache")),
+            (L.T("NVIDIA · общий для всех пользователей"), Path.Combine(common, "NVIDIA Corporation", "NV_Cache")),
+            (L.T("DirectX (кэш Windows)"), Path.Combine(local, "D3DSCache")),
             ("AMD · DirectX", Path.Combine(local, "AMD", "DxCache")),
             ("AMD · DirectX 12", Path.Combine(local, "AMD", "DxcCache")),
             ("AMD · Vulkan", Path.Combine(local, "AMD", "VkCache")),
@@ -312,7 +312,7 @@ public static class GpuDriver
     {
         string game = GameHooks.InGame ? GameHooks.Game : GameDetector.Find()?.Name;
         if (game != null)
-            return (false, $"Сейчас идёт игра{(game == "" ? "" : " (" + game + ")")}: она пользуется этим кэшем. Очистите его после выхода из игры.", 0);
+            return (false, L.F("Сейчас идёт игра{0}: она пользуется этим кэшем. Очистите его после выхода из игры.", game == "" ? "" : " (" + game + ")"), 0);
         var (freed, left) = ClearFolders(CacheRoots().Select(r => r.Path));
         var settings = host?.Settings;
         if (settings != null)
@@ -321,9 +321,9 @@ public static class GpuDriver
             var values = settings.Values;
             if (values != null) lock (values) settings.Save(); else settings.Save();
         }
-        if (freed == 0 && left == 0) return (true, "Кэш уже пуст.", 0);
-        string busy = left > 0 ? $" {Fmt.Size(left)} занято работающими программами — эти файлы пропущены." : "";
-        return (true, $"Освобождено {Fmt.Size(freed)}.{busy} Первые запуски игр будут дольше: кэш строится заново.", freed);
+        if (freed == 0 && left == 0) return (true, L.T("Кэш уже пуст."), 0);
+        string busy = left > 0 ? " " + L.F("{0} занято работающими программами — эти файлы пропущены.", Fmt.Size(left)) : "";
+        return (true, L.F("Освобождено {0}.", Fmt.Size(freed)) + busy + " " + L.T("Первые запуски игр будут дольше: кэш строится заново."), freed);
     }
 
     /// <summary>Удалить содержимое папок (сами папки остаются). Возвращает, сколько освобождено и сколько осталось из-за занятых файлов.</summary>
@@ -398,7 +398,7 @@ public static class GpuDriver
         report.Truncated = truncated;
         report.Seconds = watch.Elapsed.TotalSeconds;
         if (report.Ok) Analyze(report, sessions ?? Array.Empty<GameSession>(), installed);
-        else report.Headline = "Журнал Windows прочитать не удалось";
+        else report.Headline = L.T("Журнал Windows прочитать не удалось");
         return report;
     }
 
@@ -437,7 +437,7 @@ public static class GpuDriver
     {
         try
         {
-            if (e.ProviderName == "Display") return "драйвер " + (e.Properties.Count > 0 ? e.Properties[0].Value as string : "");
+            if (e.ProviderName == "Display") return L.F("драйвер {0}", e.Properties.Count > 0 ? e.Properties[0].Value as string : "");
             foreach (var p in e.Properties)
                 if (p.Value is string s && s.Trim().Length > 0 && !s.StartsWith(@"\Device\", StringComparison.OrdinalIgnoreCase))
                     return s.Trim();
@@ -449,26 +449,30 @@ public static class GpuDriver
     private static (string Key, string Title, string Meaning, int Severity) Classify(string provider, int id)
     {
         if (provider == "Display")
-            return ("reset", "Драйвер перестал отвечать и был перезапущен",
-                "Экран на секунду гас или игра замирала: Windows перезапустила драйвер видеокарты, чтобы компьютер не завис целиком. Это заметный сбой, а не служебная запись.", 3);
+            return ("reset", L.T("Драйвер перестал отвечать и был перезапущен"),
+                L.T("Экран на секунду гас или игра замирала: Windows перезапустила драйвер видеокарты, чтобы компьютер не завис целиком. Это заметный сбой, а не служебная запись."), 3);
         if (provider == "nvlddmkm")
             return id switch
             {
-                13 => ("nv13", "Сбой при обработке графики (событие 13)",
-                    "Драйвер NVIDIA отметил, что одна из команд графики не выполнилась. Чаще всего причина в самой игре или программе, и драйвер после этого работает дальше. " +
-                    "Windows называет запись «ошибкой», но сама по себе она не означает ни падения игры, ни неисправности видеокарты.", 1),
-                14 => ("nv14", "Ошибка в работе видеокарты (событие 14)",
-                    "Драйвер NVIDIA записал ошибку в работе самой видеокарты. Обычно рядом с ней — падение игры или искажения картинки.", 2),
-                153 => ("nv153", "Видеокарта восстановилась после ошибки (событие 153)",
-                    "Драйвер NVIDIA сообщил об ошибке видеокарты и восстановил работу. Часто идёт вместе с перезапуском драйвера.", 2),
-                _ => ("nv" + id, $"Запись драйвера NVIDIA (событие {id})", "Драйвер NVIDIA записал неполадку в своей работе.", 1),
+                13 => ("nv13", L.T("Сбой при обработке графики (событие 13)"),
+                    L.T("Драйвер NVIDIA отметил, что одна из команд графики не выполнилась. Чаще всего причина в самой игре или программе, и драйвер после этого работает дальше.") + " " +
+                    L.T("Windows называет запись «ошибкой», но сама по себе она не означает ни падения игры, ни неисправности видеокарты."), 1),
+                14 => ("nv14", L.T("Ошибка в работе видеокарты (событие 14)"),
+                    L.T("Драйвер NVIDIA записал ошибку в работе самой видеокарты. Обычно рядом с ней — падение игры или искажения картинки."), 2),
+                153 => ("nv153", L.T("Видеокарта восстановилась после ошибки (событие 153)"),
+                    L.T("Драйвер NVIDIA сообщил об ошибке видеокарты и восстановил работу. Часто идёт вместе с перезапуском драйвера."), 2),
+                _ => ("nv" + id, L.F("Запись драйвера NVIDIA (событие {0})", id), L.T("Драйвер NVIDIA записал неполадку в своей работе."), 1),
             };
         string maker = provider.StartsWith("ig", StringComparison.OrdinalIgnoreCase) ? "Intel" : "AMD";
-        return (provider + id, $"Запись драйвера {maker} (событие {id})", $"Драйвер {maker} записал ошибку или предупреждение при работе видеокарты.", 2);
+        return (provider + id, L.F("Запись драйвера {0} (событие {1})", maker, id), L.F("Драйвер {0} записал ошибку или предупреждение при работе видеокарты.", maker), 2);
     }
 
-    private static string Events(int n) => n + " " + (n % 10 == 1 && n % 100 != 11 ? "события" : "событий");     // «из 181 события», «из 184 событий»
-    private static string Day(DateTime t) => t.ToString("d MMMM", Ru);
+    // «из 181 события», «из 184 событий»: родительный падеж — слова «события»/«событий» в словаре могут быть заняты под именительный.
+    private static string Events(int n) => L.Pick(n + " " + (n % 10 == 1 && n % 100 != 11 ? "события" : "событий"), n == 1 ? "1 event" : n + " events");
+    // «3 раза», по-английски «once» / «3 times»: «раз» — и единственное, и множественное число, словарём не различить.
+    private static string Times(int n) => L.Pick(Fmt.Plural(n, "раз", "раза", "раз"), n == 1 ? "once" : n + " times");
+    private static string Day(DateTime t) => t.ToString(L.En ? "MMMM d" : "d MMMM", L.Culture);
+    private static string LongDate(DateTime t) => t.ToString(L.En ? "MMMM d, yyyy" : "d MMMM yyyy", L.Culture);
 
     private static void Analyze(DriverEventReport r, IReadOnlyList<GameSession> sessions, DateTime? installed)
     {
@@ -483,10 +487,10 @@ public static class GpuDriver
         if (ev.Count == 0)
         {
             r.Calm = true;
-            r.Headline = r.SeenSince != null ? $"После отметки {Day(r.SeenSince.Value)} новых сбоев драйвера нет" : $"Сбоев драйвера {r.Period} нет";
+            r.Headline = r.SeenSince != null ? L.F("После отметки {0} новых сбоев драйвера нет", Day(r.SeenSince.Value)) : L.F("Сбоев драйвера {0} нет", r.Period);
             r.Facts.Add(r.SeenSince != null
-                ? "Сбоев и перезапусков драйвера с тех пор не было. Записи до отметки остались в журнале Windows — программа их просто не показывает."
-                : "В журнале Windows нет ни сбоев, ни перезапусков драйвера. Делать ничего не нужно.");
+                ? L.T("Сбоев и перезапусков драйвера с тех пор не было. Записи до отметки остались в журнале Windows — программа их просто не показывает.")
+                : L.T("В журнале Windows нет ни сбоев, ни перезапусков драйвера. Делать ничего не нужно."));
             return;
         }
 
@@ -496,10 +500,10 @@ public static class GpuDriver
             var first = g.First();
             var c = Classify(first.Provider, first.Id);
             var texts = g.Where(e => e.Text != "").GroupBy(e => e.Text).OrderByDescending(t => t.Count()).Take(2).Select(t => t.Key).ToList();
-            string extra = texts.Count == 0 ? "" : "В событии записано: " + string.Join("; ", texts);
+            string extra = texts.Count == 0 ? "" : L.F("В событии записано: {0}", string.Join("; ", texts));
             string hint = c.Meaning;
             if (texts.Any(t => t.Contains("FECS", StringComparison.OrdinalIgnoreCase)))
-                hint += " FECS в тексте события — узел видеокарты, который переключает её между задачами: сбой отмечен в этот момент.";
+                hint += " " + L.T("FECS в тексте события — узел видеокарты, который переключает её между задачами: сбой отмечен в этот момент.");
             r.Kinds.Add(new DriverRow { Title = c.Title, Hint = hint, Extra = extra, Value = g.Count().ToString() });
         }
 
@@ -517,7 +521,7 @@ public static class GpuDriver
                 Value = g.Count().ToString(), Fraction = g.Count() / (double)maxDay,
             });
         }
-        if (days.Count > 10) r.ByDay.Add(new DriverRow { Title = "ещё " + Fmt.Plural(days.Count - 10, "день", "дня", "дней"), Value = days.Skip(10).Sum(g => g.Count()).ToString() });
+        if (days.Count > 10) r.ByDay.Add(new DriverRow { Title = L.F("ещё {0}", Fmt.Plural(days.Count - 10, "день", "дня", "дней")), Value = days.Skip(10).Sum(g => g.Count()).ToString() });
 
         // --- серии: много записей подряд — это одна неполадка, а не столько же отдельных сбоев
         var series = new List<List<DriverEvent>>();
@@ -536,18 +540,20 @@ public static class GpuDriver
             string time = s[0].Time.ToString("HH:mm") == s[^1].Time.ToString("HH:mm") ? s[0].Time.ToString("HH:mm") : $"{s[0].Time:HH:mm}–{s[^1].Time:HH:mm}";
             r.Recent.Add(new DriverRow
             {
-                Value = s[0].Time.ToString("d MMM", Ru) + ", " + time,
-                Title = Classify(top.Provider, top.Id).Title + (s.Count > 1 ? " — " + Fmt.Plural(s.Count, "запись", "записи", "записей") + " подряд" : ""),
-                Extra = text, Hint = game != null ? "во время " + game : "",
+                Value = s[0].Time.ToString(L.En ? "MMM d" : "d MMM", L.Culture) + ", " + time,
+                Title = Classify(top.Provider, top.Id).Title + (s.Count > 1 ? " — " + L.F("{0} подряд", Fmt.Plural(s.Count, "запись", "записи", "записей")) : ""),
+                Extra = text, Hint = game != null ? L.F("во время {0}", game) : "",
             });
         }
         var longest = series.OrderByDescending(s => s.Count).First();
         if (ev.Count >= 6 && series.Count * 3 <= ev.Count)
         {
             var span = longest[^1].Time - longest[0].Time;
-            string howLong = span.TotalMinutes < 1 ? "меньше чем за минуту" : "за " + Fmt.Duration(span);
-            r.Facts.Add($"Записи идут сериями: их {series.Count}, самая длинная — {Fmt.Plural(longest.Count, "запись", "записи", "записей")} {howLong} {Day(longest[0].Time)}. " +
-                        "Серия — это одна неполадка, записанная много раз подряд, а не столько же отдельных сбоев.");
+            string entries = Fmt.Plural(longest.Count, "запись", "записи", "записей");
+            r.Facts.Add((span.TotalMinutes < 1
+                            ? L.F("Записи идут сериями: их {0}, самая длинная — {1} меньше чем за минуту {2}.", series.Count, entries, Day(longest[0].Time))
+                            : L.F("Записи идут сериями: их {0}, самая длинная — {1} за {3} {2}.", series.Count, entries, Day(longest[0].Time), Fmt.Duration(span))) + " " +
+                        L.T("Серия — это одна неполадка, записанная много раз подряд, а не столько же отдельных сбоев."));
         }
 
         // --- нынешний драйвер или прежний
@@ -556,67 +562,67 @@ public static class GpuDriver
             r.OnCurrentDriver = ev.Count(e => e.Time >= installed.Value);
             DateTime windowStart = r.SeenSince ?? DateTime.Now.AddDays(-r.Days);
             if (r.OnCurrentDriver == 0)
-                r.Facts.Add($"Все записи сделаны до {Day(installed.Value)} — дня, когда установлен нынешний драйвер. На нём сбоев не было.");
+                r.Facts.Add(L.F("Все записи сделаны до {0} — дня, когда установлен нынешний драйвер. На нём сбоев не было.", Day(installed.Value)));
             else if (installed.Value > windowStart && r.OnCurrentDriver < ev.Count)
-                r.Facts.Add($"Нынешний драйвер установлен {Day(installed.Value)}: уже на нём — {r.OnCurrentDriver} из {Events(ev.Count)}, остальные — на прежнем.");
+                r.Facts.Add(L.F("Нынешний драйвер установлен {0}: уже на нём — {1} из {2}, остальные — на прежнем.", Day(installed.Value), r.OnCurrentDriver, Events(ev.Count)));
             else if (installed.Value > windowStart)
-                r.Facts.Add($"Все записи появились уже на нынешнем драйвере (установлен {Day(installed.Value)}).");
+                r.Facts.Add(L.F("Все записи появились уже на нынешнем драйвере (установлен {0}).", Day(installed.Value)));
         }
 
         // --- игры
         if (sessions.Count == 0)
-            r.Facts.Add("Программа ещё не записала ни одной игры, поэтому связать записи с играми пока нельзя.");
+            r.Facts.Add(L.T("Программа ещё не записала ни одной игры, поэтому связать записи с играми пока нельзя."));
         else
         {
             DateTime earliest = sessions.Min(s => s.Start);
             var since = ev.Where(e => e.Time >= earliest).ToList();
             var inGame = ev.Where(e => e.Game != null).ToList();
             if (since.Count == 0)
-                r.Facts.Add($"Программа записывает игры с {Day(earliest)}, а все эти события — раньше. Шли ли они во время игры, узнать уже нельзя.");
+                r.Facts.Add(L.F("Программа записывает игры с {0}, а все эти события — раньше. Шли ли они во время игры, узнать уже нельзя.", Day(earliest)));
             else if (inGame.Count == 0)
-                r.Facts.Add($"Из {Events(since.Count)}, появившихся с начала записи игр, ни одно не пришлось на игровую сессию: в играх драйвер работал без сбоев.");
+                r.Facts.Add(L.F("Из {0}, появившихся с начала записи игр, ни одно не пришлось на игровую сессию: в играх драйвер работал без сбоев.", Events(since.Count)));
             else
             {
                 var byGame = inGame.GroupBy(e => e.Game).OrderByDescending(g => g.Count()).ToList();
-                string where = byGame.Count == 1 ? $"{inGame.Count} — во время {byGame[0].Key}"
-                    : $"{inGame.Count} — во время игр: " + string.Join(", ", byGame.Take(4).Select(g => $"{g.Key} — {g.Count()}"));
-                string rest = since.Count < ev.Count ? $" Ещё {ev.Count - since.Count} — до того, как программа начала записывать игры." : "";
-                r.Facts.Add($"Из {Events(ev.Count)} {where}.{rest}");
+                string where = byGame.Count == 1 ? L.F("{0} — во время {1}", inGame.Count, byGame[0].Key)
+                    : L.F("{0} — во время игр: {1}", inGame.Count, string.Join(", ", byGame.Take(4).Select(g => $"{g.Key} — {g.Count()}")));
+                string rest = since.Count < ev.Count ? " " + L.F("Ещё {0} — до того, как программа начала записывать игры.", ev.Count - since.Count) : "";
+                r.Facts.Add(L.F("Из {0} {1}.", Events(ev.Count), where) + rest);
             }
         }
-        if (r.Truncated) r.Facts.Add("Журнал большой, и программа прочитала его не целиком: показаны самые свежие записи.");
+        if (r.Truncated) r.Facts.Add(L.T("Журнал большой, и программа прочитала его не целиком: показаны самые свежие записи."));
 
         // --- вывод
         bool onlyMild = ev.All(e => Classify(e.Provider, e.Id).Severity <= 1);
         r.Calm = r.OnCurrentDriver == 0 || onlyMild && r.Resets == 0 && series.Count <= 3;
         string records = Fmt.Plural(ev.Count, "запись", "записи", "записей");
-        r.Headline = r.OnCurrentDriver == 0 ? $"На нынешнем драйвере сбоев нет, а {records} — от прежнего"
-            : r.Resets > 0 ? $"Драйвер перезапускался {Fmt.Plural(r.Resets, "раз", "раза", "раз")} {r.Period}"
-            : onlyMild ? $"{records} драйвера {r.Period}, перезапусков не было"
-            : $"{records} о сбоях драйвера {r.Period}";
+        r.Headline = r.OnCurrentDriver == 0 ? L.F("На нынешнем драйвере сбоев нет, а {0} — от прежнего", records)
+            : r.Resets > 0 ? L.F("Драйвер перезапускался {0} {1}", Times(r.Resets), r.Period)
+            : onlyMild ? L.F("{0} драйвера {1}, перезапусков не было", records, r.Period)
+            : L.F("{0} о сбоях драйвера {1}", records, r.Period);
         if (r.SeenSince != null)
-            r.Facts.Insert(0, $"Учтены только записи после {Day(r.SeenSince.Value)}: более ранние вы отметили как просмотренные. В журнале Windows они остались.");
+            r.Facts.Insert(0, L.F("Учтены только записи после {0}: более ранние вы отметили как просмотренные. В журнале Windows они остались.", Day(r.SeenSince.Value)));
         r.StepsLead = r.Calm
-            ? "Сейчас ничего делать не нужно. Если записи появятся снова или игры начнут падать, пройдите шаги по порядку и после каждого проверяйте, прекратились ли записи:"
-            : "Пройдите шаги по порядку. После каждого поиграйте день-два и проверьте здесь, появляются ли новые записи:";
+            ? L.T("Сейчас ничего делать не нужно. Если записи появятся снова или игры начнут падать, пройдите шаги по порядку и после каждого проверяйте, прекратились ли записи:")
+            : L.T("Пройдите шаги по порядку. После каждого поиграйте день-два и проверьте здесь, появляются ли новые записи:");
     }
 
     private static List<DriverRow> Steps(IReadOnlyList<GameSession> sessions)
     {
         double maxTemp = sessions.Take(10).Select(s => s.MaxTemp).DefaultIfEmpty(0).Max();
-        string temp = maxTemp <= 0 ? "Температуру видеокарты в игре программа показывает в отчёте о сессии: выше 85 °C — пора чистить от пыли."
-            : maxTemp >= 85 ? $"В последних играх видеокарта нагревалась до {maxTemp:0} °C — это много: почистите её от пыли и проверьте вентиляторы."
-            : $"В последних играх видеокарта нагревалась не выше {maxTemp:0} °C — перегрева нет.";
+        string temp = maxTemp <= 0 ? L.T("Температуру видеокарты в игре программа показывает в отчёте о сессии: выше 85 °C — пора чистить от пыли.")
+            : maxTemp >= 85 ? L.F("В последних играх видеокарта нагревалась до {0:0} °C — это много: почистите её от пыли и проверьте вентиляторы.", maxTemp)
+            : L.F("В последних играх видеокарта нагревалась не выше {0:0} °C — перегрева нет.", maxTemp);
         return new List<DriverRow>
         {
-            new() { Value = "1", Title = "Обновить драйвер или переустановить его начисто",
-                Hint = "При установке выберите выборочный режим и отметьте «чистую установку» (у AMD — «сброс до заводских настроек»): старые файлы драйвера заменятся целиком. Затем очистите кэш шейдеров." },
-            new() { Value = "2", Title = "Снять разгон",
-                Hint = "Верните видеокарту, процессор и память к штатным частотам и напряжениям — в программах разгона и в BIOS. Нестабильный разгон — частая причина таких записей." },
-            new() { Value = "3", Title = "Проверить питание и температуру видеокарты",
-                Hint = "Кабели питания видеокарты должны быть вставлены до щелчка, а каждый разъём — подключён отдельным кабелем от блока питания. " + temp },
-            new() { Value = "4", Title = "Отключить оверлеи",
-                Hint = "Оверлеи Discord, Steam, приложения производителя видеокарты и программы записи экрана встраиваются в игру и нередко вызывают такие сбои. Выключите их на время проверки." },
+            new() { Value = "1", Title = L.T("Обновить драйвер или переустановить его начисто"),
+                Hint = L.T("При установке выберите выборочный режим и отметьте «чистую установку» (у AMD — «сброс до заводских настроек»): старые файлы драйвера заменятся целиком. Затем очистите кэш шейдеров.") },
+            new() { Value = "2", Title = L.T("Снять разгон"),
+                Hint = L.T("Верните видеокарту, процессор и память к штатным частотам и напряжениям — в программах разгона и в BIOS. Нестабильный разгон — частая причина таких записей.") },
+            new() { Value = "3", Title = L.T("Проверить питание и температуру видеокарты"),
+                Hint = L.T("Кабели питания видеокарты должны быть вставлены до щелчка, а каждый разъём — подключён отдельным кабелем от блока питания.") + " " + temp },
+            new() { Value = "4", Title = L.T("Отключить оверлеи"),
+                Hint = L.T("Оверлеи Discord, Steam, приложения производителя видеокарты и программы записи экрана встраиваются в игру и нередко вызывают такие сбои. Выключите их на время проверки.") },
         };
     }
 

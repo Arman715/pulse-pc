@@ -109,7 +109,14 @@ if ($key -and ($embedded.X -ne $key.X -or $embedded.Y -ne $key.Y)) {
 $mode = if ($NoElevate) { 'noelevate' } else { 'release' }
 if ($ReadyToRun) { $mode += '-r2r' }
 $artifacts = Join-Path $env:LOCALAPPDATA "PulsePC-release\$mode"
+# Фоновый компилятор (VBCSCompiler, узлы MSBuild) держит файлы прошлой сборки: если папка не удалится целиком,
+# в сборку попадёт старый код разметки (ошибки «имя … не существует» для новых элементов окна).
+dotnet build-server shutdown 2>&1 | Out-Null
 Remove-Item $artifacts -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $artifacts) {
+    $artifacts = Join-Path $env:LOCALAPPDATA ("PulsePC-release\$mode-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    Write-Host "Прошлая сборка занята — собираю в новую папку $artifacts"
+}
 
 function Publish([string]$name, [bool]$extractNatives, [string[]]$more) {
     $out = Join-Path $artifacts "$name-out"

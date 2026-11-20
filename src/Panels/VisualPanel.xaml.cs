@@ -24,6 +24,7 @@ public partial class VisualPanel : UserControl, ISystemPanel
     private PanelHost host;
     private readonly ObservableCollection<FxRow> rows = new();
     private bool loaded, busy, filling;
+    private string changedNote;     // подпись «Изменено: …», которую Refresh снимает сам
 
     public VisualPanel()
     {
@@ -62,15 +63,15 @@ public partial class VisualPanel : UserControl, ISystemPanel
     {
         if (state == null)
         {
-            State.Text = "Оформление прочитать не удалось";
-            Result.Text = "Windows не отдала настройки эффектов. Откройте раздел ещё раз.";
+            State.Text = L.T("Оформление прочитать не удалось");
+            Result.Text = L.T("Windows не отдала настройки эффектов. Откройте раздел ещё раз.");
             return;
         }
         filling = true;
         for (int i = 0; i < rows.Count; i++) { rows[i].Current = state[i]; rows[i].Desired = state[i]; }
         filling = false;
         loaded = true;
-        State.Text = "Сейчас: " + VisualFx.Describe(state);
+        State.Text = L.F("Сейчас: {0}", VisualFx.Describe(state));
         BtnRestore.IsEnabled = host.Admin && backup;
         Refresh();
     }
@@ -90,17 +91,17 @@ public partial class VisualPanel : UserControl, ISystemPanel
         ProfileSpeed.IsChecked = profile == FxProfile.Speed;
         ProfileNote.Text = profile switch
         {
-            FxProfile.Pretty => "«Красиво»: включены все эффекты.",
-            FxProfile.Balance => "«Баланс»: остаётся то, что помогает читать и не путать окна, — сглаживание шрифтов, эскизы, содержимое окна при перетаскивании, тени окон и просмотр рабочего стола. Прозрачность и анимации выключены.",
-            FxProfile.Speed => "«Скорость»: выключено всё, кроме сглаживания шрифтов, — без него текст трудно читать.",
-            _ => "Свой набор: переключатели не совпадают ни с одним профилем.",
+            FxProfile.Pretty => L.T("«Красиво»: включены все эффекты."),
+            FxProfile.Balance => L.T("«Баланс»: остаётся то, что помогает читать и не путать окна, — сглаживание шрифтов, эскизы, содержимое окна при перетаскивании, тени окон и просмотр рабочего стола. Прозрачность и анимации выключены."),
+            FxProfile.Speed => L.T("«Скорость»: выключено всё, кроме сглаживания шрифтов, — без него текст трудно читать."),
+            _ => L.T("Свой набор: переключатели не совпадают ни с одним профилем."),
         };
 
         int changed = rows.Count(r => r.Desired != r.Current);
         BtnApply.IsEnabled = can && changed > 0;
         if (loaded && !busy && changed > 0)
-            Result.Text = $"Изменено: {changed} из {rows.Count}. Вступит в силу после «Применить».";
-        else if (loaded && !busy && Result.Text.StartsWith("Изменено:")) Result.Text = "";
+            Result.Text = changedNote = L.F("Изменено: {0} из {1}. Вступит в силу после «Применить».", changed, rows.Count);
+        else if (loaded && !busy && changedNote != null && Result.Text == changedNote) Result.Text = "";
     }
 
     private void Profile_Click(object sender, RoutedEventArgs e)
@@ -118,18 +119,18 @@ public partial class VisualPanel : UserControl, ISystemPanel
         if (busy || host?.Admin != true) return;
         if (GameHooks.InGame)
         {
-            Result.Text = "Идёт игра. При смене оформления Windows перерисовывает все окна, и игра может дёрнуться. Сделайте это после игры.";
+            Result.Text = L.T("Идёт игра. При смене оформления Windows перерисовывает все окна, и игра может дёрнуться. Сделайте это после игры.");
             return;
         }
         var desired = rows.Select(r => r.Desired).ToArray();
-        Run("Применяю…", () =>
+        Run(L.T("Применяю…"), () =>
         {
             var (changed, failed) = VisualFx.Apply(desired);
             if (failed.Count > 0)
-                return $"Не удалось изменить: {string.Join("; ", failed)}. Попробуйте ещё раз; если не выйдет — выйдите из Windows и войдите снова.";
+                return L.F("Не удалось изменить: {0}. Попробуйте ещё раз; если не выйдет — выйдите из Windows и войдите снова.", string.Join("; ", failed));
             return changed == 0
-                ? "Менять нечего: эффекты уже так и настроены."
-                : $"Готово, изменено эффектов: {changed}. Эскизы, панель задач и просмотр рабочего стола могут обновиться только после повторного открытия окон или нового входа в Windows.";
+                ? L.T("Менять нечего: эффекты уже так и настроены.")
+                : L.F("Готово, изменено эффектов: {0}. Эскизы, панель задач и просмотр рабочего стола могут обновиться только после повторного открытия окон или нового входа в Windows.", changed);
         });
     }
 
@@ -138,10 +139,10 @@ public partial class VisualPanel : UserControl, ISystemPanel
         if (busy || host?.Admin != true) return;
         if (GameHooks.InGame)
         {
-            Result.Text = "Идёт игра. Верните оформление после неё.";
+            Result.Text = L.T("Идёт игра. Верните оформление после неё.");
             return;
         }
-        Run("Возвращаю…", () => VisualFx.Restore().Message);
+        Run(L.T("Возвращаю…"), () => VisualFx.Restore().Message);
     }
 
     /// <summary>Действие в фоне с линией занятости; после него состояние перечитывается.</summary>
@@ -158,7 +159,7 @@ public partial class VisualPanel : UserControl, ISystemPanel
             bool[] state = null;
             bool backup = false;
             try { message = action(); }
-            catch (Exception ex) { message = "Не удалось: " + ex.Message; }
+            catch (Exception ex) { message = L.F("Не удалось: {0}", ex.Message); }
             try { state = VisualFx.Read(); backup = VisualFx.HasBackup; } catch { }
             host.Ui(() =>
             {

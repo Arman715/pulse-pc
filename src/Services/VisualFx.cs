@@ -73,66 +73,66 @@ public static class VisualFx
     {
         new FxEffect
         {
-            Title = "Анимация окон при сворачивании и разворачивании",
-            Hint = "Окно плавно уходит в панель задач и возвращается; без неё сворачивается сразу.",
+            Title = L.T("Анимация окон при сворачивании и разворачивании"),
+            Hint = L.T("Окно плавно уходит в панель задач и возвращается; без неё сворачивается сразу."),
             Slots = new[] { new FxSlot("minanimate", FxKind.Animation, 0x0048, 0x0049) },
         },
         new FxEffect
         {
-            Title = "Анимации внутри окон",
-            Hint = "Плавное появление кнопок, списков и страниц внутри программ; в «Параметрах» это переключатель «Эффекты анимации».",
+            Title = L.T("Анимации внутри окон"),
+            Hint = L.T("Плавное появление кнопок, списков и страниц внутри программ; в «Параметрах» это переключатель «Эффекты анимации»."),
             Slots = new[] { new FxSlot("clientanim", FxKind.SpiBool, 0x1042, 0x1043) },
         },
         new FxEffect
         {
-            Title = "Анимации панели задач",
-            Hint = "Плавное появление значков и эскизов окон на панели задач.",
+            Title = L.T("Анимации панели задач"),
+            Hint = L.T("Плавное появление значков и эскизов окон на панели задач."),
             Slots = new[] { new FxSlot("taskbaranim", FxKind.Reg, Path: Advanced, Name: "TaskbarAnimations") },
         },
         new FxEffect
         {
-            Title = "Прозрачность",
-            Hint = "Полупрозрачные панель задач, меню «Пуск» и окна; размытие фона немного нагружает видеокарту.",
+            Title = L.T("Прозрачность"),
+            Hint = L.T("Полупрозрачные панель задач, меню «Пуск» и окна; размытие фона немного нагружает видеокарту."),
             Slots = new[] { new FxSlot("transparency", FxKind.Reg, Path: @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", Name: "EnableTransparency") },
         },
         new FxEffect
         {
-            Title = "Тени под окнами",
-            Hint = "Тень по краю окна помогает отличать окна друг от друга.",
+            Title = L.T("Тени под окнами"),
+            Hint = L.T("Тень по краю окна помогает отличать окна друг от друга."),
             InBalance = true,
             Slots = new[] { new FxSlot("dropshadow", FxKind.SpiBool, 0x1024, 0x1025) },
         },
         new FxEffect
         {
-            Title = "Тень под указателем",
-            Hint = "Небольшая тень у стрелки мыши.",
+            Title = L.T("Тень под указателем"),
+            Hint = L.T("Небольшая тень у стрелки мыши."),
             Slots = new[] { new FxSlot("cursorshadow", FxKind.SpiBool, 0x101A, 0x101B, Master: true) },
         },
         new FxEffect
         {
-            Title = "Сглаживание шрифтов",
-            Hint = "Делает края букв ровными; без него текст рваный и читать тяжело, поэтому оно остаётся во всех наборах.",
+            Title = L.T("Сглаживание шрифтов"),
+            Hint = L.T("Делает края букв ровными; без него текст рваный и читать тяжело, поэтому оно остаётся во всех наборах."),
             InBalance = true, InSpeed = true,
             Slots = new[] { new FxSlot("fontsmoothing", FxKind.SpiUi, 0x004A, 0x004B) },
         },
         new FxEffect
         {
-            Title = "Эскизы вместо значков",
-            Hint = "В папках видны уменьшенные картинки и кадры видео, а не одинаковые значки.",
+            Title = L.T("Эскизы вместо значков"),
+            Hint = L.T("В папках видны уменьшенные картинки и кадры видео, а не одинаковые значки."),
             InBalance = true,
             Slots = new[] { new FxSlot("iconsonly", FxKind.Reg, Path: Advanced, Name: "IconsOnly", On: 0, Off: 1, Missing: 0) },
         },
         new FxEffect
         {
-            Title = "Содержимое окна при перетаскивании",
-            Hint = "Окно двигается целиком; без этого при перетаскивании видна только рамка.",
+            Title = L.T("Содержимое окна при перетаскивании"),
+            Hint = L.T("Окно двигается целиком; без этого при перетаскивании видна только рамка."),
             InBalance = true,
             Slots = new[] { new FxSlot("dragfull", FxKind.SpiUi, 0x0026, 0x0025) },
         },
         new FxEffect
         {
-            Title = "Плавная прокрутка списков",
-            Hint = "Списки прокручиваются и раскрываются плавно, а не рывком.",
+            Title = L.T("Плавная прокрутка списков"),
+            Hint = L.T("Списки прокручиваются и раскрываются плавно, а не рывком."),
             Slots = new[]
             {
                 new FxSlot("listscroll", FxKind.SpiBool, 0x1006, 0x1007, Master: true),
@@ -141,8 +141,8 @@ public static class VisualFx
         },
         new FxEffect
         {
-            Title = "Затухание меню и подсказок",
-            Hint = "Меню и всплывающие подсказки появляются и исчезают плавно, а не сразу.",
+            Title = L.T("Затухание меню и подсказок"),
+            Hint = L.T("Меню и всплывающие подсказки появляются и исчезают плавно, а не сразу."),
             Slots = new[]
             {
                 new FxSlot("menuanim", FxKind.SpiBool, 0x1002, 0x1003, Master: true),
@@ -152,8 +152,8 @@ public static class VisualFx
         },
         new FxEffect
         {
-            Title = "Просмотр рабочего стола (Aero Peek)",
-            Hint = "Показывает рабочий стол сквозь окна, когда указатель стоит на правом крае панели задач.",
+            Title = L.T("Просмотр рабочего стола (Aero Peek)"),
+            Hint = L.T("Показывает рабочий стол сквозь окна, когда указатель стоит на правом крае панели задач."),
             InBalance = true,
             Slots = new[] { new FxSlot("peek", FxKind.Reg, Path: @"Software\Microsoft\Windows\DWM", Name: "EnableAeroPeek") },
         },
@@ -185,10 +185,10 @@ public static class VisualFx
 
     public static string ProfileName(FxProfile p) => p switch
     {
-        FxProfile.Pretty => "Красиво",
-        FxProfile.Balance => "Баланс",
-        FxProfile.Speed => "Скорость",
-        _ => "свой набор",
+        FxProfile.Pretty => L.T("Красиво"),
+        FxProfile.Balance => L.T("Баланс"),
+        FxProfile.Speed => L.T("Скорость"),
+        _ => L.T("свой набор"),
     };
 
     /// <summary>Положения переключателей для набора (по порядку Effects).</summary>
@@ -207,8 +207,8 @@ public static class VisualFx
     public static string Describe(IReadOnlyList<bool> state)
     {
         var p = Match(state);
-        string name = p == FxProfile.Custom ? "свой набор" : $"профиль «{ProfileName(p)}»";
-        return $"{name}, включено {state.Count(x => x)} из {state.Count}";
+        string name = p == FxProfile.Custom ? L.T("свой набор") : L.F("профиль «{0}»", ProfileName(p));
+        return L.F("{0}, включено {1} из {2}", name, state.Count(x => x), state.Count);
     }
 
     // ---------- Чтение ----------
@@ -299,9 +299,9 @@ public static class VisualFx
     {
         lock (Gate)
         {
-            if (!File.Exists(backupFile)) return (false, "Копии «как было» нет: программа ещё ничего не меняла.");
+            if (!File.Exists(backupFile)) return (false, L.T("Копии «как было» нет: программа ещё ничего не меняла."));
             var saved = LoadBackup(backupFile);
-            if (saved.Count == 0) return (false, "Копия «как было» не читается. Настройте эффекты вручную и нажмите «Применить».");
+            if (saved.Count == 0) return (false, L.T("Копия «как было» не читается. Настройте эффекты вручную и нажмите «Применить»."));
 
             var written = new List<string>();
             int failed = 0;
@@ -314,16 +314,17 @@ public static class VisualFx
                 if (backend.Write(slot, was)) written.Add(slot.Key); else failed++;
             }
             if (written.Count > 0) backend.Notify(written);
-            if (failed > 0) return (false, $"Не удалось вернуть {Fmt.Plural(failed, "значение", "значения", "значений")}. Копия сохранена, попробуйте ещё раз.");
+            if (failed > 0) return (false, L.F("Не удалось вернуть {0}. Копия сохранена, попробуйте ещё раз.", Fmt.Plural(failed, "значение", "значения", "значений")));
             File.Delete(backupFile);
-            return (true, "Оформление возвращено таким, каким было до первого изменения.");
+            return (true, L.T("Оформление возвращено таким, каким было до первого изменения."));
         }
     }
 
     private static void SaveBackup(string file, Dictionary<string, int?> raw)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(file));
-        File.WriteAllLines(file, raw.Select(p => $"{p.Key}={(p.Value == null ? "-" : p.Value.Value.ToString())}"));
+        // Через временный файл: обрыв посреди записи не оставит обрезанную копию, по которой «Вернуть» вернуло бы не всё.
+        AtomicFile.WriteAllText(file, string.Join(Environment.NewLine, raw.Select(p => $"{p.Key}={(p.Value == null ? "-" : p.Value.Value.ToString())}")) + Environment.NewLine);
     }
 
     private static Dictionary<string, int?> LoadBackup(string file)

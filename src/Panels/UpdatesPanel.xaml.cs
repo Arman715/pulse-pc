@@ -49,18 +49,18 @@ public partial class UpdatesPanel : UserControl, ISystemPanel
     {
         if (st == null)
         {
-            State.Text = "Не удалось прочитать состояние обновлений.";
+            State.Text = L.T("Не удалось прочитать состояние обновлений.");
             NowList.ItemsSource = null;
             GuardToggle.IsEnabled = false; NoRebootToggle.IsEnabled = false;
             return;
         }
 
         bool holding = st.InGame && (st.Services.Any(x => x.Held) || st.HoursShifted);
-        State.Text = holding ? "Идёт игра: обновления приостановлены."
-            : st.Guard && st.NoReboot ? "В игре обновления и перезагрузки ставятся на паузу."
-            : st.Guard ? "В игре обновления ставятся на паузу."
-            : st.NoReboot ? "В игре Windows не перезагрузит компьютер."
-            : "Защита от обновлений во время игры выключена.";
+        State.Text = holding ? L.T("Идёт игра: обновления приостановлены.")
+            : st.Guard && st.NoReboot ? L.T("В игре обновления и перезагрузки ставятся на паузу.")
+            : st.Guard ? L.T("В игре обновления ставятся на паузу.")
+            : st.NoReboot ? L.T("В игре Windows не перезагрузит компьютер.")
+            : L.T("Защита от обновлений во время игры выключена.");
 
         GuardToggle.IsChecked = st.Guard;
         NoRebootToggle.IsChecked = st.NoReboot;
@@ -68,7 +68,7 @@ public partial class UpdatesPanel : UserControl, ISystemPanel
         // Период задан политикой организации: значения пользователя не действуют, переключатель был бы обманом.
         NoRebootToggle.IsEnabled = host.Admin && !st.HoursPolicy;
 
-        if (st.Last == null) { LastText.Text = "Ещё не было."; LastWhen.Text = ""; }
+        if (st.Last == null) { LastText.Text = L.T("Ещё не было."); LastWhen.Text = ""; }
         else { LastText.Text = st.LastText; LastWhen.Text = When(st.Last.Value); }
 
         var now = new List<Fact>();
@@ -77,26 +77,26 @@ public partial class UpdatesPanel : UserControl, ISystemPanel
         bool loaderOff = st.Services.Any(x => x.Name == "DoSvc" && x.State is "stopped" or "missing");
         now.Add(new Fact
         {
-            Title = "Загрузка обновлений",
-            Hint = st.Downloading < 0 ? "Windows не ответила, качает ли она что-нибудь."
-                : st.Downloading == 0 ? (loaderOff ? "Служба загрузки не запущена, Windows сейчас ничего не качает." : "Windows сейчас ничего не качает.")
-                : $"Windows качает {Fmt.Plural(st.Downloading, "файл", "файла", "файлов")}, осталось {Fmt.Size(st.DownloadLeftBytes)}. В игре это отнимает скорость интернета и нагружает диск.",
-            Value = st.Downloading < 0 ? "не удалось узнать" : st.Downloading == 0 ? "не идёт" : "идёт",
+            Title = L.T("Загрузка обновлений"),
+            Hint = st.Downloading < 0 ? L.T("Windows не ответила, качает ли она что-нибудь.")
+                : st.Downloading == 0 ? (loaderOff ? L.T("Служба загрузки не запущена, Windows сейчас ничего не качает.") : L.T("Windows сейчас ничего не качает."))
+                : L.F("Windows качает {0}, осталось {1}. В игре это отнимает скорость интернета и нагружает диск.", Fmt.Plural(st.Downloading, "файл", "файла", "файлов"), Fmt.Size(st.DownloadLeftBytes)),
+            Value = st.Downloading < 0 ? L.T("не удалось узнать") : st.Downloading == 0 ? L.T("не идёт") : L.T("идёт"),
         });
         now.Add(new Fact
         {
-            Title = "Перезагрузка для установки",
-            Hint = st.RebootPending ? "Обновления скачаны и ждут перезагрузки. Перезагрузите компьютер сами, когда будет удобно, — тогда Windows не выберет время за вас."
-                : "Для установки обновлений перезагрузка не нужна.",
-            Value = st.RebootPending ? "нужна" : "не нужна",
+            Title = L.T("Перезагрузка для установки"),
+            Hint = st.RebootPending ? L.T("Обновления скачаны и ждут перезагрузки. Перезагрузите компьютер сами, когда будет удобно, — тогда Windows не выберет время за вас.")
+                : L.T("Для установки обновлений перезагрузка не нужна."),
+            Value = st.RebootPending ? L.T("нужна") : L.T("не нужна"),
         });
         now.Add(new Fact
         {
-            Title = "Период активности",
-            Hint = "В эти часы Windows не перезагружает компьютер ради обновлений."
-                   + (st.HoursShifted ? $" Сейчас сдвинут на время игры; был {st.HoursWas}." : "")
-                   + (st.HoursPolicy ? " Задан политикой организации — программа его не меняет." : ""),
-            Value = st.HoursStart == null || st.HoursEnd == null ? "не задан" : $"{st.HoursStart:00}:00–{st.HoursEnd:00}:00",
+            Title = L.T("Период активности"),
+            Hint = L.T("В эти часы Windows не перезагружает компьютер ради обновлений.")
+                   + (st.HoursShifted ? " " + L.F("Сейчас сдвинут на время игры; был {0}.", st.HoursWas) : "")
+                   + (st.HoursPolicy ? " " + L.T("Задан политикой организации — программа его не меняет.") : ""),
+            Value = st.HoursStart == null || st.HoursEnd == null ? L.T("не задан") : $"{st.HoursStart:00}:00–{st.HoursEnd:00}:00",
         });
         NowList.ItemsSource = now;
     }
@@ -106,8 +106,9 @@ public partial class UpdatesPanel : UserControl, ISystemPanel
         if (host == null || !host.Admin) return;
         bool on = GuardToggle.IsChecked == true;
         UpdateGuard.SetGuard(host, on);
-        Say(!on ? "Службы обновлений во время игры больше не останавливаются." + Tail()
-            : "Включено. Службы обновлений будут останавливаться " + (GameHooks.InGame ? "со следующего запуска игры." : "при запуске игры и запускаться после неё."));
+        Say(!on ? L.T("Службы обновлений во время игры больше не останавливаются.") + Tail()
+            : GameHooks.InGame ? L.T("Включено. Службы обновлений будут останавливаться со следующего запуска игры.")
+            : L.T("Включено. Службы обновлений будут останавливаться при запуске игры и запускаться после неё."));
     }
 
     private void NoRebootToggle_Click(object sender, RoutedEventArgs e)
@@ -115,8 +116,9 @@ public partial class UpdatesPanel : UserControl, ISystemPanel
         if (host == null || !host.Admin) return;
         bool on = NoRebootToggle.IsChecked == true;
         UpdateGuard.SetNoReboot(host, on);
-        Say(!on ? "Период активности на время игры больше не сдвигается." + Tail()
-            : "Включено. Период активности будет сдвигаться " + (GameHooks.InGame ? "со следующего запуска игры." : "при запуске игры и возвращаться после неё."));
+        Say(!on ? L.T("Период активности на время игры больше не сдвигается.") + Tail()
+            : GameHooks.InGame ? L.T("Включено. Период активности будет сдвигаться со следующего запуска игры.")
+            : L.T("Включено. Период активности будет сдвигаться при запуске игры и возвращаться после неё."));
     }
 
     /// <summary>Итог действия под переключателями; пока сказать нечего, строка места не занимает.</summary>
@@ -127,14 +129,13 @@ public partial class UpdatesPanel : UserControl, ISystemPanel
     }
 
     // Выключили посреди игры: то, что уже остановлено и сдвинуто, вернётся, когда игра закроется.
-    private static string Tail() => GameHooks.InGame ? " То, что уже приостановлено, вернётся, когда вы закроете игру." : "";
-
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
+    private static string Tail() => GameHooks.InGame ? " " + L.T("То, что уже приостановлено, вернётся, когда вы закроете игру.") : "";
 
     /// <summary>«сегодня, 21:40», «вчера, 09:05», «18 ноября, 21:40».</summary>
     private static string When(DateTime t)
     {
         int days = (DateTime.Today - t.Date).Days;
-        return days == 0 ? "сегодня, " + t.ToString("HH:mm") : days == 1 ? "вчера, " + t.ToString("HH:mm") : t.ToString("d MMMM, HH:mm", Ru);
+        return days == 0 ? L.F("сегодня, {0:HH:mm}", t) : days == 1 ? L.F("вчера, {0:HH:mm}", t)
+            : t.ToString(L.En ? "MMMM d, HH:mm" : "d MMMM, HH:mm", L.Culture);
     }
 }

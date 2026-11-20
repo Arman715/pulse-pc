@@ -60,7 +60,7 @@ public static class BootPerf
                     }
                     else
                     {
-                        string kind = e.Id switch { 101 => "программа", 102 => "драйвер", 103 => "служба", 109 => "устройство", _ => null };
+                        string kind = e.Id switch { 101 => L.T("программа"), 102 => L.T("драйвер"), 103 => L.T("служба"), 109 => L.T("устройство"), _ => null };
                         if (kind == null) continue;
                         string name = Str(data, "FriendlyName");
                         if (string.IsNullOrWhiteSpace(name)) name = Str(data, "Name");
@@ -81,8 +81,8 @@ public static class BootPerf
             }
             report.Boots.Reverse();     // по порядку времени: старые слева
         }
-        catch (UnauthorizedAccessException) { report.Error = "Подробности загрузки Windows видно только с правами администратора."; }
-        catch (Exception ex) { report.Error = "Не удалось прочитать журнал загрузки: " + ex.Message; }
+        catch (UnauthorizedAccessException) { report.Error = L.T("Подробности загрузки Windows видно только с правами администратора."); }
+        catch (Exception ex) { report.Error = L.F("Не удалось прочитать журнал загрузки: {0}", ex.Message); }
         return report;
     }
 

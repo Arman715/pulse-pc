@@ -47,21 +47,21 @@ public partial class PhonePanel : UserControl, ISystemPanel
         var s = PhoneServer.Snapshot();
         if (!switching) Switch.IsChecked = s.Enabled;
 
-        State.Text = !s.Enabled ? "Панель выключена."
-            : !s.Running ? (s.Problem.Length > 0 ? "Панель включена, но не запустилась." : "Панель запускается…")
-            : s.Devices > 0 ? $"Панель работает, подключено устройств: {s.Devices}."
-            : "Панель работает, телефон пока не подключён.";
+        State.Text = !s.Enabled ? L.T("Панель выключена.")
+            : !s.Running ? (s.Problem.Length > 0 ? L.T("Панель включена, но не запустилась.") : L.T("Панель запускается…"))
+            : s.Devices > 0 ? L.F("Панель работает, подключено устройств: {0}.", s.Devices)
+            : L.T("Панель работает, телефон пока не подключён.");
 
         string result = s.Enabled && !s.Running && s.Problem.Length > 0 ? s.Problem
             : note.Length == 0 && s.Running && s.KeyRenewed
-                ? "Ключ в адресе стал длиннее (12 знаков вместо 6) — так его не подобрать перебором. Старый QR-код и значок на телефоне больше не открываются: наведите камеру на новый код ниже."
-                    + " Профиль для iPhone тоже нужно сохранить и поставить заново."
+                ? L.T("Ключ в адресе стал длиннее (12 знаков вместо 6) — так его не подобрать перебором. Старый QR-код и значок на телефоне больше не открываются: наведите камеру на новый код ниже. Профиль для iPhone тоже нужно сохранить и поставить заново.")
                 : note;
         Result.Text = result;
         Result.Foreground = result == note ? Palette.Ink3 : Palette.Warn;
         Result.Visibility = result.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         AddressBlock.Visibility = s.Running ? Visibility.Visible : Visibility.Collapsed;
+        ShowTrouble(s);
         if (!s.Running) { shownUrl = ""; return; }
 
         if (s.Url != shownUrl)
@@ -72,21 +72,39 @@ public partial class PhonePanel : UserControl, ISystemPanel
             Qr.Matrix = code;
             QrFrame.Visibility = code != null ? Visibility.Visible : Visibility.Collapsed;
             HowTo.Text = code != null
-                ? "Наведите камеру телефона на код или наберите адрес в браузере телефона целиком:"
-                : "Наберите адрес в браузере телефона целиком:";
+                ? L.T("Наведите камеру телефона на код или наберите адрес в браузере телефона целиком:")
+                : L.T("Наберите адрес в браузере телефона целиком:");
         }
-        Devices.Text = s.Devices == 0 ? "пока никто" : Fmt.Plural(s.Devices, "устройство", "устройства", "устройств");
-        Last.Text = s.LastRequest == default ? "ещё не было" : Ago(s.LastRequest);
+        Devices.Text = s.Devices == 0 ? L.T("пока никто") : Fmt.Plural(s.Devices, "устройство", "устройства", "устройств");
+        Last.Text = s.LastRequest == default ? L.T("ещё не было") : Ago(s.LastRequest);
         Adapter.Text = s.Adapter;
+    }
+
+    /// <summary>
+    /// «Не открывается на телефоне?»: то, что программа видит сама (брандмауэр, отклонённое устройство), — первым и цветом;
+    /// ниже — что проверить на телефоне и в роутере.
+    /// </summary>
+    private void ShowTrouble(PhoneServer.State s)
+    {
+        if (s.Running && s.Devices == 0) PhoneServer.CheckFirewall();
+        var found = new List<string>();
+        if (s.Running && s.Firewall.Length > 0) found.Add(s.Firewall);
+        if (s.Running && s.Rejected.Length > 0 && (DateTime.Now - s.RejectedAt).TotalMinutes < 30)
+            found.Add(L.F("Устройство {0} пыталось открыть страницу {1}, но программа его не пустила: его адрес не из домашней сети. Так бывает, если на телефоне включён VPN или телефон подключён к гостевой сети Wi-Fi.", s.Rejected, Ago(s.RejectedAt)));
+        if (s.Running && s.WiredOnly && s.Devices == 0 && (s.LastRequest == default || (DateTime.Now - s.LastRequest).TotalMinutes > 10))
+            found.Add(L.T("Компьютер подключён к роутеру только кабелем. Если телефон не открывает страницу, а когда компьютер подключён по Wi-Fi — открывает, значит роутер не пускает устройства из Wi-Fi к компьютерам на кабеле. "
+                          + "Подключите компьютер ещё и к Wi-Fi — программа сама покажет адрес Wi-Fi. Или разрешите это в настройках роутера: «изоляция клиентов» (AP isolation) должна быть выключена."));
+        TroubleFound.Text = string.Join("\n\n", found);
+        TroubleBlock.Visibility = found.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static string Ago(DateTime at)
     {
         var passed = DateTime.Now - at;
-        if (passed.TotalSeconds < 5) return "только что";
-        if (passed.TotalSeconds < 60) return $"{(int)passed.TotalSeconds} с назад";
-        if (passed.TotalMinutes < 60) return $"{(int)passed.TotalMinutes} мин назад";
-        return at.Date == DateTime.Today ? $"сегодня в {at:HH:mm}" : $"{at:d MMM} в {at:HH:mm}";
+        if (passed.TotalSeconds < 5) return L.T("только что");
+        if (passed.TotalSeconds < 60) return L.F("{0} с назад", (int)passed.TotalSeconds);
+        if (passed.TotalMinutes < 60) return L.F("{0} мин назад", (int)passed.TotalMinutes);
+        return at.Date == DateTime.Today ? L.F("сегодня в {0:HH:mm}", at) : L.F("{0:d MMM} в {0:HH:mm}", at);
     }
 
     private void Switch_Click(object sender, RoutedEventArgs e)
@@ -109,8 +127,8 @@ public partial class PhonePanel : UserControl, ISystemPanel
     private void BtnCopy_Click(object sender, RoutedEventArgs e)
     {
         if (shownUrl.Length == 0) return;
-        try { Clipboard.SetText(shownUrl); note = "Адрес скопирован."; }
-        catch { note = "Скопировать не получилось: буфер обмена занят другой программой. Попробуйте ещё раз."; }
+        try { Clipboard.SetText(shownUrl); note = L.T("Адрес скопирован."); }
+        catch { note = L.T("Скопировать не получилось: буфер обмена занят другой программой. Попробуйте ещё раз."); }
         Refresh();
     }
 
@@ -118,15 +136,15 @@ public partial class PhonePanel : UserControl, ISystemPanel
     private void BtnIphone_Click(object sender, RoutedEventArgs e)
     {
         var bytes = PhoneServer.CurrentProfile();
-        if (bytes == null) { note = "Сначала включите панель."; Refresh(); return; }
+        if (bytes == null) { note = L.T("Сначала включите панель."); Refresh(); return; }
         try
         {
-            string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Пульс ПК для iPhone.mobileconfig");
+            string name = L.T("Пульс ПК для iPhone.mobileconfig");
+            string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), name);
             File.WriteAllBytes(file, bytes);
-            note = "Профиль сохранён на рабочем столе: «Пульс ПК для iPhone.mobileconfig». Установите его через iMazing («Профили» → «Установить») "
-                 + "или откройте на iPhone адрес панели с «pulse.mobileconfig» на конце. На телефоне: «Настройки» → «Профиль загружен» → «Установить».";
+            note = L.F("Профиль сохранён на рабочем столе: «{0}». Установите его через iMazing («Профили» → «Установить») или откройте на iPhone адрес панели с «pulse.mobileconfig» на конце. На телефоне: «Настройки» → «Профиль загружен» → «Установить».", name);
         }
-        catch (Exception ex) { note = "Не удалось сохранить профиль: " + ex.Message; }
+        catch (Exception ex) { note = L.F("Не удалось сохранить профиль: {0}", ex.Message); }
         Refresh();
     }
 
@@ -139,7 +157,7 @@ public partial class PhonePanel : UserControl, ISystemPanel
         {
             host.EndBusy();
             BtnKey.IsEnabled = true;
-            note = "Ключ сменён: прежний адрес больше не открывается. На телефоне откройте новый.";
+            note = L.T("Ключ сменён: прежний адрес больше не открывается. На телефоне откройте новый.");
             Refresh();
         }));
     }

@@ -64,9 +64,10 @@ public static class InputTuning
 
     private static readonly (AccessKind Kind, string Key, string Title)[] Hotkeys =
     {
-        (AccessKind.Sticky, "sticky", "залипание клавиш"),
-        (AccessKind.Filter, "filter", "фильтрация ввода"),
-        (AccessKind.Toggle, "toggle", "озвучивание переключений"),
+        // Key — для файла копии (не переводится), Title — для сообщений (на языке интерфейса).
+        (AccessKind.Sticky, "sticky", L.T("залипание клавиш")),
+        (AccessKind.Filter, "filter", L.T("фильтрация ввода")),
+        (AccessKind.Toggle, "toggle", L.T("озвучивание переключений")),
     };
 
     private static readonly IAccessBackend LiveAccess = new LiveAccessBackend();
@@ -99,14 +100,19 @@ public static class InputTuning
             var active = current.Where(c => c.Data != null && (c.Data[1] & HotkeyActive) != 0).ToList();
             if (active.Count == 0)
                 return current.Any(c => c.Data == null)
-                    ? (false, "Windows не отдала настройки специальных возможностей. Попробуйте ещё раз.")
-                    : (true, "Сочетания уже отключены, менять нечего.");
+                    ? (false, L.T("Windows не отдала настройки специальных возможностей. Попробуйте ещё раз."))
+                    : (true, L.T("Сочетания уже отключены, менять нечего."));
 
             // Исходное запоминается один раз: повторное применение не должно затереть настоящее «как было».
-            if (!File.Exists(backupFile))
+            // Функции, которые в прошлый раз не прочитались (их тогда и не меняли), дописываются в копию: иначе их
+            // выключение сейчас было бы нечем вернуть.
+            var saved = File.Exists(backupFile) ? File.ReadAllLines(backupFile).ToList() : new List<string>();
+            var missing = current.Where(c => c.Data != null && !saved.Any(l => l.Split('=')[0].Trim() == c.Key))
+                                 .Select(c => $"{c.Key}={c.Data[1]}").ToList();
+            if (missing.Count > 0)
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(backupFile));
-                File.WriteAllLines(backupFile, current.Where(c => c.Data != null).Select(c => $"{c.Key}={c.Data[1]}"));
+                AtomicFile.WriteAllText(backupFile, string.Join(Environment.NewLine, saved.Concat(missing)) + Environment.NewLine);
             }
 
             var failed = new List<string>();
@@ -116,8 +122,8 @@ public static class InputTuning
                 if (!backend.Set(c.Kind, c.Data)) failed.Add(c.Title);
             }
             return failed.Count == 0
-                ? (true, $"Отключено: {string.Join(", ", active.Select(c => c.Title))}. Сами функции остались в «Параметрах» → «Специальные возможности».")
-                : (false, $"Не удалось отключить: {string.Join(", ", failed)}. Попробуйте ещё раз.");
+                ? (true, L.F("Отключено: {0}. Сами функции остались в «Параметрах» → «Специальные возможности».", string.Join(", ", active.Select(c => c.Title))))
+                : (false, L.F("Не удалось отключить: {0}. Попробуйте ещё раз.", string.Join(", ", failed)));
         }
     }
 
@@ -128,7 +134,7 @@ public static class InputTuning
     {
         lock (HotkeyGate)
         {
-            if (!File.Exists(backupFile)) return (false, "Копии «как было» нет: программа сочетания не меняла.");
+            if (!File.Exists(backupFile)) return (false, L.T("Копии «как было» нет: программа сочетания не меняла."));
             var saved = new Dictionary<string, uint>();
             foreach (var line in File.ReadAllLines(backupFile))
             {
@@ -146,9 +152,10 @@ public static class InputTuning
                 data[1] = (data[1] & ~HotkeyActive) | (was & HotkeyActive);
                 if (!backend.Set(h.Kind, data)) failed++;
             }
-            if (failed > 0) return (false, "Вернуть удалось не всё. Копия сохранена, попробуйте ещё раз.");
+            if (failed > 0) return (false, L.T("Вернуть удалось не всё. Копия сохранена, попробуйте ещё раз."));
             File.Delete(backupFile);
-            return (true, "Сочетания возвращены такими, какими были до изменений.");
+            try { File.Delete(backupFile + ".bak"); } catch { }
+            return (true, L.T("Сочетания возвращены такими, какими были до изменений."));
         }
     }
 
@@ -383,10 +390,10 @@ public static class InputTuning
     /// <summary>Короткая оценка частоты для игр.</summary>
     public static string RateVerdict(int hz)
     {
-        if (hz < 200) return "Мало для игр: мышь сообщает о движении раз в 8 мс. Если она умеет больше, выберите 500–1000 Гц в её программе или кнопкой на корпусе.";
-        if (hz < 400) return "Для игр терпимо, но лучше 500–1000 Гц, если мышь это умеет.";
-        if (hz <= 1200) return "Хорошо для игр.";
-        return "Выше 1000 Гц — на любителя: разницу трудно заметить, а процессор нагружается сильнее.";
+        if (hz < 200) return L.T("Мало для игр: мышь сообщает о движении раз в 8 мс. Если она умеет больше, выберите 500–1000 Гц в её программе или кнопкой на корпусе.");
+        if (hz < 400) return L.T("Для игр терпимо, но лучше 500–1000 Гц, если мышь это умеет.");
+        if (hz <= 1200) return L.T("Хорошо для игр.");
+        return L.T("Выше 1000 Гц — на любителя: разницу трудно заметить, а процессор нагружается сильнее.");
     }
 
     // ======================================================================================
@@ -400,24 +407,24 @@ public static class InputTuning
     /// <summary>Марка мыши по коду производителя USB (VID): название, фирменная программа и что в ней нажать.</summary>
     private sealed record MouseBrand(string Name, string Advice);
 
-    private const string AnyApp = " Выберите 1000 Гц. У большинства игровых мышей значение хранится в самой мыши, так что программу потом можно не держать в автозагрузке.";
+    private static readonly string AnyApp = L.T(" Выберите 1000 Гц. У большинства игровых мышей значение хранится в самой мыши, так что программу потом можно не держать в автозагрузке.");
 
     private static readonly Dictionary<int, MouseBrand> Brands = new()
     {
-        [0x03F0] = new("HyperX", "Откройте HyperX NGenuity (бесплатно, есть в Microsoft Store), выберите мышь и найдите в её настройках «Polling Rate» — это и есть частота опроса." + AnyApp),
-        [0x0951] = new("HyperX", "Откройте HyperX NGenuity (бесплатно, есть в Microsoft Store), выберите мышь и найдите в её настройках «Polling Rate» — это и есть частота опроса." + AnyApp),
-        [0x046D] = new("Logitech", "Откройте Logitech G HUB, выберите мышь и раздел чувствительности (DPI): там есть «Report rate» — частота опроса." + AnyApp),
-        [0x1532] = new("Razer", "Откройте Razer Synapse, выберите мышь и вкладку «Производительность» (Performance): там есть «Polling Rate» — частота опроса." + AnyApp),
-        [0x1038] = new("SteelSeries", "Откройте SteelSeries GG, раздел Engine, выберите мышь и найдите «Polling Rate» — частоту опроса." + AnyApp),
-        [0x1B1C] = new("Corsair", "Откройте Corsair iCUE, выберите мышь и её настройки устройства: там есть «Polling Rate» — частота опроса." + AnyApp),
-        [0x0B05] = new("ASUS", "Откройте Armoury Crate, выберите мышь и раздел «Производительность»: там есть «Polling Rate» — частота опроса." + AnyApp),
-        [0x1E7D] = new("ROCCAT", "Откройте ROCCAT Swarm (у новых моделей — Turtle Beach Swarm II), выберите мышь и найдите «Polling Rate» — частоту опроса." + AnyApp),
-        [0x2516] = new("Cooler Master", "Откройте Cooler Master MasterPlus+, выберите мышь и найдите «Polling Rate» — частоту опроса." + AnyApp),
-        [0x1462] = new("MSI", "Откройте MSI Center, раздел устройств, выберите мышь и найдите «Polling Rate» — частоту опроса." + AnyApp),
-        [0x09DA] = new("A4Tech / Bloody", "Откройте программу Bloody (для мышей Bloody) или A4Tech Oscar, выберите мышь и найдите частоту опроса (Report Rate)." + AnyApp),
-        [0x1AF3] = new("ZOWIE", "У мышей ZOWIE нет программы: частота меняется кнопкой снизу корпуса. Нажимайте её, глядя на индикатор, — какой цвет какой частоте соответствует, написано в инструкции к модели. Нужна 1000 Гц."),
-        [0x3367] = new("Endgame Gear", "Скачайте с сайта Endgame Gear программу для своей модели и выберите в ней «Polling Rate» 1000 Гц. У части моделей частоту меняет и кнопка снизу корпуса."),
-        [0x258A] = new("Sinowealth", "Эта микросхема стоит в мышах многих марок (Glorious, Redragon и других). Частоту меняет программа производителя вашей мыши — найдите её на сайте марки — или сочетание кнопок из инструкции. Нужна 1000 Гц."),
+        [0x03F0] = new("HyperX", L.T("Откройте HyperX NGenuity (бесплатно, есть в Microsoft Store), выберите мышь и найдите в её настройках «Polling Rate» — это и есть частота опроса.") + AnyApp),
+        [0x0951] = new("HyperX", L.T("Откройте HyperX NGenuity (бесплатно, есть в Microsoft Store), выберите мышь и найдите в её настройках «Polling Rate» — это и есть частота опроса.") + AnyApp),
+        [0x046D] = new("Logitech", L.T("Откройте Logitech G HUB, выберите мышь и раздел чувствительности (DPI): там есть «Report rate» — частота опроса.") + AnyApp),
+        [0x1532] = new("Razer", L.T("Откройте Razer Synapse, выберите мышь и вкладку «Производительность» (Performance): там есть «Polling Rate» — частота опроса.") + AnyApp),
+        [0x1038] = new("SteelSeries", L.T("Откройте SteelSeries GG, раздел Engine, выберите мышь и найдите «Polling Rate» — частоту опроса.") + AnyApp),
+        [0x1B1C] = new("Corsair", L.T("Откройте Corsair iCUE, выберите мышь и её настройки устройства: там есть «Polling Rate» — частота опроса.") + AnyApp),
+        [0x0B05] = new("ASUS", L.T("Откройте Armoury Crate, выберите мышь и раздел «Производительность»: там есть «Polling Rate» — частота опроса.") + AnyApp),
+        [0x1E7D] = new("ROCCAT", L.T("Откройте ROCCAT Swarm (у новых моделей — Turtle Beach Swarm II), выберите мышь и найдите «Polling Rate» — частоту опроса.") + AnyApp),
+        [0x2516] = new("Cooler Master", L.T("Откройте Cooler Master MasterPlus+, выберите мышь и найдите «Polling Rate» — частоту опроса.") + AnyApp),
+        [0x1462] = new("MSI", L.T("Откройте MSI Center, раздел устройств, выберите мышь и найдите «Polling Rate» — частоту опроса.") + AnyApp),
+        [0x09DA] = new("A4Tech / Bloody", L.T("Откройте программу Bloody (для мышей Bloody) или A4Tech Oscar, выберите мышь и найдите частоту опроса (Report Rate).") + AnyApp),
+        [0x1AF3] = new("ZOWIE", L.T("У мышей ZOWIE нет программы: частота меняется кнопкой снизу корпуса. Нажимайте её, глядя на индикатор, — какой цвет какой частоте соответствует, написано в инструкции к модели. Нужна 1000 Гц.")),
+        [0x3367] = new("Endgame Gear", L.T("Скачайте с сайта Endgame Gear программу для своей модели и выберите в ней «Polling Rate» 1000 Гц. У части моделей частоту меняет и кнопка снизу корпуса.")),
+        [0x258A] = new("Sinowealth", L.T("Эта микросхема стоит в мышах многих марок (Glorious, Redragon и других). Частоту меняет программа производителя вашей мыши — найдите её на сайте марки — или сочетание кнопок из инструкции. Нужна 1000 Гц.")),
         [0x045E] = new("Microsoft", ""),
         [0x413C] = new("Dell", ""),
         [0x17EF] = new("Lenovo", ""),
@@ -426,12 +433,11 @@ public static class InputTuning
     /// <summary>Обычные офисные марки: частота у их мышей, как правило, 125 Гц и не меняется.</summary>
     private static readonly HashSet<int> OfficeBrands = new() { 0x045E, 0x413C, 0x17EF };
 
-    private const string GenericAdvice =
-        "Найдите на сайте производителя мыши фирменную программу: частота опроса в ней называется «Polling rate» или «Report rate», выберите 1000 Гц. "
-        + "У многих игровых мышей частоту меняет кнопка снизу корпуса или сочетание кнопок из инструкции. Обычные офисные мыши работают на 125 Гц, и поднять её нельзя.";
+    private static readonly string GenericAdvice = L.T(
+        "Найдите на сайте производителя мыши фирменную программу: частота опроса в ней называется «Polling rate» или «Report rate», выберите 1000 Гц. У многих игровых мышей частоту меняет кнопка снизу корпуса или сочетание кнопок из инструкции. Обычные офисные мыши работают на 125 Гц, и поднять её нельзя.");
 
-    private const string BluetoothAdvice =
-        "Мышь подключена по Bluetooth: так частота почти всегда около 125 Гц. Для игр подключите её через USB-приёмник (2,4 ГГц) или кабелем — тогда доступна 1000 Гц.";
+    private static readonly string BluetoothAdvice = L.T(
+        "Мышь подключена по Bluetooth: так частота почти всегда около 125 Гц. Для игр подключите её через USB-приёмник (2,4 ГГц) или кабелем — тогда доступна 1000 Гц.");
 
     /// <summary>Мышь, которую видит Windows.</summary>
     public sealed class MouseDevice
@@ -445,7 +451,7 @@ public static class InputTuning
         public bool Bluetooth;
         public string Brand => BrandName(Vid, Product);
         public string Id => Vid >= 0 ? $"{Vid:X4}:{Pid:X4}" : "";
-        public string Title => Product.Length > 0 ? Product : Brand.Length > 0 ? "Мышь " + Brand : Vid >= 0 ? "Мышь без названия" : "Встроенное указывающее устройство";
+        public string Title => Product.Length > 0 ? Product : Brand.Length > 0 ? L.F("Мышь {0}", Brand) : Vid >= 0 ? L.T("Мышь без названия") : L.T("Встроенное указывающее устройство");
         public string Caption => string.Join(" · ", new[]
         {
             Brand.Length > 0 && !Product.Contains(Brand.Split(' ')[0], StringComparison.OrdinalIgnoreCase) ? Brand : "",
@@ -481,9 +487,9 @@ public static class InputTuning
     {
         if (bluetooth) return BluetoothAdvice;
         if (vid == 0x03F0 && (product ?? "").Contains("OMEN", StringComparison.OrdinalIgnoreCase))
-            return "Откройте OMEN Gaming Hub, выберите мышь и найдите «Polling Rate» — частоту опроса." + AnyApp;
+            return L.T("Откройте OMEN Gaming Hub, выберите мышь и найдите «Polling Rate» — частоту опроса.") + AnyApp;
         if (OfficeBrands.Contains(vid) || (vid == 0x03F0 && !(product ?? "").Contains("HyperX", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(product)))
-            return "Похоже, это обычная офисная мышь: такие почти всегда работают на 125 Гц, и поменять это нельзя. Если в её описании есть частота опроса 500 или 1000 Гц, ищите настройку в программе производителя; иначе для игр нужна игровая мышь.";
+            return L.T("Похоже, это обычная офисная мышь: такие почти всегда работают на 125 Гц, и поменять это нельзя. Если в её описании есть частота опроса 500 или 1000 Гц, ищите настройку в программе производителя; иначе для игр нужна игровая мышь.");
         return Brands.TryGetValue(vid, out var b) && b.Advice.Length > 0 ? b.Advice : GenericAdvice;
     }
 
@@ -565,9 +571,14 @@ public static class InputTuning
     {
         if (beforeHz <= 0 || nowHz <= 0) return "";
         if (beforeId.Length > 0 && nowId.Length > 0 && beforeId != nowId) return "";
-        string when = beforeAt == default ? "" : beforeAt.Date == today.Date ? $" (сегодня в {beforeAt:HH:mm})"
-            : $" ({beforeAt.ToString("d MMMM", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"))})";
-        return beforeHz == nowHz ? $"Как и в прошлый раз{when}: {nowHz} Гц." : $"Было {beforeHz} Гц{when} → стало {nowHz} Гц.";
+        bool same = beforeHz == nowHz;
+        if (beforeAt == default)
+            return same ? L.F("Как и в прошлый раз: {0}\u00A0Гц.", nowHz) : L.F("Было {0}\u00A0Гц → стало {1}\u00A0Гц.", beforeHz, nowHz);
+        if (beforeAt.Date == today.Date)
+            return same ? L.F("Как и в прошлый раз (сегодня в {1:HH:mm}): {0}\u00A0Гц.", nowHz, beforeAt)
+                        : L.F("Было {0}\u00A0Гц (сегодня в {2:HH:mm}) → стало {1}\u00A0Гц.", beforeHz, nowHz, beforeAt);
+        return same ? L.F("Как и в прошлый раз ({1:d MMMM}): {0}\u00A0Гц.", nowHz, beforeAt)
+                    : L.F("Было {0}\u00A0Гц ({2:d MMMM}) → стало {1}\u00A0Гц.", beforeHz, nowHz, beforeAt);
     }
 
     // ======================================================================================
@@ -606,6 +617,27 @@ public static class InputTuning
                 : ((data[1] & HotkeyActive) != 0 ? "срабатывает" : "отключён") + $" (флаги {data[1]} = 0x{data[1]:X})"));
         }
         sb.AppendLine("Копия «как было» для сочетаний: " + (HasHotkeyBackup ? HotkeyBackupFile : "нет, программа их не меняла"));
+
+        // Копия сочетаний — на подставных флагах и во временном файле, без настоящей системы.
+        string fakeFile = Path.Combine(Path.GetTempPath(), "pulsepc-hotkeys-test-" + Guid.NewGuid().ToString("N") + ".txt");
+        try
+        {
+            var fake = new FakeAccess();
+            fake.Flags[AccessKind.Sticky] = HotkeyActive | 0x1;
+            fake.Flags[AccessKind.Toggle] = 0;
+            fake.Flags[AccessKind.Filter] = HotkeyActive;
+            fake.Unreadable.Add(AccessKind.Filter);                 // в первый раз фильтрация не прочиталась
+            DisableHotkeys(fake, fakeFile);
+            fake.Unreadable.Clear();
+            DisableHotkeys(fake, fakeFile);                         // теперь прочиталась и выключена
+            bool off = (fake.Flags[AccessKind.Filter] & HotkeyActive) == 0 && (fake.Flags[AccessKind.Sticky] & HotkeyActive) == 0;
+            var back = RestoreHotkeys(fake, fakeFile);
+            bool ok = off && back.Ok && fake.Flags[AccessKind.Sticky] == (HotkeyActive | 0x1) && fake.Flags[AccessKind.Filter] == HotkeyActive
+                      && fake.Flags[AccessKind.Toggle] == 0 && !File.Exists(fakeFile);
+            if (!ok) problems.Add("сочетания: не прочитанная в первый раз функция не вернулась");
+            sb.AppendLine($"  [{(ok ? "верно" : "ОШИБКА")}] сочетания: функция, не прочитанная при первом изменении, тоже возвращается");
+        }
+        finally { foreach (var tmp in new[] { fakeFile, fakeFile + ".bak", fakeFile + ".tmp" }) { try { File.Delete(tmp); } catch { } } }
 
         var pointer = ReadPointer();
         if (!pointer.Ok) problems.Add("не читаются настройки указателя");
@@ -712,11 +744,11 @@ public static class InputTuning
         var adviceCases = new (string Name, bool Ok)[]
         {
             ("HyperX → NGenuity", BrandName(0x03F0, "HyperX Pulsefire Haste 2") == "HyperX" && RaiseAdvice(0x03F0, "HyperX Pulsefire Haste 2", false).Contains("NGenuity")),
-            ("HP без «HyperX» в названии → офисная мышь", RaiseAdvice(0x03F0, "HP USB Optical Mouse", false).Contains("офисная")),
+            ("HP без «HyperX» в названии → офисная мышь", RaiseAdvice(0x03F0, "HP USB Optical Mouse", false) == RaiseAdvice(0x045E, "", false)),
             ("Logitech → G HUB", BrandName(0x046D, "") == "Logitech" && RaiseAdvice(0x046D, "", false).Contains("G HUB")),
             ("Razer → Synapse", RaiseAdvice(0x1532, "", false).Contains("Synapse")),
             ("SteelSeries → GG", RaiseAdvice(0x1038, "", false).Contains("SteelSeries GG")),
-            ("ZOWIE → кнопка снизу", RaiseAdvice(0x1AF3, "", false).Contains("кнопкой снизу")),
+            ("ZOWIE → кнопка снизу", RaiseAdvice(0x1AF3, "", false) is var zowie && zowie.Contains("ZOWIE") && zowie != GenericAdvice && !zowie.Contains(AnyApp)),
             ("неизвестная марка → общий совет", BrandName(0x1234, "") == "" && RaiseAdvice(0x1234, "", false) == GenericAdvice),
             ("Bluetooth → совет про приёмник", RaiseAdvice(0x046D, "MX Master 3", true).Contains("Bluetooth")),
         };
@@ -728,8 +760,8 @@ public static class InputTuning
         var day = new DateTime(2026, 11, 19, 15, 0, 0);
         var compareCases = new (string Name, string Got, string Expect)[]
         {
-            ("было 125 → стало 1000", CompareText(125, new DateTime(2026, 11, 18, 21, 40, 0), "03F0:028E", 1000, "03F0:028E", day), "Было 125\u00A0Гц (18 ноября) → стало 1000\u00A0Гц."),
-            ("сегодня, то же значение", CompareText(1000, new DateTime(2026, 11, 19, 9, 5, 0), "03F0:028E", 1000, "03F0:028E", day), "Как и в прошлый раз (сегодня в 09:05): 1000\u00A0Гц."),
+            ("было 125 → стало 1000", CompareText(125, new DateTime(2026, 11, 18, 21, 40, 0), "03F0:028E", 1000, "03F0:028E", day), L.Pick("Было 125\u00A0Гц (18 ноября) → стало 1000\u00A0Гц.", "Was 125\u00A0Hz (November 18) → now 1000\u00A0Hz.")),
+            ("сегодня, то же значение", CompareText(1000, new DateTime(2026, 11, 19, 9, 5, 0), "03F0:028E", 1000, "03F0:028E", day), L.Pick("Как и в прошлый раз (сегодня в 09:05): 1000\u00A0Гц.", "Same as last time (today at 09:05): 1000\u00A0Hz.")),
             ("другая мышь — не сравнивать", CompareText(125, day, "046D:C539", 1000, "03F0:028E", day), ""),
             ("замера не было — не сравнивать", CompareText(0, default, "", 1000, "03F0:028E", day), ""),
         };
@@ -818,6 +850,23 @@ public static class InputTuning
     private static extern bool SystemParametersInfo(uint action, uint param, ref int value, uint winIni);
     [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
     private static extern bool SystemParametersInfo(uint action, uint param, [In, Out] int[] value, uint winIni);
+}
+
+/// <summary>Подделка для самопроверки: флаги в памяти; функции из Unreadable «не читаются».</summary>
+internal sealed class FakeAccess : IAccessBackend
+{
+    public readonly Dictionary<AccessKind, uint> Flags = new();
+    public readonly HashSet<AccessKind> Unreadable = new();
+
+    public uint[] Get(AccessKind kind) =>
+        Unreadable.Contains(kind) || !Flags.TryGetValue(kind, out uint f) ? null : new uint[] { 8, f };
+
+    public bool Set(AccessKind kind, uint[] data)
+    {
+        if (Unreadable.Contains(kind) || data == null || data.Length < 2) return false;
+        Flags[kind] = data[1];
+        return true;
+    }
 }
 
 /// <summary>Настоящая система: SystemParametersInfo для STICKYKEYS, FILTERKEYS и TOGGLEKEYS.</summary>

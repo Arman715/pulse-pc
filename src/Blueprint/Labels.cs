@@ -31,8 +31,12 @@ public static class BlueprintLabels
     public static void Apply()
     {
         Scenes.Reset();
+        Version++;
         Changed?.Invoke();
     }
+
+    /// <summary>Растёт при каждом <see cref="Apply"/>: вид, пропустивший событие (был вне окна), сверяет его при загрузке.</summary>
+    public static int Version { get; private set; }
 
     public static event Action Changed;
 }

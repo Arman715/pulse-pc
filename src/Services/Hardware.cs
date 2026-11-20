@@ -42,7 +42,7 @@ public sealed class HardwareInfo
             "$g = @(Get-CimInstance Win32_VideoController | ForEach-Object { [pscustomobject]@{ Name=\"$($_.Name)\"; Driver=\"$($_.DriverVersion)\"; Pnp=\"$($_.PNPDeviceID)\" } }); " +
             "$sd = ''; try { $sd = (Get-Partition -DriveLetter $env:SystemDrive[0] -ErrorAction Stop | Get-Disk).FriendlyName } catch {}; " +
             "[pscustomobject]@{ Cpu=\"$($p.Name)\"; Board=\"$($b.Product)\"; BoardMaker=\"$($b.Manufacturer)\"; Bios=\"$($bi.SMBIOSBIOSVersion)\"; " +
-            "BiosDate=$(if ($bi.ReleaseDate) { $bi.ReleaseDate.ToString('dd.MM.yyyy') } else { '' }); Socket=\"$($p.SocketDesignation)\"; " +
+            "BiosDate=$(if ($bi.ReleaseDate) { $bi.ReleaseDate.ToString('dd.MM.yyyy', [Globalization.CultureInfo]::InvariantCulture) } else { '' }); Socket=\"$($p.SocketDesignation)\"; " +
             "Cores=[int]$p.NumberOfCores; Threads=[int]$p.NumberOfLogicalProcessors; MaxMhz=[int]$p.MaxClockSpeed; Ram=$m; Gpu=$g; SysDisk=\"$sd\" } | ConvertTo-Json -Compress -Depth 3";
         try
         {

@@ -38,13 +38,13 @@ public sealed class HistoryLog
             var loaded = AtomicFile.Read(FilePath, text => JsonSerializer.Deserialize<List<HistoryPoint>>(text, Json));
             if (loaded == null)
             {
-                if (File.Exists(FilePath)) Health.Fail("История", "history.json и его копия не читаются — история начнётся заново");
+                if (File.Exists(FilePath)) Health.Fail("История", L.T("history.json и его копия не читаются — история начнётся заново"));
                 return;
             }
             DateTime cutoff = DateTime.Now.AddMinutes(-KeepMinutes);
             points.AddRange(loaded.Where(p => p != null && p.T > cutoff).OrderBy(p => p.T));
         }
-        catch (Exception ex) { Health.Fail("История", "чтение: " + ex.Message); }
+        catch (Exception ex) { Health.Fail("История", L.F("чтение: {0}", ex.Message)); }
     }
 
     /// <summary>Сохранить атомарно: обрыв питания посреди записи оставляет прежний файл, а не обрезок.</summary>
@@ -56,7 +56,7 @@ public sealed class HistoryLog
             AtomicFile.WriteAllText(FilePath, JsonSerializer.Serialize(points, Json));
             Health.Ok("История");
         }
-        catch (Exception ex) { Health.Fail("История", "сохранение: " + ex.Message); }
+        catch (Exception ex) { Health.Fail("История", L.F("сохранение: {0}", ex.Message)); }
     }
 
     /// <summary>Добавить показание (вызывается каждые 1,5 секунды).</summary>
@@ -112,8 +112,11 @@ public sealed class HistoryLog
 
         foreach (var p in points)
         {
-            int i = (int)((p.T - from).TotalMinutes) / step;
-            if (i < 0 || i >= n) continue;
+            // Точки раньше начала окна отсекаются до деления: (int)(−3) / 4 = 0, и минуты до окна попадали бы в его первую точку.
+            double since = (p.T - from).TotalMinutes;
+            if (since < 0) continue;
+            int i = (int)since / step;
+            if (i >= n) continue;
             if (counts[i] == 0) { cpu[i] = p.Cpu; gpu[i] = p.Gpu; temp[i] = p.Temp; ram[i] = p.RamUsed; }
             else
             {

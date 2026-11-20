@@ -29,7 +29,9 @@ public class NvRow : Notifier
 /// <summary>Общие настройки драйвера или профиль одной игры.</summary>
 public class NvTarget
 {
+    /// <summary>Название игры или «Все игры (общие настройки)» — по нему профиль ищется после перечитывания и называется в драйвере; не переводится.</summary>
     public string Title { get; set; } = "";
+    public string TitleText => L.T(Title);
     public string Caption { get; set; } = "";
     public bool Global;
     /// <summary>Имя запускаемого файла игры: по нему драйвер узнаёт игру.</summary>
@@ -46,7 +48,9 @@ public class NvTarget
 
 public sealed class NvAdvice
 {
+    /// <summary>Заголовок по-русски: с ним сверяется самопроверка; на экране — TitleText.</summary>
     public string Title { get; set; } = "";
+    public string TitleText => L.T(Title);
     public string Text { get; set; } = "";
     /// <summary>Что открыть кнопкой (программа, ярлык или адрес приложения); пусто — кнопки нет.</summary>
     public string Launch { get; set; } = "";
@@ -58,8 +62,9 @@ public sealed class NvState
 {
     /// <summary>Драйвер NVIDIA отвечает, профили читаются.</summary>
     public bool Available;
-    /// <summary>Почему раздел недоступен — одной фразой.</summary>
+    /// <summary>Почему раздел недоступен — одной фразой. Для AMD и Intel — по-русски (с ним сверяется самопроверка); на экране — ReasonText.</summary>
     public string Reason = "";
+    public string ReasonText => L.T(Reason);
     /// <summary>Советы общего вида для видеокарт AMD и Intel.</summary>
     public List<NvAdvice> Advice = new();
     /// <summary>Производитель главной видеокарты: NVIDIA, AMD, Intel или пусто.</summary>
@@ -141,7 +146,7 @@ public static class NvidiaProfiles
         {
             if (!Nv.Ready(out string why)) { Unavailable(state, why); return state; }
             using var drs = Drs.Open(out int st);
-            if (drs == null) { Unavailable(state, "Драйвер NVIDIA не открыл свои настройки (" + Nv.Error(st) + "). Переустановите драйвер и откройте раздел снова."); return state; }
+            if (drs == null) { Unavailable(state, L.F("Драйвер NVIDIA не открыл свои настройки ({0}). Переустановите драйвер и откройте раздел снова.", Nv.Error(st))); return state; }
 
             var ctx = Context.Make(sessions);
             state.Available = true;
@@ -189,8 +194,9 @@ public static class NvidiaProfiles
     public static void Advise(NvState state, string vendor, string name, bool integrated, bool basic, string why, int cap, int hz, string app, bool battery)
     {
         state.Vendor = vendor;
-        string limit = hz > 60 ? $"{cap} FPS (монитор {hz} Гц)" : "под частоту монитора";
+        string limit = hz > 60 ? L.F("{0} FPS (монитор {1} Гц)", cap, hz) : L.T("под частоту монитора");
         string appName = GpuVendors.ControlApp(vendor);
+        // Причина остаётся по-русски (с ней сверяется самопроверка) и переводится при показе: NvState.ReasonText.
         state.Reason = vendor == "NVIDIA" ? why
             : name == "" ? "Видеокарта с драйвером не найдена — настраивать нечего."
             : basic ? $"Драйвер для {name} не установлен: настройки по играм появятся вместе с ним."
@@ -199,42 +205,40 @@ public static class NvidiaProfiles
             : $"Для {name} программа даёт только общие советы";
         if (basic) return;
 
-        string noApp = app == "" && appName != "" ? $" Если {appName} не установлен — он ставится вместе с драйвером с сайта {vendor}." : "";
+        string noApp = app == "" && appName != "" ? " " + L.F("Если {0} не установлен — он ставится вместе с драйвером с сайта {1}.", appName, vendor) : "";
+        // Заголовки советов — по-русски (с ними сверяется самопроверка), на экране — NvAdvice.TitleText.
         if (vendor == "AMD")
             state.Advice.Add(new NvAdvice
             {
                 Title = "В приложении AMD Software",
-                Text = "«Игры» → выберите игру. Radeon Anti-Lag — включить: он сокращает задержку от мыши до экрана. " +
-                       "Radeon Boost — выключить: он на ходу снижает разрешение, и картинка теряет чёткость. " +
-                       $"Лимит FPS {cap} ставьте в самой игре — второй не нужен. Если в игре его нет, задайте здесь через Radeon Chill с одинаковым минимумом и максимумом." + noApp,
-                Launch = app, LaunchText = "Открыть AMD Software",
+                Text = L.F("«Игры» → выберите игру. Radeon Anti-Lag — включить: он сокращает задержку от мыши до экрана. Radeon Boost — выключить: он на ходу снижает разрешение, и картинка теряет чёткость. Лимит FPS {0} ставьте в самой игре — второй не нужен. Если в игре его нет, задайте здесь через Radeon Chill с одинаковым минимумом и максимумом.", cap) + noApp,
+                Launch = app, LaunchText = L.T("Открыть AMD Software"),
             });
         else if (vendor == "Intel")
             state.Advice.Add(new NvAdvice
             {
                 Title = "В приложении Intel Graphics Software",
-                Text = $"«Графика» → выберите игру. Режим низкой задержки — включить. Лимит FPS {cap} ставьте в самой игре, а если в игре его нет — здесь, в ограничении частоты кадров." + noApp,
-                Launch = app, LaunchText = "Открыть настройки Intel",
+                Text = L.F("«Графика» → выберите игру. Режим низкой задержки — включить. Лимит FPS {0} ставьте в самой игре, а если в игре его нет — здесь, в ограничении частоты кадров.", cap) + noApp,
+                Launch = app, LaunchText = L.T("Открыть настройки Intel"),
             });
-        string upscale = vendor == "NVIDIA" ? "" : integrated ? "" : " Если FPS не хватает — включите FSR или XeSS в режиме «Качество».";
+        string upscale = vendor == "NVIDIA" ? "" : integrated ? "" : " " + L.T("Если FPS не хватает — включите FSR или XeSS в режиме «Качество».");
         state.Advice.Add(new NvAdvice
         {
             Title = "В самих играх",
-            Text = $"Вертикальная синхронизация — выключить, лимит FPS — {limit}, размытие в движении — выключить.{upscale} " +
-                   "Для установленных игр программа предлагает это сама: вкладка «Оптимизация», блок «Настройки графики игр».",
+            Text = L.F("Вертикальная синхронизация — выключить, лимит FPS — {0}, размытие в движении — выключить.", limit) + upscale + " " +
+                   L.T("Для установленных игр программа предлагает это сама: вкладка «Оптимизация», блок «Настройки графики игр»."),
         });
         if (integrated)
             state.Advice.Add(new NvAdvice
             {
                 Title = "Встроенная графика",
-                Text = "Она забирает часть оперативной памяти и делит питание с процессором. В играх снижайте разрешение или включайте FSR / XeSS, " +
-                       "а перед игрой закрывайте браузер. Две планки памяти вместо одной заметно ускоряют встроенную графику.",
+                Text = L.T("Она забирает часть оперативной памяти и делит питание с процессором. В играх снижайте разрешение или включайте FSR / XeSS, а перед игрой закрывайте браузер. Две планки памяти вместо одной заметно ускоряют встроенную графику."),
             });
         if (battery)
             state.Advice.Add(new NvAdvice
             {
                 Title = "Электропитание",
-                Text = "Играйте от сети: от батареи видеокарта и процессор работают вполсилы, какими бы ни были настройки драйвера, а заряд уходит за час-два.",
+                Text = L.T("Играйте от сети: от батареи видеокарта и процессор работают вполсилы, какими бы ни были настройки драйвера, а заряд уходит за час-два."),
             });
     }
 
@@ -289,8 +293,8 @@ public static class NvidiaProfiles
         }
         else if (string.IsNullOrEmpty(exePath))
         {
-            t.Caption = "файл игры не найден";
-            t.Note = "Программа не нашла запускаемый файл этой игры в папке установки, поэтому не знает, какой профиль драйвера к ней относится. Настройте игру в панели управления NVIDIA.";
+            t.Caption = L.T("файл игры не найден");
+            t.Note = L.T("Программа не нашла запускаемый файл этой игры в папке установки, поэтому не знает, какой профиль драйвера к ней относится. Настройте игру в панели управления NVIDIA.");
             return t;
         }
         else
@@ -312,11 +316,11 @@ public static class NvidiaProfiles
         t.HasBackup = LoadBackup().Any(l => l[0] == t.Key);
 
         int n = t.Changes;
-        string advice = n == 0 ? "менять нечего" : Fmt.Plural(n, "рекомендация", "рекомендации", "рекомендаций");
-        t.Caption = global ? "для всех игр и программ · " + advice
-            : (t.HasProfile ? "профиль есть" : "профиля ещё нет") + " · " + advice;
+        string advice = n == 0 ? L.T("менять нечего") : Fmt.Plural(n, "рекомендация", "рекомендации", "рекомендаций");
+        t.Caption = global ? L.F("для всех игр и программ · {0}", advice)
+            : (t.HasProfile ? L.T("профиль есть") : L.T("профиля ещё нет")) + " · " + advice;
         if (!global && !t.HasProfile)
-            t.Note = $"Своего профиля у этой игры в драйвере нет — она работает на общих настройках. Профиль для {t.Exe} будет создан, только когда вы нажмёте «Применить отмеченные».";
+            t.Note = L.F("Своего профиля у этой игры в драйвере нет — она работает на общих настройках. Профиль для {0} будет создан, только когда вы нажмёте «Применить отмеченные».", t.Exe);
         return t;
     }
 
@@ -345,97 +349,97 @@ public static class NvidiaProfiles
         bool game = !t.Global;
 
         // --- режим низкой задержки
-        var latency = new NvRow { Key = "latency", Title = "Режим низкой задержки", NowText = LatencyText(v.Latency) };
+        var latency = new NvRow { Key = "latency", Title = L.T("Режим низкой задержки"), NowText = LatencyText(v.Latency) };
         if (game && HasReflex(t.Title))
         {
-            latency.Why = $"В {t.Title} есть NVIDIA Reflex: он делает то же самое точнее и заменяет этот режим. Включите Reflex в настройках игры — здесь менять нечего.";
-            latency.Remark = "в игре есть Reflex";
+            latency.Why = L.F("В {0} есть NVIDIA Reflex: он делает то же самое точнее и заменяет этот режим. Включите Reflex в настройках игры — здесь менять нечего.", t.TitleText);
+            latency.Remark = L.T("в игре есть Reflex");
         }
         else
         {
-            latency.Why = "Кадры не копятся в очереди перед видеокартой — мышь откликается быстрее, когда видеокарта загружена полностью. "
-                          + (game ? "Если в игре есть NVIDIA Reflex, включайте его: он заменяет этот режим." : "В играх с NVIDIA Reflex включайте его: он заменяет этот режим.");
+            latency.Why = L.T("Кадры не копятся в очереди перед видеокартой — мышь откликается быстрее, когда видеокарта загружена полностью.") + " "
+                          + (game ? L.T("Если в игре есть NVIDIA Reflex, включайте его: он заменяет этот режим.") : L.T("В играх с NVIDIA Reflex включайте его: он заменяет этот режим."));
             if (v.Latency == 0) { latency.ToText = LatencyText(1); latency.Writes = LatencyWrites(1); }
-            else latency.Remark = "менять не нужно";
+            else latency.Remark = L.T("менять не нужно");
         }
         rows.Add(latency);
 
         // --- ограничение частоты кадров
-        var cap = new NvRow { Key = "cap", Title = "Лимит FPS", NowText = v.Cap == 0 ? "нет" : v.Cap + " FPS" };
+        var cap = new NvRow { Key = "cap", Title = L.T("Лимит FPS"), NowText = v.Cap == 0 ? L.T("нет") : v.Cap + " FPS" };
         if (!game)
         {
-            cap.Why = "Общий лимит действует на все программы сразу, в том числе на те, которым он мешает. Задавайте его по играм.";
-            cap.Remark = v.Cap == 0 ? "менять не нужно" : "действует на все программы";
+            cap.Why = L.T("Общий лимит действует на все программы сразу, в том числе на те, которым он мешает. Задавайте его по играм.");
+            cap.Remark = v.Cap == 0 ? L.T("менять не нужно") : L.T("действует на все программы");
         }
         else if (ctx.Hz <= 60)
         {
-            cap.Why = $"Монитор работает на {ctx.Hz} Гц: лимит драйвера здесь ничего не даст — хватит вертикальной синхронизации или лимита в самой игре.";
-            cap.Remark = "менять не нужно";
+            cap.Why = L.F("Монитор работает на {0} Гц: лимит драйвера здесь ничего не даст — хватит вертикальной синхронизации или лимита в самой игре.", ctx.Hz);
+            cap.Remark = L.T("менять не нужно");
         }
         else
         {
-            cap.Why = $"Чуть ниже частоты монитора ({ctx.Hz} Гц): кадры идут ровнее, а видеокарта не греется впустую. " +
-                      "Лимит программа предлагает только здесь, а не в файлах игр: так он один на игру и не сбрасывается её обновлениями. Если лимит стоит и в самой игре, действует меньший из двух.";
+            cap.Why = L.F("Чуть ниже частоты монитора ({0} Гц): кадры идут ровнее, а видеокарта не греется впустую.", ctx.Hz) + " " +
+                      L.T("Лимит программа предлагает только здесь, а не в файлах игр: так он один на игру и не сбрасывается её обновлениями. Если лимит стоит и в самой игре, действует меньший из двух.");
             if (v.Cap == 0 || v.Cap > ctx.Cap + 1) { cap.ToText = ctx.Cap + " FPS"; cap.Writes.Add((FrameLimit, (uint)ctx.Cap)); }
-            else cap.Remark = "менять не нужно";
+            else cap.Remark = L.T("менять не нужно");
         }
         rows.Add(cap);
 
         // --- режим электропитания
-        var power = new NvRow { Key = "power", Title = "Режим электропитания", NowText = PowerText(v.Power) };
+        var power = new NvRow { Key = "power", Title = L.T("Режим электропитания"), NowText = PowerText(v.Power) };
         if (game)
         {
-            power.Why = "Видеокарта не сбрасывает частоту в лёгких сценах — меньше рывков, когда нагрузка резко растёт. Действует, только пока запущена эта игра.";
+            power.Why = L.T("Видеокарта не сбрасывает частоту в лёгких сценах — меньше рывков, когда нагрузка резко растёт. Действует, только пока запущена эта игра.");
             if (v.Power != PowerMax) { power.ToText = PowerText(PowerMax); power.Writes.Add((PowerMode, PowerMax)); }
-            else power.Remark = "менять не нужно";
+            else power.Remark = L.T("менять не нужно");
         }
         else
         {
-            power.Why = "В общих настройках лучше обычный режим: с максимальной производительностью видеокарта держит высокую частоту и вне игр — лишние тепло и шум. Максимальную производительность включайте для отдельных игр.";
+            power.Why = L.T("В общих настройках лучше обычный режим: с максимальной производительностью видеокарта держит высокую частоту и вне игр — лишние тепло и шум. Максимальную производительность включайте для отдельных игр.");
             if (v.Power == PowerMax) { power.ToText = PowerText(PowerNormal); power.Writes.Add((PowerMode, PowerNormal)); }
-            else power.Remark = "менять не нужно";
+            else power.Remark = L.T("менять не нужно");
         }
         rows.Add(power);
 
         // --- вертикальная синхронизация
-        var sync = new NvRow { Key = "vsync", Title = "Вертикальная синхронизация", NowText = SyncText(v.Sync) };
+        var sync = new NvRow { Key = "vsync", Title = L.T("Вертикальная синхронизация"), NowText = SyncText(v.Sync) };
         if (v.Sync == VsHalf || v.Sync == VsThird || v.Sync == VsQuarter)
         {
-            sync.Why = "Сейчас драйвер держит FPS на половине частоты монитора или ниже — игра идёт заметно хуже, чем могла бы. Верните выбор игре.";
+            sync.Why = L.T("Сейчас драйвер держит FPS на половине частоты монитора или ниже — игра идёт заметно хуже, чем могла бы. Верните выбор игре.");
             sync.ToText = SyncText(VsApp);
             sync.Writes.Add((VSync, VsApp));
         }
         else
         {
-            sync.Why = "Решает, кто согласует кадры с монитором: игра или драйвер. С лимитом FPS и переменной частотой обновления (G-SYNC) разрывов картинки нет и без синхронизации, поэтому менять не нужно.";
-            sync.Remark = "менять не нужно";
+            sync.Why = L.T("Решает, кто согласует кадры с монитором: игра или драйвер. С лимитом FPS и переменной частотой обновления (G-SYNC) разрывов картинки нет и без синхронизации, поэтому менять не нужно.");
+            sync.Remark = L.T("менять не нужно");
         }
         rows.Add(sync);
 
         // --- качество фильтрации текстур
-        var tex = new NvRow { Key = "texture", Title = "Качество фильтрации текстур", NowText = TextureText(v.Texture) };
+        var tex = new NvRow { Key = "texture", Title = L.T("Качество фильтрации текстур"), NowText = TextureText(v.Texture) };
         bool gpuBound = played?.GpuBound >= 50;
         if (game && v.Texture == TexHighQuality && gpuBound)
         {
-            tex.Why = $"В ваших сессиях эту игру ограничивала видеокарта ({played.GpuBound:0} % времени). «Качество» выглядит почти так же, а видеокарте чуть легче.";
+            tex.Why = L.F("В ваших сессиях эту игру ограничивала видеокарта ({0:0} % времени). «Качество» выглядит почти так же, а видеокарте чуть легче.", played.GpuBound);
             tex.ToText = TextureText(TexQuality);
             tex.Writes.Add((TextureQuality, TexQuality));
         }
         else
         {
-            tex.Why = "Насколько точно сглаживаются текстуры под углом. На FPS влияет на 1–2 %, поэтому менять ради скорости незачем.";
-            tex.Remark = "менять не нужно";
+            tex.Why = L.T("Насколько точно сглаживаются текстуры под углом. На FPS влияет на 1–2 %, поэтому менять ради скорости незачем.");
+            tex.Remark = L.T("менять не нужно");
         }
         rows.Add(tex);
 
         // --- размер кэша шейдеров: общий для всех игр
         if (!game)
         {
-            var cache = new NvRow { Key = "cache", Title = "Размер кэша шейдеров", NowText = !v.CacheKnown ? "по умолчанию" : CacheText(v.CacheMb) };
-            cache.Why = "Место на диске под готовые шейдеры. Когда его мало, шейдеры крупных игр вытесняют друг друга и собираются заново — отсюда рывки.";
+            var cache = new NvRow { Key = "cache", Title = L.T("Размер кэша шейдеров"), NowText = !v.CacheKnown ? L.T("по умолчанию") : CacheText(v.CacheMb) };
+            cache.Why = L.T("Место на диске под готовые шейдеры. Когда его мало, шейдеры крупных игр вытесняют друг друга и собираются заново — отсюда рывки.");
             bool small = v.CacheKnown && v.CacheMb != CacheUnlimited && v.CacheMb < CacheTenGb;
             if (small && ctx.FreeGb >= 40) { cache.ToText = CacheText(CacheTenGb); cache.Writes.Add((ShaderCacheSize, CacheTenGb)); }
-            else cache.Remark = small ? "на диске мало места" : "менять не нужно";
+            else cache.Remark = small ? L.T("на диске мало места") : L.T("менять не нужно");
             rows.Add(cache);
         }
         return rows;
@@ -447,22 +451,24 @@ public static class NvidiaProfiles
         (LowLatencyState, (uint)mode), (LowLatencyUltra, mode == 2 ? 1u : 0u), (PrerenderLimit, mode == 0 ? 0u : 1u),
     };
 
-    private static string LatencyText(int mode) => mode switch { 0 => "выкл.", 1 => "вкл.", _ => "ультра" };
+    // Значения — как в панели управления NVIDIA (по-английски — её же названия).
+    private static string LatencyText(int mode) => mode switch { 0 => L.T("выкл."), 1 => L.T("вкл."), _ => L.T("ультра") };
     private static string PowerText(uint v) => v switch
     {
-        0 => "адаптивный", 1 => "максимальная производительность", 2 => "на усмотрение драйвера", 3 => "стабильная производительность",
-        4 => "экономия энергии", 5 => "обычный", _ => "другой (" + v + ")",
+        0 => L.T("адаптивный"), 1 => L.T("максимальная производительность"), 2 => L.T("на усмотрение драйвера"), 3 => L.T("стабильная производительность"),
+        4 => L.T("экономия энергии"), 5 => L.T("обычный"), _ => L.F("другой ({0})", v),
     };
     private static string SyncText(uint v) => v switch
     {
-        VsApp => "как в игре", VsOff => "выкл.", VsOn => "вкл.", VsFast => "быстрая",
-        VsHalf => "половина частоты монитора", VsThird => "треть частоты монитора", VsQuarter => "четверть частоты монитора", _ => "другая",
+        VsApp => L.T("как в игре"), VsOff => L.T("выкл."), VsOn => L.T("вкл."), VsFast => L.T("быстрая"),
+        VsHalf => L.T("половина частоты монитора"), VsThird => L.T("треть частоты монитора"), VsQuarter => L.T("четверть частоты монитора"), _ => L.T("другая"),
     };
     private static string TextureText(uint v) => v switch
     {
-        TexHighQuality => "высокое качество", TexQuality => "качество", TexPerformance => "производительность", TexHighPerformance => "высокая производительность", _ => "другое",
+        TexHighQuality => L.T("высокое качество"), TexQuality => L.T("качество"), TexPerformance => L.T("производительность"), TexHighPerformance => L.T("высокая производительность"), _ => L.T("другое"),
     };
-    private static string CacheText(uint mb) => mb == CacheUnlimited ? "без ограничения" : mb == 0 ? "выключен" : mb >= 1024 ? (mb / 1024.0).ToString("0.#") + " ГБ" : mb + " МБ";
+    private static string CacheText(uint mb) => mb == CacheUnlimited ? L.T("без ограничения") : mb == 0 ? L.T("выключен")
+        : mb >= 1024 ? (mb / 1024.0).ToString("0.#", L.Culture) + " " + Fmt.GbUnit : mb + " " + Fmt.MbUnit;
 
     // ================================================================== запускаемый файл игры
     private static readonly string[] SkipExeParts =
@@ -521,14 +527,14 @@ public static class NvidiaProfiles
         var writes = new Dictionary<uint, uint>();
         foreach (var r in rows.Where(r => r.CanChange))
             foreach (var (id, value) in r.Writes) writes[id] = value;
-        if (t == null || writes.Count == 0) return "Ничего не отмечено.";
-        if (!t.Global && t.Exe == "") return "Запускаемый файл игры не найден — записывать некуда.";
+        if (t == null || writes.Count == 0) return L.T("Ничего не отмечено.");
+        if (!t.Global && t.Exe == "") return L.T("Запускаемый файл игры не найден — записывать некуда.");
 
         lock (Gate)
         {
             if (!Nv.Ready(out string why)) return why;
             using var drs = Drs.Open(out int st);
-            if (drs == null) return "Драйвер NVIDIA не открыл свои настройки: " + Nv.Error(st) + ".";
+            if (drs == null) return L.F("Драйвер NVIDIA не открыл свои настройки: {0}.", Nv.Error(st));
 
             IntPtr profile;
             string createdName = null;
@@ -547,7 +553,7 @@ public static class NvidiaProfiles
                     if (st == NvOk) st = drs.CreateApp(profile, t.Exe.ToLowerInvariant(), t.Title);
                 }
             }
-            if (st != NvOk || profile == IntPtr.Zero) return "Не удалось открыть профиль драйвера: " + Nv.Error(st) + ".";
+            if (st != NvOk || profile == IntPtr.Zero) return L.F("Не удалось открыть профиль драйвера: {0}.", Nv.Error(st));
 
             // Копия «как было» — до записи. Что уже сохранено раньше, не трогаем: там настоящие исходные значения.
             var present = createdName != null ? new Dictionary<uint, (uint Value, bool Predefined)>() : drs.Enum(profile);
@@ -585,13 +591,13 @@ public static class NvidiaProfiles
                 backup.RemoveAll(added.Contains);
                 SaveBackup(backup);
                 return st == NvInvalidUserPrivilege || st == NvAccessDenied
-                    ? "Драйвер не дал записать настройки: нужны права администратора."
-                    : "Драйвер не принял настройки: " + Nv.Error(st) + ". Ничего не изменено.";
+                    ? L.T("Драйвер не дал записать настройки: нужны права администратора.")
+                    : L.F("Драйвер не принял настройки: {0}. Ничего не изменено.", Nv.Error(st));
             }
         }
         string what = Fmt.Plural(rows.Count(r => r.CanChange), "значение", "значения", "значений");
-        return $"Готово: в профиле драйвера изменено {what}. " + (t.Global ? "Подействует на программы, запущенные после этого." : "Подействует при следующем запуске игры.")
-               + " Исходные значения сохранены — «Вернуть как было» восстановит их.";
+        return L.F("Готово: в профиле драйвера изменено {0}.", what) + " " + (t.Global ? L.T("Подействует на программы, запущенные после этого.") : L.T("Подействует при следующем запуске игры."))
+               + " " + L.T("Исходные значения сохранены — «Вернуть как было» восстановит их.");
     }
 
     /// <summary>Вернуть настройки профиля к тому, что было до первого изменения программой.</summary>
@@ -602,10 +608,10 @@ public static class NvidiaProfiles
         {
             var backup = LoadBackup();
             var mine = backup.Where(l => l[0] == t.Key).ToList();
-            if (mine.Count == 0) return "Копии нет — программа этот профиль не меняла.";
+            if (mine.Count == 0) return L.T("Копии нет — программа этот профиль не меняла.");
             if (!Nv.Ready(out string why)) return why;
             using var drs = Drs.Open(out int st);
-            if (drs == null) return "Драйвер NVIDIA не открыл свои настройки: " + Nv.Error(st) + ".";
+            if (drs == null) return L.F("Драйвер NVIDIA не открыл свои настройки: {0}.", Nv.Error(st));
 
             IntPtr profile;
             if (t.Global) drs.Base(out profile); else profile = FindProfile(drs, t);
@@ -613,7 +619,7 @@ public static class NvidiaProfiles
             {
                 backup.RemoveAll(mine.Contains);
                 SaveBackup(backup);
-                return "Профиля этой игры в драйвере уже нет — возвращать нечего.";
+                return L.T("Профиля этой игры в драйвере уже нет — возвращать нечего.");
             }
 
             bool created = mine.Any(l => l[1] == "created");
@@ -640,13 +646,13 @@ public static class NvidiaProfiles
             if (st == NvOk) st = drs.Save();
             if (st != NvOk)
                 return st == NvInvalidUserPrivilege || st == NvAccessDenied
-                    ? "Драйвер не дал записать настройки: нужны права администратора."
-                    : "Драйвер не принял настройки: " + Nv.Error(st) + ". Ничего не изменено.";
+                    ? L.T("Драйвер не дал записать настройки: нужны права администратора.")
+                    : L.F("Драйвер не принял настройки: {0}. Ничего не изменено.", Nv.Error(st));
 
             backup.RemoveAll(mine.Contains);
             SaveBackup(backup);
-            return removed ? "Настройки возвращены, созданный программой профиль игры удалён из драйвера."
-                : "Настройки профиля возвращены к тем, что были до изменения.";
+            return removed ? L.T("Настройки возвращены, созданный программой профиль игры удалён из драйвера.")
+                : L.T("Настройки профиля возвращены к тем, что были до изменения.");
         }
     }
 
@@ -780,7 +786,7 @@ public static class NvidiaProfiles
                 {
                     tried = true;
                     try { ready = Load(out reason); }
-                    catch (Exception ex) { ready = false; reason = "Драйвер NVIDIA не отвечает (" + ex.Message + ")."; }
+                    catch (Exception ex) { ready = false; reason = L.F("Драйвер NVIDIA не отвечает ({0}).", ex.Message); }
                 }
                 why = reason;
                 return ready;
@@ -792,14 +798,14 @@ public static class NvidiaProfiles
             why = "";
             // Только из системной папки и по полному пути: туда библиотеку кладёт установщик драйвера.
             string dll = Path.Combine(Environment.SystemDirectory, "nvapi64.dll");
-            if (!Environment.Is64BitProcess || !File.Exists(dll)) { why = "Драйвер NVIDIA не установлен: его библиотеки настроек (nvapi64.dll) в системе нет."; return false; }
+            if (!Environment.Is64BitProcess || !File.Exists(dll)) { why = L.T("Драйвер NVIDIA не установлен: его библиотеки настроек (nvapi64.dll) в системе нет."); return false; }
             if (!NativeLibrary.TryLoad(dll, out IntPtr lib) || !NativeLibrary.TryGetExport(lib, "nvapi_QueryInterface", out IntPtr entry))
-            { why = "Библиотека драйвера NVIDIA не загрузилась. Переустановите драйвер."; return false; }
+            { why = L.T("Библиотека драйвера NVIDIA не загрузилась. Переустановите драйвер."); return false; }
             query = Marshal.GetDelegateForFunctionPointer<QueryInterface>(entry);
 
             var init = Fn<Plain>(0x0150E828);                       // NvAPI_Initialize
             int st = init == null ? -1 : init();
-            if (st != NvOk) { why = "Драйвер NVIDIA не отвечает: видеокарта NVIDIA не найдена или драйвер не запущен."; return false; }
+            if (st != NvOk) { why = L.T("Драйвер NVIDIA не отвечает: видеокарта NVIDIA не найдена или драйвер не запущен."); return false; }
 
             getError = Fn<ErrorMessage>(0x6C2D048C);                // NvAPI_GetErrorMessage
             CreateSession = Fn<OutHandle>(0x0694D52E);              // NvAPI_DRS_CreateSession
@@ -826,7 +832,7 @@ public static class NvidiaProfiles
             bool all = CreateSession != null && DestroySession != null && LoadSettings != null && SaveSettings != null && GetBaseProfile != null
                        && FindApplicationByName != null && FindProfileByName != null && Get != null && Set != null && GetProfileInfo != null && Enum != null
                        && CreateProfile != null && DeleteProfile != null && CreateApplication != null && RestoreProfileDefaultSetting != null && DeleteProfileSetting != null;
-            if (!all) why = "Установленный драйвер NVIDIA слишком старый: в нём нет нужных функций. Обновите драйвер.";
+            if (!all) why = L.T("Установленный драйвер NVIDIA слишком старый: в нём нет нужных функций. Обновите драйвер.");
             return all;
         }
 
@@ -851,7 +857,7 @@ public static class NvidiaProfiles
                 catch { }
                 finally { Marshal.FreeHGlobal(buf); }
             }
-            return text == "" ? "код " + status : text + ", код " + status;
+            return text == "" ? L.F("код {0}", status) : L.F("{0}, код {1}", text, status);
         }
     }
 

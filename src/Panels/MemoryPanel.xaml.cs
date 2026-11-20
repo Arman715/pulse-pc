@@ -16,7 +16,6 @@ namespace PulsePC.Panels;
 public partial class MemoryPanel : UserControl, ISystemPanel
 {
     private const string Nb = " ";
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
     private readonly DispatcherTimer tick = new() { Interval = TimeSpan.FromSeconds(2) };
     private PanelHost host;
     private int tickCount;
@@ -26,10 +25,12 @@ public partial class MemoryPanel : UserControl, ISystemPanel
     public MemoryPanel()
     {
         InitializeComponent();
+        // Единица у чисел — на языке программы (перевод разметки до частей NumberText не доходит).
+        foreach (var n in new[] { NowUsed, NowStandby, NowFree, NowAvail, WorstMin, AvgMin }) n.Unit = Fmt.GbUnit;
         SwatchStandby.Fill = SegmentBar.Pattern(0, true);
         foreach (int gb in MemoryBoost.Thresholds)
         {
-            var rb = new RadioButton { Style = (Style)FindResource("Range"), GroupName = "MemThreshold", Content = $"{gb}{Nb}ГБ", Tag = gb };
+            var rb = new RadioButton { Style = (Style)FindResource("Range"), GroupName = "MemThreshold", Content = $"{gb}{Nb}{Fmt.GbUnit}", Tag = gb };
             rb.Checked += Threshold_Checked;
             ThresholdChoice.Children.Add(rb);
         }
@@ -85,14 +86,17 @@ public partial class MemoryPanel : UserControl, ISystemPanel
             && DateTime.TryParse(s.Get(MemoryBoost.KStartAt), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var startAt))
         {
             string game = s.Get(MemoryBoost.KStartGame);
-            StartNote.Text = $"При запуске прошлой игры{(game.Length > 0 ? $" ({game}, {When(startAt).ToLower(Ru)})" : "")} было доступно {MemoryBoost.Gb(startGb)}.";
+            StartNote.Text = game.Length > 0
+                ? L.F("При запуске прошлой игры ({0}, {1}) было доступно {2}.", game, When(startAt).ToLower(L.Culture), MemoryBoost.Gb(startGb))
+                : L.F("При запуске прошлой игры было доступно {0}.", MemoryBoost.Gb(startGb));
             StartNote.Visibility = Visibility.Visible;
         }
         UpdateThresholdKey();
     }
 
     private static string When(DateTime t) =>
-        t.Date == DateTime.Today ? $"Сегодня в {t:HH:mm}" : t.Date == DateTime.Today.AddDays(-1) ? $"Вчера в {t:HH:mm}" : t.ToString("d MMMM, HH:mm", Ru);
+        t.Date == DateTime.Today ? L.F("Сегодня в {0:HH:mm}", t) : t.Date == DateTime.Today.AddDays(-1) ? L.F("Вчера в {0:HH:mm}", t)
+        : t.ToString(L.Pick("d MMMM, HH:mm", "MMMM d, HH:mm"), L.Culture);
 
     private void Trim_Click(object sender, RoutedEventArgs e)
     {
@@ -138,7 +142,7 @@ public partial class MemoryPanel : UserControl, ISystemPanel
         int t = MemoryBoost.Threshold(host.Settings);
         Bar.Threshold = on ? t : double.NaN;
         ThresholdKey.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-        ThresholdKeyText.Text = $"порог авторежима: доступно {t}{Nb}ГБ";
+        ThresholdKeyText.Text = L.F("порог авторежима: доступно {0} ГБ", t);
     }
 
     // ================================================================== сейчас
@@ -160,18 +164,18 @@ public partial class MemoryPanel : UserControl, ISystemPanel
 
     private void ShowState(MemState st)
     {
-        if (!st.Ok) { State.Text = "Память не читается."; return; }
+        if (!st.Ok) { State.Text = L.T("Память не читается."); return; }
         double avail = st.AvailGb, total = st.TotalGb;
-        State.Text = avail < 1.5 ? $"Памяти мало: программам доступно {MemoryBoost.Num(avail)} из {MemoryBoost.Gb(total)}."
-                   : avail < 3 ? $"Памяти впритык: доступно {MemoryBoost.Num(avail)} из {MemoryBoost.Gb(total)}."
-                   : $"Сейчас программам доступно {MemoryBoost.Num(avail)} из {MemoryBoost.Gb(total)}.";
+        State.Text = avail < 1.5 ? L.F("Памяти мало: программам доступно {0} из {1}.", MemoryBoost.Num(avail), MemoryBoost.Gb(total))
+                   : avail < 3 ? L.F("Памяти впритык: доступно {0} из {1}.", MemoryBoost.Num(avail), MemoryBoost.Gb(total))
+                   : L.F("Сейчас программам доступно {0} из {1}.", MemoryBoost.Num(avail), MemoryBoost.Gb(total));
 
         NowUsed.Value = st.UsedGb;
         NowAvail.Value = avail;
         NowStandby.Value = st.HasLists ? st.StandbyGb : double.NaN;
         NowFree.Value = st.HasLists ? st.FreeGb : double.NaN;
         NowAvail.Foreground = avail < 1.5 ? Palette.Warn : Palette.Ink1;
-        TotalDim.Text = $"{MemoryBoost.Num(total)} ГБ";
+        TotalDim.Text = MemoryBoost.Num(total) + " " + Fmt.GbUnit;
 
         if (st.HasLists)
         {
@@ -179,13 +183,13 @@ public partial class MemoryPanel : UserControl, ISystemPanel
             double standby = Math.Clamp(st.StandbyGb, 0, avail), free = Math.Clamp(avail - standby, 0, avail);
             Bar.Set(total, st.UsedGb, standby, free);
             NowNote.Text = st.StandbyGb >= st.FreeGb
-                ? $"Почти всё доступное сейчас — кэш ожидания ({MemoryBoost.Gb(st.StandbyGb)}): это файлы, которые недавно читались с диска. Windows держит их про запас и отдаёт программам сразу, как только память понадобится, — поэтому кэш считается доступной памятью."
-                : $"Пустой памяти {MemoryBoost.Gb(st.FreeGb)}, кэша ожидания {MemoryBoost.Gb(st.StandbyGb)}. Кэш — файлы, которые недавно читались с диска: Windows отдаёт его программам по первому требованию.";
+                ? L.F("Почти всё доступное сейчас — кэш ожидания ({0}): это файлы, которые недавно читались с диска. Windows держит их про запас и отдаёт программам сразу, как только память понадобится, — поэтому кэш считается доступной памятью.", MemoryBoost.Gb(st.StandbyGb))
+                : L.F("Пустой памяти {0}, кэша ожидания {1}. Кэш — файлы, которые недавно читались с диска: Windows отдаёт его программам по первому требованию.", MemoryBoost.Gb(st.FreeGb), MemoryBoost.Gb(st.StandbyGb));
         }
         else
         {
             Bar.Set(total, st.UsedGb, 0, avail);
-            NowNote.Text = "Счётчики Windows не отдали разбивку на кэш и пустую память — видно только, сколько доступно.";
+            NowNote.Text = L.T("Счётчики Windows не отдали разбивку на кэш и пустую память — видно только, сколько доступно.");
         }
     }
 
@@ -205,8 +209,8 @@ public partial class MemoryPanel : UserControl, ISystemPanel
         {
             Name = ProcessMemory.Pretty(t.Name),
             Count = t.Count > 1 ? "×" + t.Count : "",
-            Note = t.Name.Equals("Memory Compression", StringComparison.OrdinalIgnoreCase) ? "сжатая память Windows"
-                 : MemoryBoost.IsSystem(t.Name) ? "системное, не сжимается" : "",
+            Note = t.Name.Equals("Memory Compression", StringComparison.OrdinalIgnoreCase) ? L.T("сжатая память Windows")
+                 : MemoryBoost.IsSystem(t.Name) ? L.T("системное, не сжимается") : "",
             Share = (double)t.Bytes / max,
             Size = t.Bytes >= 1000L << 20 ? MemoryBoost.Gb(t.Bytes / Fmt.Gib) : Fmt.Size(t.Bytes).Replace(" ", Nb),
         }).ToList();
@@ -217,7 +221,7 @@ public partial class MemoryPanel : UserControl, ISystemPanel
     {
         if (host == null || !host.Admin || MemoryBoost.Running) return;
         BtnBoost.IsEnabled = false;
-        BtnBoost.Content = "Освобождаю…";
+        BtnBoost.Content = L.T("Освобождаю…");
         host.BeginBusy();
         bool trim = TrimToggle.IsChecked == true;
         int pid = GameHooks.InGame ? GameHooks.Pid : 0;
@@ -228,7 +232,7 @@ public partial class MemoryPanel : UserControl, ISystemPanel
             host.Ui(() =>
             {
                 host.EndBusy();
-                BtnBoost.Content = "Освободить память";
+                BtnBoost.Content = L.T("Освободить память");
                 BtnBoost.IsEnabled = host.Admin;
                 Refresh(true);
             });
@@ -261,7 +265,7 @@ public partial class MemoryPanel : UserControl, ISystemPanel
         GamesBody.Visibility = sh.Measured == 0 ? Visibility.Collapsed : Visibility.Visible;
         if (sh.Measured == 0) return;
 
-        ShortCount.Text = $"{sh.Short} из {sh.Measured}";
+        ShortCount.Text = L.Pick($"{sh.Short} из {sh.Measured}", $"{sh.Short} of {sh.Measured}");
         ShortCount.Foreground = sh.Short > 0 && sh.Short * 5 >= sh.Measured ? Palette.Warn : Palette.Ink1;
         WorstMin.Value = sh.Worst;
         WorstMin.Foreground = sh.Worst < MemoryBoost.ShortGb ? Palette.Warn : Palette.Ink1;
@@ -269,8 +273,9 @@ public partial class MemoryPanel : UserControl, ISystemPanel
 
         var chrono = all.OrderBy(s => s.Start).TakeLast(MinRamStrip.MaxBars).ToList();
         Strip.SetData(chrono.Select(s => s.MinRamGb).ToArray(), MemoryBoost.ShortGb);
-        StripFrom.Text = chrono.Count > 0 ? chrono[0].Start.ToString("d MMMM", Ru) : "";
-        StripTo.Text = chrono.Count > 0 ? chrono[^1].Start.ToString("d MMMM", Ru) + (all.Count > chrono.Count ? $" · последние {chrono.Count} из {all.Count}" : "") : "";
+        string day = L.Pick("d MMMM", "MMMM d");
+        StripFrom.Text = chrono.Count > 0 ? chrono[0].Start.ToString(day, L.Culture) : "";
+        StripTo.Text = chrono.Count > 0 ? chrono[^1].Start.ToString(day, L.Culture) + (all.Count > chrono.Count ? L.F(" · последние {0} из {1}", chrono.Count, all.Count) : "") : "";
 
         GameList.ItemsSource = all.GroupBy(s => s.Game)
             .Select(g =>
@@ -281,10 +286,10 @@ public partial class MemoryPanel : UserControl, ISystemPanel
                 {
                     Game = g.Key,
                     Count = Fmt.Plural(n, "сессия", "сессии", "сессий") + " · " + Fmt.Duration(TimeSpan.FromSeconds(g.Sum(s => s.Duration.TotalSeconds))),
-                    Short = $"{bad} из {n}",
+                    Short = L.Pick($"{bad} из {n}", $"{bad} of {n}"),
                     MarkVisible = bad > 0 ? Visibility.Visible : Visibility.Collapsed,
                     // 0,95 не округляется до «1,0»: иначе число выглядит выше порога, хотя ниже.
-                    Worst = worst < MemoryBoost.ShortGb ? worst.ToString("0.00", Ru) + Nb + "ГБ" : MemoryBoost.Gb(worst),
+                    Worst = worst < MemoryBoost.ShortGb ? worst.ToString("0.00", L.Culture) + Nb + Fmt.GbUnit : MemoryBoost.Gb(worst),
                     WorstInk = worst < MemoryBoost.ShortGb ? Palette.Warn : Palette.Ink1,
                 };
             })

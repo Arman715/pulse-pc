@@ -40,7 +40,7 @@ public partial class PagefilePanel : UserControl, ISystemPanel
         {
             PagefileState st;
             try { st = Load(sessions()); }
-            catch (Exception ex) { st = new PagefileState { Error = "Не удалось прочитать настройку файла подкачки: " + ex.Message }; }
+            catch (Exception ex) { st = new PagefileState { Error = L.F("Не удалось прочитать настройку файла подкачки: {0}", ex.Message) }; }
             host.Ui(() => Show(st));
         });
     }
@@ -50,12 +50,12 @@ public partial class PagefilePanel : UserControl, ISystemPanel
         state = st;
         if (!st.Loaded)
         {
-            State.Text = "Не удалось прочитать настройку файла подкачки.";
+            State.Text = L.T("Не удалось прочитать настройку файла подкачки.");
             NowList.ItemsSource = null; GamesList.ItemsSource = null;
             GamesEmpty.Visibility = Visibility.Collapsed;
             AdviceMark.Level = Severity.Info;
-            AdviceTitle.Text = "Рекомендации нет";
-            AdviceWhy.Text = st.Error + " Откройте раздел ещё раз чуть позже.";
+            AdviceTitle.Text = L.T("Рекомендации нет");
+            AdviceWhy.Text = st.Error + " " + L.T("Откройте раздел ещё раз чуть позже.");
             MemoryBlock.Visibility = Visibility.Collapsed;
             BtnApply.IsEnabled = false; BtnRestore.IsEnabled = false;
             return;
@@ -67,24 +67,24 @@ public partial class PagefilePanel : UserControl, ISystemPanel
         {
             new()
             {
-                Title = "Кто задаёт размер",
-                Hint = st.Auto ? "Windows сама увеличивает файл, когда памяти не хватает, и уменьшает, когда он не нужен."
-                    : st.Files.Any(f => f.HasSetting) ? "Размер выбран вручную в настройках Windows." : "Файл подкачки выключен в настройках Windows.",
-                Value = st.Auto ? "Windows" : st.Files.Any(f => f.HasSetting) ? "вручную" : "выключен",
+                Title = L.T("Кто задаёт размер"),
+                Hint = st.Auto ? L.T("Windows сама увеличивает файл, когда памяти не хватает, и уменьшает, когда он не нужен.")
+                    : st.Files.Any(f => f.HasSetting) ? L.T("Размер выбран вручную в настройках Windows.") : L.T("Файл подкачки выключен в настройках Windows."),
+                Value = st.Auto ? "Windows" : st.Files.Any(f => f.HasSetting) ? L.T("вручную") : L.T("выключен"),
             },
         };
         foreach (var f in st.Files)
         {
             var d = st.DriveOf(f);
-            string disk = d == null ? "Диск не найден." : d.DiskName == "" ? Cap(d.KindText) + "." : $"{Cap(d.KindText)}, {d.DiskName}.";
-            string set = !f.HasSetting || st.Auto ? "" : f.MaximumMb == 0 ? " Размер на этом диске выбирает Windows." : $" Задано от {Pagefile.Mb(f.InitialMb)} до {Pagefile.Mb(f.MaximumMb)}.";
-            string use = f.InUse ? $" Занято {Pagefile.Mb(f.UsedMb)}, с включения компьютера — до {Pagefile.Mb(f.PeakMb)}." : " Появится после перезагрузки.";
+            string disk = d == null ? L.T("Диск не найден.") : d.DiskName == "" ? Cap(d.KindText) + "." : $"{Cap(d.KindText)}, {d.DiskName}.";
+            string set = !f.HasSetting || st.Auto ? "" : " " + (f.MaximumMb == 0 ? L.T("Размер на этом диске выбирает Windows.") : L.F("Задано от {0} до {1}.", Pagefile.Mb(f.InitialMb), Pagefile.Mb(f.MaximumMb)));
+            string use = " " + (f.InUse ? L.F("Занято {0}, с включения компьютера — до {1}.", Pagefile.Mb(f.UsedMb), Pagefile.Mb(f.PeakMb)) : L.T("Появится после перезагрузки."));
             now.Add(new Fact { Title = f.Path, Hint = disk + set + use, Value = f.InUse ? Pagefile.Mb(f.AllocatedMb) : "—" });
         }
         now.Add(new Fact
         {
-            Title = "Память компьютера",
-            Hint = st.CommitLimitMb > 0 ? $"Вместе с файлом подкачки программам доступно до {Pagefile.Mb(st.CommitLimitMb)}, сейчас свободно {Pagefile.Mb(st.CommitFreeMb)}." : "",
+            Title = L.T("Память компьютера"),
+            Hint = st.CommitLimitMb > 0 ? L.F("Вместе с файлом подкачки программам доступно до {0}, сейчас свободно {1}.", Pagefile.Mb(st.CommitLimitMb), Pagefile.Mb(st.CommitFreeMb)) : "",
             Value = Pagefile.Ram(st.RamGb),
         });
         NowList.ItemsSource = now;
@@ -101,9 +101,9 @@ public partial class PagefilePanel : UserControl, ISystemPanel
             {
                 new()
                 {
-                    Title = "Меньше всего свободной памяти",
-                    Hint = g.Tight == 0 ? $"За {Fmt.Plural(g.Sessions, "последнюю игру", "последние игры", "последних игр")} свободной памяти ни разу не оставалось меньше 2 ГБ."
-                        : $"Меньше 2 ГБ оставалось в {g.Tight} из {Fmt.Plural(g.Sessions, "последней игры", "последних игр", "последних игр")}. В такие минуты Windows убирает данные в файл подкачки.",
+                    Title = L.T("Меньше всего свободной памяти"),
+                    Hint = g.Tight == 0 ? L.F("За {0} свободной памяти ни разу не оставалось меньше 2 ГБ.", Fmt.Plural(g.Sessions, "последнюю игру", "последние игры", "последних игр"))
+                        : L.F("Меньше 2 ГБ оставалось в {0} из {1}. В такие минуты Windows убирает данные в файл подкачки.", g.Tight, Fmt.Plural(g.Sessions, "последней игры", "последних игр", "последних игр")),
                     Value = Fmt.Gb(g.MinFreeGb),
                 },
             };
@@ -111,14 +111,14 @@ public partial class PagefilePanel : UserControl, ISystemPanel
             {
                 games.Add(new Fact
                 {
-                    Title = "Игры, где шла подкачка",
-                    Hint = "Во время игры Windows много читала с диска то, что не поместилось в память. В игре это рывки и подгрузки.",
-                    Value = $"{g.Paged} из {g.Analysed}",
+                    Title = L.T("Игры, где шла подкачка"),
+                    Hint = L.T("Во время игры Windows много читала с диска то, что не поместилось в память. В игре это рывки и подгрузки."),
+                    Value = g.Paged + L.Pick(" из ", " of ") + g.Analysed,
                 });
                 games.Add(new Fact
                 {
-                    Title = "Просадки FPS из-за памяти",
-                    Hint = "Резкие падения FPS в моменты, когда память была на исходе.",
+                    Title = L.T("Просадки FPS из-за памяти"),
+                    Hint = L.T("Резкие падения FPS в моменты, когда память была на исходе."),
                     Value = g.RamDips.ToString(),
                 });
             }
@@ -145,10 +145,10 @@ public partial class PagefilePanel : UserControl, ISystemPanel
     {
         var plan = state?.Advice.Plan;
         if (plan == null) return;
-        Run(() => Pagefile.Apply(plan), "Записываю настройку…");
+        Run(() => Pagefile.Apply(plan), L.T("Записываю настройку…"));
     }
 
-    private void BtnRestore_Click(object sender, RoutedEventArgs e) => Run(Pagefile.Restore, "Возвращаю прежнюю настройку…");
+    private void BtnRestore_Click(object sender, RoutedEventArgs e) => Run(Pagefile.Restore, L.T("Возвращаю прежнюю настройку…"));
 
     private void Run(Func<(bool Ok, string Message)> action, string progress)
     {
@@ -161,7 +161,7 @@ public partial class PagefilePanel : UserControl, ISystemPanel
         {
             (bool Ok, string Message) r;
             try { r = action(); }
-            catch (Exception ex) { r = (false, "Не удалось: " + ex.Message); }
+            catch (Exception ex) { r = (false, L.F("Не удалось: {0}", ex.Message)); }
             host.Ui(() =>
             {
                 host.EndBusy();

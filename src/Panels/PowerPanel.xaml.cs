@@ -48,7 +48,7 @@ public partial class PowerPanel : UserControl, ISystemPanel
         state = st;
         if (st == null || st.Active == null)
         {
-            State.Text = "Не удалось прочитать схему питания.";
+            State.Text = L.T("Не удалось прочитать схему питания.");
             OnGame.Text = "—";
             SchemeList.ItemsSource = null;
             SchemesEmpty.Visibility = Visibility.Visible;
@@ -60,10 +60,10 @@ public partial class PowerPanel : UserControl, ISystemPanel
         string active = st.Active.Name;
         bool always = st.Mode == PowerAuto.ModeAlways;
         bool held = st.InGame && st.BeforeName != "";       // идёт игра, схему сменила программа
-        State.Text = held ? $"Идёт игра: включена «{active}»."
-            : st.Enabled && !st.Active.IsMax ? $"Сейчас «{active}». В игре включится «{st.MaxName}»."
-            : always && !st.Active.IsMax ? $"Сейчас «{active}», хотя выбрана «всегда максимальная»."
-            : $"Сейчас включена схема «{active}».";
+        State.Text = held ? L.F("Идёт игра: включена «{0}».", active)
+            : st.Enabled && !st.Active.IsMax ? L.F("Сейчас «{0}». В игре включится «{1}».", active, st.MaxName)
+            : always && !st.Active.IsMax ? L.F("Сейчас «{0}», хотя выбрана «всегда максимальная».", active)
+            : L.F("Сейчас включена схема «{0}».", active);
 
         ModeGame.IsChecked = st.Mode == PowerAuto.ModeGame;
         ModeAlways.IsChecked = always;
@@ -71,13 +71,13 @@ public partial class PowerPanel : UserControl, ISystemPanel
         SetModesEnabled(host.Admin && !switching);
 
         // Названия схем даёт Windows на своём языке, поэтому в текстах они стоят только в именительном падеже.
-        OnGame.Text = always ? (st.Active.IsMax ? $"Ничего не изменится: «{active}» включена всегда." : $"Схема сменится на «{st.MaxName}» и останется после игры.")
-            : !st.Enabled ? $"Ничего не изменится: останется «{active}»."
-            : held ? $"Игра уже идёт. Когда вы её закроете, вернётся схема «{st.BeforeName}»."
-            : st.Active.IsMax ? $"Схема не изменится: «{active}» уже включена. После игры она и останется."
-            : $"Схема сменится: «{active}» → «{st.MaxName}». Когда игра закроется, вернётся «{active}».";
+        OnGame.Text = always ? (st.Active.IsMax ? L.F("Ничего не изменится: «{0}» включена всегда.", active) : L.F("Схема сменится на «{0}» и останется после игры.", st.MaxName))
+            : !st.Enabled ? L.F("Ничего не изменится: останется «{0}».", active)
+            : held ? L.F("Игра уже идёт. Когда вы её закроете, вернётся схема «{0}».", st.BeforeName)
+            : st.Active.IsMax ? L.F("Схема не изменится: «{0}» уже включена. После игры она и останется.", active)
+            : L.F("Схема сменится: «{0}» → «{1}». Когда игра закроется, вернётся «{0}».", active, st.MaxName);
 
-        if (st.Last == null) { LastText.Text = "Ещё не было."; LastWhen.Text = ""; }
+        if (st.Last == null) { LastText.Text = L.T("Ещё не было."); LastWhen.Text = ""; }
         else { LastText.Text = st.LastText; LastWhen.Text = When(st.Last.Value); }
 
         // Режим включён, игра не идёт, а стоит быстрая схема: вне игр от неё только нагрев и шум.
@@ -85,9 +85,8 @@ public partial class PowerPanel : UserControl, ISystemPanel
         Offer.Visibility = offer ? Visibility.Visible : Visibility.Collapsed;
         if (offer)
         {
-            OfferText.Text = $"Сейчас игра не идёт, а включена схема «{active}»: процессор держит полную частоту без нагрузки, поэтому сильнее греется и шумит. " +
-                             $"Со схемой «{st.BalancedName}» вне игр станет тише и прохладнее, а в игре программа сама включит полную скорость.";
-            BtnBalanced.Content = $"Включить схему «{st.BalancedName}»";
+            OfferText.Text = L.F("Сейчас игра не идёт, а включена схема «{0}»: процессор держит полную частоту без нагрузки, поэтому сильнее греется и шумит. Со схемой «{1}» вне игр станет тише и прохладнее, а в игре программа сама включит полную скорость.", active, st.BalancedName);
+            BtnBalanced.Content = L.F("Включить схему «{0}»", st.BalancedName);
         }
         BtnBalanced.IsEnabled = host.Admin;
 
@@ -124,7 +123,7 @@ public partial class PowerPanel : UserControl, ISystemPanel
         {
             string message;
             try { message = PowerAuto.SetMode(host, mode); }
-            catch (Exception ex) { message = "Не удалось сменить режим: " + ex.Message; }
+            catch (Exception ex) { message = L.F("Не удалось сменить режим: {0}", ex.Message); }
             host.Ui(() =>
             {
                 host.EndBusy();
@@ -144,7 +143,7 @@ public partial class PowerPanel : UserControl, ISystemPanel
         {
             (bool Ok, string Message) r;
             try { r = PowerAuto.SwitchToBalanced(); }
-            catch (Exception ex) { r = (false, "Не удалось сменить схему: " + ex.Message); }
+            catch (Exception ex) { r = (false, L.F("Не удалось сменить схему: {0}", ex.Message)); }
             host.Ui(() =>
             {
                 host.EndBusy();
@@ -162,12 +161,11 @@ public partial class PowerPanel : UserControl, ISystemPanel
         Result.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
-
     /// <summary>«сегодня, 21:40», «вчера, 09:05», «18 ноября, 21:40».</summary>
     private static string When(DateTime t)
     {
         int days = (DateTime.Today - t.Date).Days;
-        return days == 0 ? "сегодня, " + t.ToString("HH:mm") : days == 1 ? "вчера, " + t.ToString("HH:mm") : t.ToString("d MMMM, HH:mm", Ru);
+        return days == 0 ? L.F("сегодня, {0:HH:mm}", t) : days == 1 ? L.F("вчера, {0:HH:mm}", t)
+            : t.ToString(L.Pick("d MMMM, HH:mm", "MMMM d, HH:mm"), L.Culture);
     }
 }

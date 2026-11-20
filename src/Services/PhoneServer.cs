@@ -41,8 +41,15 @@ public static class PhoneServer
         /// <summary>Старый короткий ключ заменён длинным: QR-код и значок на телефоне нужно получить заново.</summary>
         public bool KeyRenewed;
         public string Url = "", Adapter = "", Problem = "";
+        /// <summary>Компьютер в домашней сети только по кабелю (Wi-Fi на нём нет или выключен).</summary>
+        public bool WiredOnly;
         public int Devices;
         public DateTime LastRequest;
+        /// <summary>Последнее устройство, которое пыталось открыть страницу, но не было пущено (адрес и когда).</summary>
+        public string Rejected = "";
+        public DateTime RejectedAt;
+        /// <summary>Что мешает телефону открыть страницу на стороне Windows (брандмауэр); пусто — помех не видно.</summary>
+        public string Firewall = "";
     }
 
     private static readonly object Gate = new();
@@ -50,10 +57,13 @@ public static class PhoneServer
     private static PanelHost host;
     private static Instance current;
     private static string adapterText = "", problem = "";
+    private static volatile bool wiredOnly;
     private static Timer addressTimer, watchTimer;
     private static (IPAddress Address, int Port, string Key) test;
     private static bool testOn = true;          // в проверочном режиме переключатель живёт только в памяти
     private static bool keyRenewed;
+    private static (IPAddress Address, DateTime At) rejected;
+    private static DateTime rejectNotified;
 
     /// <summary>Состояние изменилось (вызывается из фонового потока).</summary>
     public static event Action Changed;
@@ -129,7 +139,8 @@ public static class PhoneServer
     {
         lock (Gate)
         {
-            var s = new State { Enabled = Enabled, Test = test.Address != null, Adapter = adapterText, Problem = problem, KeyRenewed = keyRenewed };
+            var s = new State { Enabled = Enabled, Test = test.Address != null, Adapter = adapterText, Problem = problem, KeyRenewed = keyRenewed, WiredOnly = wiredOnly,
+                                Rejected = rejected.Address?.ToString() ?? "", RejectedAt = rejected.At, Firewall = firewallText ?? "" };
             if (current != null)
             {
                 s.Running = true;
@@ -163,7 +174,7 @@ public static class PhoneServer
         try
         {
             IPAddress address; string adapter, trouble;
-            if (test.Address != null) (address, adapter, trouble) = (test.Address, "проверка на этом компьютере", "");
+            if (test.Address != null) (address, adapter, trouble) = (test.Address, L.T("проверка на этом компьютере"), "");
             else (address, adapter, trouble) = FindAddress();
 
             lock (Gate)
@@ -171,7 +182,8 @@ public static class PhoneServer
                 // Адрес сервера по-прежнему наш и его сеть по-прежнему частная — работающий сервер не трогаем (новый адрес на миг
                 // не определился, сеть переподключается, меняются временные адреса): иначе панель гасла от любого сетевого события.
                 // Сеть стала общедоступной или адреса больше нет — сервер закрывается, в разделе видна причина.
-                if (onlyIfMoved && current != null && StillMine(current.Address) && Volatile.Read(ref trusted).Any(n => n.Contains(current.Address))) return;
+                if (onlyIfMoved && current != null && StillMine(current.Address) && Volatile.Read(ref trusted).Any(n => n.Contains(current.Address))
+                    && (address == null || address.Equals(current.Address))) return;
             }
             Instance old;
             lock (Gate) { old = current; current = null; }
@@ -203,7 +215,7 @@ public static class PhoneServer
         }
         catch (Exception ex)
         {
-            lock (Gate) problem = "Панель не запустилась: " + ex.Message;
+            lock (Gate) problem = L.F("Панель не запустилась: {0}", ex.Message);
         }
     }
 
@@ -284,15 +296,71 @@ public static class PhoneServer
     /// </summary>
     private static Subnet[] trusted = Array.Empty<Subnet>();
 
-    /// <summary>Пускать ли устройство: только из доверенной подсети и только с домашнего адреса; этот же компьютер — всегда.</summary>
-    private static bool ClientAllowed(IPAddress remote)
+    /// <summary>Адреса этого компьютера в частных (не виртуальных) сетях: подключение, пришедшее на них, — из домашней сети.</summary>
+    private static IPAddress[] trustedLocal = Array.Empty<IPAddress>();
+
+    /// <summary>
+    /// Пускать ли устройство: только с домашнего адреса (10.x, 172.16–31.x, 192.168.x) и только если оно в подсети частной сети
+    /// компьютера или пришло на его адрес в частной сети. Второе нужно для роутеров, у которых Wi-Fi и порты для кабеля —
+    /// разные подсети (192.168.0.x и 192.168.1.x): телефон по Wi-Fi и компьютер по кабелю тогда в разных подсетях одного роутера.
+    /// VPN и общедоступные сети сюда не попадают: их адреса компьютера не входят в trustedLocal. Этот же компьютер — всегда.
+    /// </summary>
+    private static bool ClientAllowed(IPAddress remote, IPAddress local = null)
     {
         if (remote == null) return false;
         if (remote.IsIPv4MappedToIPv6) remote = remote.MapToIPv4();
         if (IPAddress.IsLoopback(remote)) return true;
         if (!IsHomeAddress(remote)) return false;
         var nets = Volatile.Read(ref trusted);
-        return nets.Any(n => n.Contains(remote));
+        if (nets.Any(n => n.Contains(remote))) return true;
+        if (local == null) return false;
+        if (local.IsIPv4MappedToIPv6) local = local.MapToIPv4();
+        return Volatile.Read(ref trustedLocal).Any(a => a.Equals(local));
+    }
+
+    // ───────────── Брандмауэр (только чтение) ─────────────
+
+    private static string firewallText;
+    private static DateTime firewallAt;
+    private static int firewallBusy;
+
+    /// <summary>
+    /// Проверить в фоне, не закрывает ли брандмауэр Windows входящие подключения к программе. Программа ничего в брандмауэре
+    /// не меняет — только читает правила и, если нужно, подсказывает, где разрешить. Не чаще раза в 2 минуты.
+    /// </summary>
+    public static void CheckFirewall()
+    {
+        if (test.Address != null || (DateTime.UtcNow - firewallAt).TotalMinutes < 2) return;
+        if (Interlocked.Exchange(ref firewallBusy, 1) == 1) return;
+        firewallAt = DateTime.UtcNow;
+        Task.Run(() =>
+        {
+            try
+            {
+                string exe = Environment.ProcessPath ?? "";
+                string ps = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+                string script =
+                    "$p = '" + exe.Replace("'", "''") + "'; " +
+                    "$r = Get-NetFirewallApplicationFilter -All | Where-Object { [Environment]::ExpandEnvironmentVariables($_.Program) -ieq $p } | Get-NetFirewallRule | " +
+                    "Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' }; " +
+                    "'BLOCK=' + @($r | Where-Object { $_.Action -eq 'Block' -and $_.Profile.ToString() -match 'Any|Private' }).Count; " +
+                    "'ALLOW=' + @($r | Where-Object { $_.Action -eq 'Allow' -and $_.Profile.ToString() -match 'Any|Private' }).Count; " +
+                    "'ON=' + (Get-NetFirewallProfile -Profile Private).Enabled";
+                string b64 = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+                var (code, output) = Shell.Run(ps, "-NoProfile -NonInteractive -EncodedCommand " + b64, 30000);
+                int Num(string key) => System.Text.RegularExpressions.Regex.Match(output ?? "", key + @"=(\d+)") is { Success: true } m ? int.Parse(m.Groups[1].Value) : -1;
+                bool on = (output ?? "").Contains("ON=True", StringComparison.OrdinalIgnoreCase);
+                int block = Num("BLOCK"), allow = Num("ALLOW");
+                string where = L.T("«Безопасность Windows» → «Брандмауэр и защита сети» → «Разрешить работу с приложением через брандмауэр» → «Изменить параметры»: в строке «PulsePC» отметьте «Частная».");
+                firewallText = block > 0
+                    ? L.F("Брандмауэр Windows запрещает телефону подключаться к Пульс ПК (правило «Блокировать»; так бывает, если когда-то нажали «Отмена» в окне брандмауэра). Разрешите сами: {0}", where)
+                    : on && allow == 0 && block == 0
+                        ? L.F("В брандмауэре Windows нет разрешения для Пульс ПК в частной сети: телефон может не достучаться. Разрешите сами: {0}", where)
+                        : "";
+            }
+            catch { }
+            finally { Volatile.Write(ref firewallBusy, 0); Changed?.Invoke(); }
+        });
     }
 
     private static readonly object CategoryGate = new();
@@ -352,6 +420,8 @@ public static class PhoneServer
 
         var cats = NetworkCategories();
         var subnets = new List<Subnet>();
+        var locals = new List<IPAddress>();
+        var candidates = new List<(IPAddress Address, Subnet Net, bool Wireless, string Text)>();
         (IPAddress, string)? chosen = null, fallback = null;
         bool routedIsPublic = false;
         string publicNet = null;
@@ -378,6 +448,8 @@ public static class PhoneServer
                     int prefix = unicast.PrefixLength;
                     if (prefix is < 8 or > 32) continue;
                     subnets.Add(MakeSubnet(a, prefix));
+                    locals.Add(a);
+                    candidates.Add((a, MakeSubnet(a, prefix), nic.NetworkInterfaceType == NetworkInterfaceType.Wireless80211, Describe(nic)));
                     if (isRouted) chosen ??= (a, Describe(nic));
                     if (hasGateway && fallback == null) fallback = (a, Describe(nic));
                 }
@@ -385,18 +457,33 @@ public static class PhoneServer
         }
         catch { }
         Volatile.Write(ref trusted, subnets.Distinct().ToArray());
+        Volatile.Write(ref trustedLocal, locals.Distinct().ToArray());
 
-        if (chosen != null) return (chosen.Value.Item1, chosen.Value.Item2, "");
-        // Интернет идёт через VPN или его нет вовсе: берём обычное подключение к роутеру.
-        if (fallback != null) return (fallback.Value.Item1, fallback.Value.Item2, "");
+        wiredOnly = candidates.Count > 0 && !candidates.Any(c => c.Wireless);
+        var pick = chosen ?? fallback;     // без маршрута в интернет (VPN или интернета нет) — обычное подключение к роутеру
+        if (pick != null)
+        {
+            // Компьютер в одной сети и кабелем, и по Wi-Fi: в коде — адрес Wi-Fi. Телефон тоже в Wi-Fi, а многие роутеры
+            // не пускают устройства из Wi-Fi к компьютерам на кабеле (проверено у пользователя: адрес кабеля не открывался,
+            // адрес Wi-Fi — открывался). Сервер слушает все адреса, так что адрес кабеля тоже работает, если роутер пускает.
+            var (addr, text) = pick.Value;
+            var mine = candidates.FirstOrDefault(c => c.Address.Equals(addr));
+            if (mine.Address != null && !mine.Wireless)
+            {
+                var wifi = candidates.FirstOrDefault(c => c.Wireless && c.Net.Equals(mine.Net));
+                if (wifi.Address != null) (addr, text) = (wifi.Address, wifi.Text);
+            }
+            var others = candidates.Where(c => !c.Address.Equals(addr)).Select(c => c.Address + " (" + (c.Wireless ? "Wi-Fi" : L.T("кабель")) + ")").Distinct().ToList();
+            if (others.Count > 0) text += " · " + L.F("другой адрес: {0}", string.Join(", ", others));
+            return (addr, text, "");
+        }
         if (publicNet != null && cats != null)
-            return (null, "", $"Windows считает сеть «{publicNet}» общедоступной (как в кафе или гостинице) — в такой сети панель не включается, её увидели бы чужие. "
-                              + "Если это ваша домашняя сеть, отметьте её как частную: «Параметры» → «Сеть и Интернет» → свойства подключения → «Частная сеть».");
+            return (null, "", L.F("Windows считает сеть «{0}» общедоступной (как в кафе или гостинице) — в такой сети панель не включается, её увидели бы чужие. Если это ваша домашняя сеть, отметьте её как частную: «Параметры» → «Сеть и Интернет» → свойства подключения → «Частная сеть».", publicNet));
         if (publicNet != null)
-            return (null, "", "Windows не сообщила, частная ли это сеть, — на всякий случай панель не включается. Программа попробует снова через минуту.");
+            return (null, "", L.T("Windows не сообщила, частная ли это сеть, — на всякий случай панель не включается. Программа попробует снова через минуту."));
         if (routedIsPublic)
-            return (null, "", "Компьютер подключён к интернету напрямую, без роутера. Так панель не включается: её было бы видно из интернета.");
-        return (null, "", "Компьютер не подключён к домашней сети. Подключите его к роутеру кабелем или по Wi-Fi — панель включится сама.");
+            return (null, "", L.T("Компьютер подключён к интернету напрямую, без роутера. Так панель не включается: её было бы видно из интернета."));
+        return (null, "", L.T("Компьютер не подключён к домашней сети. Подключите его к роутеру кабелем или по Wi-Fi — панель включится сама."));
     }
 
     /// <summary>
@@ -416,7 +503,7 @@ public static class PhoneServer
     }
 
     private static string Describe(NetworkInterface nic) =>
-        (nic.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ? "Wi-Fi" : "кабель") + " · " + nic.Description;
+        (nic.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ? "Wi-Fi" : L.T("кабель")) + " · " + nic.Description;
 
     // ───────────── Сервер ─────────────
 
@@ -444,7 +531,7 @@ public static class PhoneServer
         private Instance(TcpListener listener, IPAddress address, int port, string key, Func<LiveData> live, Func<double> vramTotal)
         {
             this.listener = listener; Address = address; Port = port; this.key = key; this.live = live; this.vramTotal = vramTotal;
-            pageBytes = Encoding.UTF8.GetBytes(PageHtml.Replace("{K}", key));
+            pageBytes = Encoding.UTF8.GetBytes(Page(key));
             sampler = new Timer(_ => Sample(), null, 0, 1500);
             _ = Task.Run(AcceptLoop);
         }
@@ -466,7 +553,7 @@ public static class PhoneServer
                 }
                 catch (SocketException) { try { l.Stop(); } catch { } }
             }
-            problem = $"Панель не запустилась: порты с {port} по {port + tries - 1} заняты другими программами.";
+            problem = L.F("Панель не запустилась: порты с {0} по {1} заняты другими программами.", port, port + tries - 1);
             return null;
         }
 
@@ -509,10 +596,32 @@ public static class PhoneServer
 
                 // Только частная домашняя сеть: подключения из общедоступных и виртуальных сетей (кафе, VPN, ZeroTier, Radmin VPN)
                 // и из интернета закрываются молча, ещё до чтения запроса. С одного адреса — не больше двух соединений сразу.
-                var remote = (client.Client.RemoteEndPoint as IPEndPoint)?.Address;
-                if (remote != null && remote.IsIPv4MappedToIPv6) remote = remote.MapToIPv4();
+                // Адреса соединения, оборванного сразу после приёма, могут не прочитаться: такое соединение просто закрывается —
+                // исключение здесь навсегда остановило бы приём, а раздел продолжал бы показывать «работает».
+                IPAddress remote = null, local = null;
+                try
+                {
+                    remote = (client.Client.RemoteEndPoint as IPEndPoint)?.Address;
+                    if (remote != null && remote.IsIPv4MappedToIPv6) remote = remote.MapToIPv4();
+                    local = (client.Client.LocalEndPoint as IPEndPoint)?.Address;
+                }
+                catch { remote = null; }
                 bool admit = false;
-                if (ClientAllowed(remote))
+                bool allowed = ClientAllowed(remote, local);
+                if (!allowed && remote != null)
+                {
+                    // Перебор портов с чужого адреса не должен дёргать окно на каждое соединение: раздел обновляется,
+                    // когда сменился адрес или прошла секунда.
+                    var now = DateTime.Now;
+                    bool notify = !remote.Equals(rejected.Address) || (now - rejectNotified).TotalSeconds >= 1;
+                    rejected = (remote, now);
+                    if (notify)
+                    {
+                        rejectNotified = now;
+                        try { Changed?.Invoke(); } catch { }
+                    }
+                }
+                if (allowed)
                 {
                     lock (perAddress)
                     {
@@ -568,16 +677,16 @@ public static class PhoneServer
                     length += read;
                     end = buffer.AsSpan(0, length).IndexOf("\r\n\r\n"u8);
                 }
-                if (end < 0) { await Send(stream, 431, "Request Header Fields Too Large", "text/plain; charset=utf-8", "Запрос слишком длинный."u8.ToArray(), false, timeout.Token); return; }
+                if (end < 0) { await Send(stream, 431, "Request Header Fields Too Large", "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(L.T("Запрос слишком длинный.")), false, timeout.Token); return; }
 
                 int lineEnd = buffer.AsSpan(0, length).IndexOf("\r\n"u8);
                 string[] parts = Encoding.ASCII.GetString(buffer, 0, lineEnd).Split(' ');
                 if (parts.Length != 3 || !parts[2].StartsWith("HTTP/1.", StringComparison.Ordinal))
-                { await Send(stream, 400, "Bad Request", "text/plain; charset=utf-8", "Непонятный запрос."u8.ToArray(), false, timeout.Token); return; }
+                { await Send(stream, 400, "Bad Request", "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(L.T("Непонятный запрос.")), false, timeout.Token); return; }
 
                 bool head = parts[0] == "HEAD";
                 if (parts[0] != "GET" && !head)
-                { await Send(stream, 405, "Method Not Allowed", "text/plain; charset=utf-8", "Страница только для чтения."u8.ToArray(), false, timeout.Token, "Allow: GET, HEAD\r\n"); return; }
+                { await Send(stream, 405, "Method Not Allowed", "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(L.T("Страница только для чтения.")), false, timeout.Token, "Allow: GET, HEAD\r\n"); return; }
 
                 string path = parts[1];
                 int query = path.IndexOf('?');
@@ -592,7 +701,7 @@ public static class PhoneServer
                 if (!page && !data && !icon && !manifest && !profile)
                 {
                     await Task.Delay(300, timeout.Token);        // подбор ключа перебором становится бессмысленно долгим
-                    await Send(stream, 404, "Not Found", "text/plain; charset=utf-8", "Такой страницы нет."u8.ToArray(), head, timeout.Token);
+                    await Send(stream, 404, "Not Found", "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(L.T("Такой страницы нет.")), head, timeout.Token);
                     return;
                 }
 
@@ -788,6 +897,16 @@ public static class PhoneServer
             Check("пускаем: этот компьютер и частная подсеть; не пускаем: соседнюю подсеть, VPN 26.x, интернет",
                 ClientAllowed(IPAddress.Loopback) && ClientAllowed(IPAddress.Parse("192.168.1.20")) && ClientAllowed(IPAddress.Parse("192.168.1.20").MapToIPv6())
                 && !ClientAllowed(IPAddress.Parse("192.168.7.20")) && !ClientAllowed(IPAddress.Parse("10.0.0.5")) && !ClientAllowed(IPAddress.Parse("26.1.2.3")) && !ClientAllowed(IPAddress.Parse("8.8.8.8")));
+            // Роутер с разными подсетями для Wi-Fi и кабеля: телефон 192.168.0.x стучится на адрес компьютера в частной сети.
+            var oldLocal = Volatile.Read(ref trustedLocal);
+            Volatile.Write(ref trustedLocal, new[] { IPAddress.Parse("192.168.1.5") });
+            Check("Wi-Fi и кабель в разных подсетях одного роутера: пускаем на адрес частной сети, не пускаем на адрес VPN и с адреса из интернета",
+                ClientAllowed(IPAddress.Parse("192.168.0.23"), IPAddress.Parse("192.168.1.5"))
+                && ClientAllowed(IPAddress.Parse("192.168.0.23"), IPAddress.Parse("192.168.1.5").MapToIPv6())
+                && !ClientAllowed(IPAddress.Parse("10.147.17.4"), IPAddress.Parse("10.147.17.1"))
+                && !ClientAllowed(IPAddress.Parse("26.1.2.3"), IPAddress.Parse("192.168.1.5"))
+                && !ClientAllowed(IPAddress.Parse("192.168.0.23")));
+            Volatile.Write(ref trustedLocal, oldLocal);
             Volatile.Write(ref trusted, Array.Empty<Subnet>());
             Check("в общедоступной сети не пускаем никого, кроме этого компьютера", !ClientAllowed(IPAddress.Parse("192.168.1.20")) && ClientAllowed(IPAddress.Loopback));
         }
@@ -841,7 +960,7 @@ public static class PhoneServer
     }
 
     private static string Manifest(string key) =>
-        "{\"name\":\"Пульс ПК\",\"short_name\":\"Пульс ПК\",\"start_url\":\"/" + key + "/\",\"scope\":\"/" + key + "/\"," +
+        "{\"name\":" + JsonSerializer.Serialize(L.T("Пульс ПК")) + ",\"short_name\":" + JsonSerializer.Serialize(L.T("Пульс ПК")) + ",\"start_url\":\"/" + key + "/\",\"scope\":\"/" + key + "/\"," +
         "\"display\":\"standalone\",\"background_color\":\"#F2EEE5\",\"theme_color\":\"#F2EEE5\"," +
         "\"icons\":[{\"src\":\"/" + key + "/icon.png\",\"sizes\":\"180x180\",\"type\":\"image/png\"}]}";
 
@@ -858,6 +977,10 @@ public static class PhoneServer
     {
         static string X(string s) => System.Security.SecurityElement.Escape(s);
         string clip = StableUuid("clip"), root = StableUuid("root");
+        string app = X(L.T("Пульс ПК"));
+        string clipText = X(L.T("Значок панели «Пульс ПК» на экране «Домой»."));
+        string title = X(L.T("Пульс ПК — панель на телефоне"));
+        string about = X(L.T("Добавляет значок «Пульс ПК» на экран «Домой». Он открывает показания компьютера во время игры во весь экран. Других настроек телефона профиль не меняет; удалить его можно в «Настройки» → «Основные» → «VPN и управление устройством»."));
         string xml = $"""
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -870,9 +993,9 @@ public static class PhoneServer
 			<key>PayloadVersion</key><integer>1</integer>
 			<key>PayloadIdentifier</key><string>ru.pulsepc.phone.webclip</string>
 			<key>PayloadUUID</key><string>{clip}</string>
-			<key>PayloadDisplayName</key><string>Пульс ПК</string>
-			<key>PayloadDescription</key><string>Значок панели «Пульс ПК» на экране «Домой».</string>
-			<key>Label</key><string>Пульс ПК</string>
+			<key>PayloadDisplayName</key><string>{app}</string>
+			<key>PayloadDescription</key><string>{clipText}</string>
+			<key>Label</key><string>{app}</string>
 			<key>URL</key><string>{X(url)}</string>
 			<key>Icon</key><data>{Convert.ToBase64String(IconBytes)}</data>
 			<key>FullScreen</key><true/>
@@ -885,9 +1008,9 @@ public static class PhoneServer
 	<key>PayloadVersion</key><integer>1</integer>
 	<key>PayloadIdentifier</key><string>ru.pulsepc.phone</string>
 	<key>PayloadUUID</key><string>{root}</string>
-	<key>PayloadDisplayName</key><string>Пульс ПК — панель на телефоне</string>
-	<key>PayloadDescription</key><string>Добавляет значок «Пульс ПК» на экран «Домой». Он открывает показания компьютера во время игры во весь экран. Других настроек телефона профиль не меняет; удалить его можно в «Настройки» → «Основные» → «VPN и управление устройством».</string>
-	<key>PayloadOrganization</key><string>Пульс ПК</string>
+	<key>PayloadDisplayName</key><string>{title}</string>
+	<key>PayloadDescription</key><string>{about}</string>
+	<key>PayloadOrganization</key><string>{app}</string>
 	<key>PayloadRemovalDisallowed</key><false/>
 </dict>
 </plist>
@@ -905,10 +1028,61 @@ public static class PhoneServer
         }
     }
 
-    /// <summary>Вся страница одним файлом: без внешних шрифтов, картинок и библиотек.</summary>
+    /// <summary>
+    /// Страница с ключом и текстами на языке программы: {K} — ключ, {T:имя} — текст из PageTexts. Значения подставляются
+    /// и в разметку, и в строки скрипта в одинарных кавычках, поэтому апостроф заменяется типографским.
+    /// </summary>
+    private static string Page(string key)
+    {
+        var sb = new StringBuilder(PageHtml).Replace("{K}", key);
+        foreach (var (id, text) in PageTexts()) sb.Replace("{T:" + id + "}", text.Replace("'", "’"));
+        return sb.ToString();
+    }
+
+    private static (string Id, string Text)[] PageTexts() => new[]
+    {
+        ("lang", L.Code),
+        ("app", L.Pick("Пульс ПК", "Pulse PC")),
+        ("kicker", L.Pick("Пульс ПК · приборы", "Pulse PC · live stats")),
+        ("connecting", L.Pick("подключаюсь", "connecting")),
+        ("lostTitle", L.Pick("Нет связи с компьютером", "No connection to the PC")),
+        ("lostText", L.Pick("Проверьте, что телефон в той же сети Wi-Fi, что и компьютер, и что программа «Пульс ПК» запущена.",
+                            "Check that the phone is on the same Wi-Fi network as the PC and that Pulse PC is running.")),
+        ("lostRetry", L.Pick("Проверьте, что телефон в той же сети Wi-Fi, что и компьютер, и что программа «Пульс ПК» запущена. Страница подключится сама.",
+                             "Check that the phone is on the same Wi-Fi network as the PC and that Pulse PC is running. The page will reconnect on its own.")),
+        ("goneTitle", L.Pick("Этот адрес больше не действует", "This address no longer works")),
+        ("goneText", L.Pick("На компьютере сменили ключ. Откройте в «Пульс ПК» вкладку «Система» → «Панель на телефоне» и наведите камеру на новый код.",
+                            "The key was changed on the PC. In Pulse PC, open System → Phone panel and scan the new code with the camera.")),
+        ("plot", L.Pick("FPS за последние две минуты", "FPS over the last two minutes")),
+        ("cpu", L.Pick("Процессор", "CPU")),
+        ("gpu", L.Pick("Видеокарта", "GPU")),
+        ("vram", L.Pick("Видеопамять", "VRAM")),
+        ("ram", L.Pick("Память", "RAM")),
+        ("ping", L.Pick("Пинг", "Ping")),
+        ("note", L.Pick("Страница только показывает числа с компьютера и обновляется сама.", "This page only shows readings from the PC and updates on its own.")),
+        ("dec", L.Pick(",", ".")),
+        ("h", L.Pick("ч", "h")),
+        ("min", L.Pick("мин", "min")),
+        ("s", L.Pick("с", "s")),
+        ("noGame", L.Pick("игра не запущена", "no game running")),
+        ("noFps", L.Pick("FPS не считается", "FPS not measured")),
+        ("countingFps", L.Pick("считаю FPS…", "measuring FPS…")),
+        ("idleSub", L.Pick("Числа ниже — как компьютер работает сейчас.", "The numbers below show how the PC is doing right now.")),
+        ("running", L.Pick("идёт ", "running for ")),
+        ("antiCheat", L.Pick(" · в этой игре строгий античит, поэтому FPS не считается", " · this game has a strict anti-cheat, so FPS is not measured")),
+        ("of", L.Pick("из", "of")),
+        ("gb", L.Pick("ГБ", "GB")),
+        ("free", L.Pick("свободно", "free")),
+        ("ms", L.Pick("мс", "ms")),
+        ("offline", L.Pick("нет связи", "offline")),
+        ("online", L.Pick("на связи", "online")),
+        ("noData", L.Pick("показаний нет", "no readings")),
+    };
+
+    /// <summary>Вся страница одним файлом: без внешних шрифтов, картинок и библиотек. Тексты — метки {T:имя}, см. Page.</summary>
     private const string PageHtml = """
 <!doctype html>
-<html lang="ru">
+<html lang="{T:lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -916,12 +1090,12 @@ public static class PhoneServer
 <meta name="format-detection" content="telephone=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Пульс ПК">
+<meta name="apple-mobile-web-app-title" content="{T:app}">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="apple-touch-icon" href="/{K}/icon.png">
 <link rel="icon" type="image/png" href="/{K}/icon.png">
 <link rel="manifest" href="/{K}/manifest.json">
-<title>Пульс ПК</title>
+<title>{T:app}</title>
 <style>
 :root {
   --paper: #F2EEE5; --ink: #1A1917; --ink2: #45423C; --ink3: #6F6A60; --ink4: #A8A194;
@@ -996,33 +1170,33 @@ body {
 <body>
 <div class="sheet rest" id="sheet">
   <div class="head">
-    <span class="kicker">Пульс ПК · приборы</span>
-    <span class="kicker link"><span class="dot"></span><span id="link">подключаюсь</span></span>
+    <span class="kicker">{T:kicker}</span>
+    <span class="kicker link"><span class="dot"></span><span id="link">{T:connecting}</span></span>
   </div>
-  <div class="lost"><b id="lostTitle">Нет связи с компьютером</b><span id="lostText">Проверьте, что телефон в той же сети Wi-Fi, что и компьютер, и что программа «Пульс ПК» запущена.</span></div>
+  <div class="lost"><b id="lostTitle">{T:lostTitle}</b><span id="lostText">{T:lostText}</span></div>
 
   <div class="left">
     <div class="hero">
       <div class="fps"><span class="n" id="fps">—</span><span class="u">FPS</span></div>
-      <div class="idle" id="idle">подключаюсь…</div>
+      <div class="idle" id="idle">{T:connecting}…</div>
       <div class="game" id="game"></div>
       <div class="sub" id="sub"></div>
     </div>
     <div class="plot">
-      <div class="kicker">FPS за последние две минуты</div>
+      <div class="kicker">{T:plot}</div>
       <canvas id="chart"></canvas>
     </div>
   </div>
 
   <div class="right">
     <div class="rows">
-      <div class="row" id="cpu"><div class="top"><span class="name">Процессор</span><span class="val">—</span></div><div class="bar"><i></i></div></div>
-      <div class="row" id="gpu"><div class="top"><span class="name">Видеокарта</span><span class="val">—</span></div><div class="bar"><i></i></div></div>
-      <div class="row" id="vram"><div class="top"><span class="name">Видеопамять</span><span class="val">—</span></div><div class="bar"><i></i></div></div>
-      <div class="row" id="ram"><div class="top"><span class="name">Память</span><span class="val">—</span></div><div class="bar"><i></i></div></div>
-      <div class="row" id="ping"><div class="top"><span class="name">Пинг</span><span class="val">—</span></div><div class="bar"><i></i></div></div>
+      <div class="row" id="cpu"><div class="top"><span class="name">{T:cpu}</span><span class="val">—</span></div><div class="bar"><i></i></div></div>
+      <div class="row" id="gpu"><div class="top"><span class="name">{T:gpu}</span><span class="val">—</span></div><div class="bar"><i></i></div></div>
+      <div class="row" id="vram"><div class="top"><span class="name">{T:vram}</span><span class="val">—</span></div><div class="bar"><i></i></div></div>
+      <div class="row" id="ram"><div class="top"><span class="name">{T:ram}</span><span class="val">—</span></div><div class="bar"><i></i></div></div>
+      <div class="row" id="ping"><div class="top"><span class="name">{T:ping}</span><span class="val">—</span></div><div class="bar"><i></i></div></div>
     </div>
-    <div class="note">Страница только показывает числа с компьютера и обновляется сама.</div>
+    <div class="note">{T:note}</div>
   </div>
 </div>
 <script>
@@ -1034,14 +1208,14 @@ body {
   var data = null, fails = 0, gone = false, timer = 0;
 
   function has(v) { return typeof v === 'number' && isFinite(v); }
-  function num(v, digits) { return has(v) ? v.toFixed(digits || 0).replace('.', ',') : '—'; }
+  function num(v, digits) { return has(v) ? v.toFixed(digits || 0).replace('.', '{T:dec}') : '—'; }
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
   function span(sec) {
     if (!has(sec)) return '';
     var m = Math.floor(sec / 60), h = Math.floor(m / 60);
-    if (h > 0) return h + ' ч ' + (m % 60) + ' мин';
-    if (m > 0) return m + ' мин';
-    return Math.max(0, Math.floor(sec)) + ' с';
+    if (h > 0) return h + ' {T:h} ' + (m % 60) + ' {T:min}';
+    if (m > 0) return m + ' {T:min}';
+    return Math.max(0, Math.floor(sec)) + ' {T:s}';
   }
   // Строка-полоса: текст значения, доля заполнения 0..1 (null — без полосы), предупреждение.
   function row(id, html, part, warn) {
@@ -1057,22 +1231,22 @@ body {
     for (i = 0; i < h.length; i++) if (has(h[i])) { any = true; break; }
     // Крупное число и график — только когда кадры есть; иначе короткая надпись на их месте.
     sheet.classList.toggle('rest', !d.rec || (!has(d.fps) && !any));
-    $('idle').textContent = !d.rec ? 'игра не запущена' : d.nofps ? 'FPS не считается' : 'считаю FPS…';
+    $('idle').textContent = !d.rec ? '{T:noGame}' : d.nofps ? '{T:noFps}' : '{T:countingFps}';
     $('fps').textContent = num(d.fps);
     $('game').textContent = d.rec ? d.game : '';
-    $('sub').textContent = !d.rec ? 'Числа ниже — как компьютер работает сейчас.'
-      : d.nofps ? 'идёт ' + span(d.sec) + ' · в этой игре строгий античит, поэтому FPS не считается'
-      : 'идёт ' + span(d.sec);
+    $('sub').textContent = !d.rec ? '{T:idleSub}'
+      : d.nofps ? '{T:running}' + span(d.sec) + '{T:antiCheat}'
+      : '{T:running}' + span(d.sec);
 
     row('cpu', num(d.cpu) + unit('%'), has(d.cpu) ? d.cpu / 100 : null, false);
     row('gpu', num(d.gpu) + unit('%') + (has(d.gpuT) ? '<small> ·</small> ' + num(d.gpuT) + unit('°C') : ''),
       has(d.gpu) ? d.gpu / 100 : null, has(d.gpuT) && d.gpuT >= 85);
     var full = has(d.vram) && has(d.vramT) && d.vramT > 0 ? d.vram / d.vramT : null;
-    row('vram', num(d.vram, 1) + (has(d.vramT) && has(d.vram) ? unit('из ' + num(d.vramT, d.vramT % 1 ? 1 : 0) + ' ГБ') : unit('ГБ')), full, has(full) && full >= 0.93);
+    row('vram', num(d.vram, 1) + (has(d.vramT) && has(d.vram) ? unit('{T:of} ' + num(d.vramT, d.vramT % 1 ? 1 : 0) + ' {T:gb}') : unit('{T:gb}')), full, has(full) && full >= 0.93);
     var free = has(d.ramF) && has(d.ramT) && d.ramT > 0 ? d.ramF / d.ramT : null;
-    row('ram', (has(d.ramF) ? '<small>свободно </small>' : '') + num(d.ramF, 1) + (has(d.ramT) && has(d.ramF) ? unit('из ' + num(d.ramT, 1) + ' ГБ') : unit('ГБ')),
+    row('ram', (has(d.ramF) ? '<small>{T:free} </small>' : '') + num(d.ramF, 1) + (has(d.ramT) && has(d.ramF) ? unit('{T:of} ' + num(d.ramT, 1) + ' {T:gb}') : unit('{T:gb}')),
       has(free) ? 1 - free : null, has(d.ramF) && d.ramF < 1);
-    row('ping', num(d.ping) + unit('мс'), has(d.ping) ? d.ping / 150 : null, has(d.ping) && d.ping >= 90);
+    row('ping', num(d.ping) + unit('{T:ms}'), has(d.ping) ? d.ping / 150 : null, has(d.ping) && d.ping >= 90);
     draw(h);
   }
 
@@ -1128,12 +1302,12 @@ body {
   function status() {
     var off = gone || fails >= 2;
     sheet.classList.toggle('off', off);
-    $('link').textContent = off ? 'нет связи' : data ? 'на связи' : 'подключаюсь';
-    if (!data) $('idle').textContent = off ? 'показаний нет' : 'подключаюсь…';
-    $('lostTitle').textContent = gone ? 'Этот адрес больше не действует' : 'Нет связи с компьютером';
+    $('link').textContent = off ? '{T:offline}' : data ? '{T:online}' : '{T:connecting}';
+    if (!data) $('idle').textContent = off ? '{T:noData}' : '{T:connecting}…';
+    $('lostTitle').textContent = gone ? '{T:goneTitle}' : '{T:lostTitle}';
     $('lostText').textContent = gone
-      ? 'На компьютере сменили ключ. Откройте в «Пульс ПК» вкладку «Система» → «Панель на телефоне» и наведите камеру на новый код.'
-      : 'Проверьте, что телефон в той же сети Wi-Fi, что и компьютер, и что программа «Пульс ПК» запущена. Страница подключится сама.';
+      ? '{T:goneText}'
+      : '{T:lostRetry}';
   }
 
   function poll() {

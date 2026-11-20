@@ -58,7 +58,7 @@ public static class PanelHarness
         Live = () => new LiveData
         {
             Recording = true, Game = "Deadlock", SessionSeconds = 2520, Fps = 148, CpuLoad = 61, CpuGhz = 4.1,
-            GpuLoad = 93, GpuTemp = 67, VramUsedGb = 5.4, RamFreeGb = 3.1, RamTotalGb = 15.8, PingMs = 14, GpuName = "Видеокарта",
+            GpuLoad = 93, GpuTemp = 67, VramUsedGb = 5.4, RamFreeGb = 3.1, RamTotalGb = 15.8, PingMs = 14, GpuName = L.T("Видеокарта"),
         },
         Ui = a => Application.Current.Dispatcher.BeginInvoke(a),
         // Сессии — только из отдельной папки проверки (PULSEPC_DATA), настоящие в снимок не попадают.
@@ -91,8 +91,16 @@ public static class PanelHarness
         timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
         timer.Start();
         Dispatcher.PushFrame(frame);
+        // Раздел не в окне — Loaded не приходит, и тексты разметки не переводятся сами (L.HookWindows): переводим здесь.
+        TranslateTree(page);
         Layout(page);
-
+        // Проверка перевода: тексты раздела, оставшиеся на русском, — в файл рядом со снимком.
+        if (L.En)
+        {
+            var left = new List<string>();
+            CollectRussian(page, left);
+            File.WriteAllLines(file + ".ru.txt", left.Distinct());
+        }
         const double scale = 1.25;
         var bmp = new RenderTargetBitmap((int)Math.Ceiling(page.ActualWidth * scale), (int)Math.Ceiling(Math.Max(1, page.ActualHeight) * scale),
             96 * scale, 96 * scale, PixelFormats.Pbgra32);
@@ -112,6 +120,31 @@ public static class PanelHarness
         System.Windows.Documents.TextElement.SetForeground(page, (Brush)Application.Current.Resources["Ink1"]);
         page.UseLayoutRounding = true;
         page.SnapsToDevicePixels = true;
+    }
+
+    /// <summary>Тексты разметки на языке программы — как при загрузке элементов в окне.</summary>
+    private static void TranslateTree(DependencyObject d)
+    {
+        if (d == null || !L.En) return;
+        L.Translate(d);
+        if (d is Visual or System.Windows.Media.Media3D.Visual3D)
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) TranslateTree(VisualTreeHelper.GetChild(d, i));
+    }
+
+    private static void CollectRussian(DependencyObject d, List<string> into)
+    {
+        if (d == null) return;
+        string text = d switch
+        {
+            TextBlock tb => tb.Text,
+            TextBox box => box.Text,
+            ContentControl { Content: string s } => s,
+            _ => null,
+        };
+        if (text != null && System.Text.RegularExpressions.Regex.IsMatch(text, "[А-Яа-яЁё]")) into.Add(text.Replace("\n", " ⏎ "));
+        if (d is FrameworkElement { ToolTip: string tip } && System.Text.RegularExpressions.Regex.IsMatch(tip, "[А-Яа-яЁё]")) into.Add("[tooltip] " + tip);
+        if (d is Visual or System.Windows.Media.Media3D.Visual3D)
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) CollectRussian(VisualTreeHelper.GetChild(d, i), into);
     }
 
     private static void Layout(FrameworkElement page)

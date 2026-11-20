@@ -195,7 +195,7 @@ public static class SystemScan
             var result = new ScanStepResult { Index = i, Title = title };
             int before = ctx.R.Findings.Count;
             try { result.Summary = steps[i](ctx) ?? ""; }
-            catch (Exception ex) { result.Error = ex.GetType().Name + ": " + ex.Message; result.Summary = "не удалось проверить"; }
+            catch (Exception ex) { result.Error = ex.GetType().Name + ": " + ex.Message; result.Summary = L.T("не удалось проверить"); }
             var added = ctx.R.Findings.Skip(before).ToList();
             result.Worst = added.Count == 0 ? Severity.Ok : added.Min(f => f.Severity);
             int rest = minStepMs - (int)sw.ElapsedMilliseconds;
@@ -258,7 +258,7 @@ public static class SystemScan
             R.Findings.Add(new ScanFinding { Severity = s, Title = title, Detail = detail, TargetPage = 7, TargetSection = section, Step = Step });
 
         public void Passport(string label, string value) =>
-            R.Passport.Add(new PassportLine { Label = label, Value = string.IsNullOrWhiteSpace(value) ? "нет данных" : value.Trim() });
+            R.Passport.Add(new PassportLine { Label = label, Value = string.IsNullOrWhiteSpace(value) ? L.T("нет данных") : value.Trim() });
 
         public JsonElement? HwData => Wait(Hw, 50000);
         public JsonElement? StorageData => Wait(Storage, 50000);
@@ -286,7 +286,7 @@ public static class SystemScan
 
     private const string HwScript =
         "$ErrorActionPreference='SilentlyContinue'; " +
-        "function D($d){ if ($d) { try { ([datetime]$d).ToString('yyyy-MM-dd') } catch { '' } } else { '' } } " +
+        "function D($d){ if ($d) { try { ([datetime]$d).ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture) } catch { '' } } else { '' } } " +
         "$p=@(Get-CimInstance Win32_Processor); $v=@(Get-CimInstance Win32_VideoController); $m=@(Get-CimInstance Win32_PhysicalMemory); " +
         "$b=Get-CimInstance Win32_BaseBoard; $bi=Get-CimInstance Win32_BIOS; $cs=Get-CimInstance Win32_ComputerSystem; $os=Get-CimInstance Win32_OperatingSystem; " +
         "$bat=@(Get-CimInstance Win32_Battery).Count; " +
@@ -345,24 +345,27 @@ public static class SystemScan
     private static string Tidy(string s) =>
         Regex.Replace(Regex.Replace(s ?? "", @"\((R|TM|tm|r)\)|®|™", ""), @"\s{2,}", " ").Trim();
 
-    private static string Ru(double v, string fmt) => v.ToString(fmt, CultureInfo.GetCultureInfo("ru-RU"));
+    private static string Ru(double v, string fmt) => v.ToString(fmt, L.Culture);
 
-    private static string GbText(double gb) => gb >= 10 || Math.Abs(gb - Math.Round(gb)) < 0.05 ? $"{Math.Round(gb):0} ГБ" : Ru(gb, "0.0") + " ГБ";
+    /// <summary>Кавычки вокруг названия: «…» по-русски, “…” по-английски.</summary>
+    private static string Q(string s) => L.En ? "“" + s + "”" : "«" + s + "»";
+
+    private static string GbText(double gb) => gb >= 10 || Math.Abs(gb - Math.Round(gb)) < 0.05 ? Ru(Math.Round(gb), "0") + " " + Fmt.GbUnit : Ru(gb, "0.0") + " " + Fmt.GbUnit;
 
     /// <summary>Объём накопителя как на коробке: 1 ТБ, 512 ГБ.</summary>
     private static string DiskSize(long bytes)
     {
         double gb = bytes / 1e9;
-        if (gb >= 1000) return Ru(Math.Round(gb / 1000, gb >= 10000 ? 0 : 1), "0.#") + " ТБ";
-        return $"{Math.Round(gb):0} ГБ";
+        if (gb >= 1000) return Ru(Math.Round(gb / 1000, gb >= 10000 ? 0 : 1), "0.#") + " " + L.T("ТБ");
+        return Ru(Math.Round(gb), "0") + " " + Fmt.GbUnit;
     }
 
     /// <summary>Свободное место: «335 ГБ», «1,7 ТБ», «850 МБ».</summary>
     private static string FreeSize(long bytes)
     {
         double gb = bytes / Fmt.Gib;
-        if (gb >= 1000) return Ru(gb / 1024, "0.0") + " ТБ";
-        if (gb >= 10) return $"{gb:0} ГБ";
+        if (gb >= 1000) return Ru(gb / 1024, "0.0") + " " + L.T("ТБ");
+        if (gb >= 10) return Ru(gb, "0") + " " + Fmt.GbUnit;
         return Fmt.Size(bytes);
     }
 
@@ -409,8 +412,8 @@ public static class SystemScan
 
         string name = CpuShort(r.CpuName);
         string counts = r.Cores > 0 ? $"{Fmt.Plural(r.Cores, "ядро", "ядра", "ядер")}, {Fmt.Plural(r.Threads, "поток", "потока", "потоков")}" : Fmt.Plural(r.Threads, "поток", "потока", "потоков");
-        string clock = r.BaseMhz > 0 ? " · " + Ru(r.BaseMhz / 1000.0, "0.0#") + " ГГц" : "";
-        c.Passport("Процессор", name + "\n" + counts + clock);
+        string clock = r.BaseMhz > 0 ? " · " + L.F("{0:0.0#} ГГц", r.BaseMhz / 1000.0) : "";
+        c.Passport(L.T("Процессор"), name + "\n" + counts + clock);
         return r.Cores > 0 ? $"{name} · {r.Cores}/{r.Threads}" : name;
     }
 
@@ -424,7 +427,7 @@ public static class SystemScan
         s = Regex.Replace(s, @"\s+\d+-Core Processor", "", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"\s+with Radeon.*$", "", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"\s+Processor$", "", RegexOptions.IgnoreCase);
-        return s.Trim() == "" ? "процессор" : s.Trim();
+        return s.Trim() == "" ? L.T("процессор") : s.Trim();
     }
 
     // ───────────────────────────── 2. Видеокарта ─────────────────────────────
@@ -461,41 +464,41 @@ public static class SystemScan
 
         if (r.Gpus.Count == 0)
         {
-            c.Passport("Видеокарта", "");
-            return "не найдена";
+            c.Passport(L.T("Видеокарта"), "");
+            return L.T("не найдена");
         }
 
         var lines = new List<string>();
         foreach (var g in r.Gpus)
         {
             string vram = g.VramBytes >= 256L << 20 ? " · " + GbText(g.VramBytes / Fmt.Gib) : "";
-            string kind = !g.Discrete && r.Gpus.Count > 1 ? " · встроенная" : "";
-            string drv = g.Basic ? "драйвер не установлен"
-                : "драйвер " + g.DriverShort + (g.DriverDate > DateTime.MinValue ? " от " + g.DriverDate.ToString("dd.MM.yyyy") : "");
+            string kind = !g.Discrete && r.Gpus.Count > 1 ? " · " + L.T("встроенная") : "";
+            string drv = g.Basic ? L.T("драйвер не установлен")
+                : g.DriverDate > DateTime.MinValue ? L.F("драйвер {0} от {1:d}", g.DriverShort, g.DriverDate) : L.F("драйвер {0}", g.DriverShort);
             lines.Add(g.Name + vram + kind + "\n" + drv);
         }
-        c.Passport("Видеокарта", string.Join("\n", lines));
+        c.Passport(L.T("Видеокарта"), string.Join("\n", lines));
 
         var main = r.Gpus[0];
         if (r.Gpus.Any(g => g.Basic))
-            c.Add(Severity.Bad, "Не установлен драйвер видеокарты",
-                "Windows работает через «Базовый видеоадаптер»: игры не запустятся или будут идти очень медленно. Скачайте драйвер на сайте производителя видеокарты или ноутбука.");
+            c.Add(Severity.Bad, L.T("Не установлен драйвер видеокарты"),
+                L.T("Windows работает через «Базовый видеоадаптер»: игры не запустятся или будут идти очень медленно. Скачайте драйвер на сайте производителя видеокарты или ноутбука."));
         else if (main.DriverDate > DateTime.MinValue)
         {
             int days = (int)(DateTime.Now - main.DriverDate).TotalDays;
             string where = main.Vendor switch
             {
-                "NVIDIA" => "Новый можно установить через NVIDIA App или с nvidia.com.",
-                "AMD" => "Новый можно установить через AMD Software: Adrenalin Edition или с amd.com.",
-                "Intel" => "Новый можно установить через Intel Driver & Support Assistant или с сайта производителя ноутбука.",
-                _ => "Новый можно скачать на сайте производителя видеокарты.",
+                "NVIDIA" => L.T("Новый можно установить через NVIDIA App или с nvidia.com."),
+                "AMD" => L.T("Новый можно установить через AMD Software: Adrenalin Edition или с amd.com."),
+                "Intel" => L.T("Новый можно установить через Intel Driver & Support Assistant или с сайта производителя ноутбука."),
+                _ => L.T("Новый можно скачать на сайте производителя видеокарты."),
             };
             if (days > 365)
-                c.Add(Severity.Warn, "Драйвер видеокарты старше года",
-                    $"Драйвер {main.Name} от {main.DriverDate:dd.MM.yyyy}. В новых версиях — исправления и оптимизации для свежих игр. {where}");
+                c.Add(Severity.Warn, L.T("Драйвер видеокарты старше года"),
+                    L.F("Драйвер {0} от {1:d}. В новых версиях — исправления и оптимизации для свежих игр. {2}", main.Name, main.DriverDate, where));
             else if (days > 183)
-                c.Add(Severity.Info, "Драйверу видеокарты больше полугода",
-                    $"Драйвер {main.Name} от {main.DriverDate:dd.MM.yyyy}. Для новых игр его стоит обновить. {where}");
+                c.Add(Severity.Info, L.T("Драйверу видеокарты больше полугода"),
+                    L.F("Драйвер {0} от {1:d}. Для новых игр его стоит обновить. {2}", main.Name, main.DriverDate, where));
         }
 
         string vr = main.VramBytes >= 256L << 20 ? " · " + GbText(main.VramBytes / Fmt.Gib) : "";
@@ -548,7 +551,11 @@ public static class SystemScan
     {
         var r = c.R;
         var hw = c.HwData;
-        r.IsLaptop = hw is JsonElement h && (N(h, "PcType") == 2 || N(h, "Battery") > 0);
+        // Батарея — по Windows (BatteryInfo): ИБП у настольного компьютера Win32_Battery тоже показывает батареей,
+        // и компьютер с ИБП назывался «ноутбуком», а замечания для него смягчались.
+        bool battery = false;
+        try { battery = BatteryInfo.Read().HasBattery; } catch { }
+        r.IsLaptop = hw is JsonElement h && N(h, "PcType") == 2 || battery;
 
         foreach (var m in Arr(hw, "Ram"))
         {
@@ -579,37 +586,38 @@ public static class SystemScan
             : r.RamModules.GroupBy(m => Math.Round(m.Bytes / Fmt.Gib)).Count() == 1
                 ? $" · {r.RamModules.Count} × {GbText(r.RamModules[0].Bytes / Fmt.Gib)}"
                 : " · " + string.Join(" + ", r.RamModules.Select(m => GbText(m.Bytes / Fmt.Gib)));
-        string speed = conf > 0 ? $"{conf} МГц" + (evidence > conf + 100 ? $" (планки рассчитаны на {evidence})" : "") : "";
+        string speed = conf > 0 ? L.F("{0} МГц", conf) + (evidence > conf + 100 ? " " + L.F("(планки рассчитаны на {0})", evidence) : "") : "";
         string makers = string.Join(", ", r.RamModules.Select(m => m.Maker).Where(x => x != "" && !Regex.IsMatch(x, @"^[0-9A-F]{4,}$")).Distinct().Take(2));
-        c.Passport("Память", $"{GbText(r.RamTotalGb)} {r.RamType}{layout}".Trim() + "\n" + string.Join(" · ", new[] { speed, makers }.Where(x => x != "")));
+        c.Passport(L.T("Память"), $"{GbText(r.RamTotalGb)} {r.RamType}{layout}".Trim() + "\n" + string.Join(" · ", new[] { speed, makers }.Where(x => x != "")));
 
         // Объём
         double gbTotal = Math.Round(r.RamTotalGb);
         if (gbTotal < 8)
-            c.Add(Severity.Bad, $"Мало памяти: {GbText(r.RamTotalGb)}",
-                "Современным играм нужно от 16 ГБ. С таким объёмом Windows постоянно использует файл подкачки — это рывки и долгие загрузки.");
+            c.Add(Severity.Bad, L.F("Мало памяти: {0}", GbText(r.RamTotalGb)),
+                L.T("Современным играм нужно от 16 ГБ. С таким объёмом Windows постоянно использует файл подкачки — это рывки и долгие загрузки."));
         else if (gbTotal < 15)
-            c.Add(Severity.Warn, $"Памяти {GbText(r.RamTotalGb)} — меньше, чем просят игры",
-                "Современным играм нужно 16 ГБ. Пока памяти мало, перед игрой закрывайте браузер и другие тяжёлые программы.");
+            c.Add(Severity.Warn, L.F("Памяти {0} — меньше, чем просят игры", GbText(r.RamTotalGb)),
+                L.T("Современным играм нужно 16 ГБ. Пока памяти мало, перед игрой закрывайте браузер и другие тяжёлые программы."));
 
         // Каналы
         if (!lp && r.RamModules.Count == 1)
-            c.Add(Severity.Warn, "Одна планка памяти",
-                "Память работает в одноканальном режиме, и в играх, где много считает процессор, это заметно снижает FPS. Вторая такая же планка включит двухканальный режим.");
+            c.Add(Severity.Warn, L.T("Одна планка памяти"),
+                L.T("Память работает в одноканальном режиме, и в играх, где много считает процессор, это заметно снижает FPS. Вторая такая же планка включит двухканальный режим."));
         else if (!lp && r.RamModules.Count >= 2 && r.RamModules.Select(m => m.Bytes).Distinct().Count() > 1)
-            c.Add(Severity.Info, "Планки памяти разного объёма",
-                "Часть памяти может работать в одноканальном режиме. Лучше всего ставить одинаковые планки парами.");
+            c.Add(Severity.Info, L.T("Планки памяти разного объёма"),
+                L.T("Часть памяти может работать в одноканальном режиме. Лучше всего ставить одинаковые планки парами."));
 
         // XMP / EXPO
         if (!lp && conf > 0 && evidence >= conf + 200)
-            c.Add(Severity.Warn, "Профиль XMP/EXPO не включён",
-                $"Планки рассчитаны на {evidence} МГц, а работают на {conf} МГц. Включите в BIOS профиль XMP (Intel) или EXPO/DOCP (AMD): память заработает на своей частоте, если её поддерживают плата и процессор.");
+            c.Add(Severity.Warn, L.T("Профиль XMP/EXPO не включён"),
+                L.F("Планки рассчитаны на {0} МГц, а работают на {1} МГц. Включите в BIOS профиль XMP (Intel) или EXPO/DOCP (AMD): память заработает на своей частоте, если её поддерживают плата и процессор.", evidence, conf));
         else if (!lp && !r.IsLaptop && conf > 0 && ((r.RamType == "DDR4" && conf <= 2666) || (r.RamType == "DDR5" && conf <= 4800)))
-            c.Add(Severity.Info, $"Память работает на базовой частоте {conf} МГц",
-                $"Это стандартная частота {r.RamType} без разгона. Если на планках или в их характеристиках указано больше (например, {(r.RamType == "DDR4" ? "3200 или 3600" : "6000")}), включите в BIOS профиль XMP или EXPO.");
+            c.Add(Severity.Info, L.F("Память работает на базовой частоте {0} МГц", conf),
+                L.F("Это стандартная частота {0} без разгона. Если на планках или в их характеристиках указано больше (например, {1}), включите в BIOS профиль XMP или EXPO.",
+                    r.RamType, r.RamType == "DDR4" ? L.T("3200 или 3600") : "6000"));
 
         string sum = $"{GbText(r.RamTotalGb)} {r.RamType}".Trim();
-        return conf > 0 ? $"{sum} · {conf} МГц" : sum;
+        return conf > 0 ? sum + " · " + L.F("{0} МГц", conf) : sum;
     }
 
     /// <summary>Частота из маркировки планки (у популярных производителей она зашита в номер). 0 — не распознано.</summary>
@@ -633,27 +641,27 @@ public static class SystemScan
     {
         var r = c.R;
         var hw = c.HwData;
-        if (hw is not JsonElement h) { c.Passport("Плата", ""); return "нет данных"; }
+        if (hw is not JsonElement h) { c.Passport(L.T("Плата"), ""); return L.T("нет данных"); }
 
         string board = Regex.Replace(Clean(S(h, "Board")), @"\s*\(MS-\w+\)\s*$", "");
         string boardMaker = ShortMaker(S(h, "BoardMaker"));
         string csMaker = ShortMaker(S(h, "CsMaker")), csModel = Clean(S(h, "CsModel"));
         string name = r.IsLaptop && csModel != ""
-            ? "Ноутбук " + (csModel.StartsWith(csMaker, StringComparison.OrdinalIgnoreCase) ? csModel : (csMaker + " " + csModel).Trim())
+            ? L.F("Ноутбук {0}", csModel.StartsWith(csMaker, StringComparison.OrdinalIgnoreCase) ? csModel : (csMaker + " " + csModel).Trim())
             : (boardMaker + " " + board).Trim();
         if (name == "" && csModel != "") name = (csMaker + " " + csModel).Trim();
         r.BoardName = name;
         r.BiosVersion = Clean(S(h, "Bios"));
         r.BiosDate = Date(S(h, "BiosDate"));
-        string bios = r.BiosVersion != "" ? "BIOS " + r.BiosVersion + (r.BiosDate > DateTime.MinValue ? " от " + r.BiosDate.ToString("dd.MM.yyyy") : "") : "";
-        c.Passport("Плата", string.Join("\n", new[] { name, bios }.Where(x => x != "")));
+        string bios = r.BiosVersion == "" ? "" : r.BiosDate > DateTime.MinValue ? L.F("BIOS {0} от {1:d}", r.BiosVersion, r.BiosDate) : "BIOS " + r.BiosVersion;
+        c.Passport(L.T("Плата"), string.Join("\n", new[] { name, bios }.Where(x => x != "")));
 
         if (r.BiosDate > DateTime.MinValue && (DateTime.Now - r.BiosDate).TotalDays > 730)
-            c.Add(Severity.Info, $"BIOS от {r.BiosDate:MM.yyyy}",
-                (r.IsLaptop ? "Производитель ноутбука" : "Производитель платы") +
-                " мог выпустить новую версию: обычно в ней лучше совместимость с памятью, стабильность и защита. Обновляйте строго по инструкции с его сайта и не выключайте компьютер во время обновления.");
+            c.Add(Severity.Info, L.F("BIOS от {0:MM.yyyy}", r.BiosDate),
+                L.F("{0} мог выпустить новую версию: обычно в ней лучше совместимость с памятью, стабильность и защита. Обновляйте строго по инструкции с его сайта и не выключайте компьютер во время обновления.",
+                    r.IsLaptop ? L.T("Производитель ноутбука") : L.T("Производитель платы")));
 
-        return name == "" ? "нет данных" : name;
+        return name == "" ? L.T("нет данных") : name;
     }
 
     // ───────────────────────────── 5. Накопители ─────────────────────────────
@@ -698,18 +706,18 @@ public static class SystemScan
             disk.Kind = disk.Bus.ToUpperInvariant() switch
             {
                 "NVME" => "NVMe SSD",
-                "USB" => "USB-диск",
+                "USB" => L.T("USB-диск"),
                 "SATA" or "ATA" => ssd ? "SATA SSD" : hdd ? "HDD" : "SATA",
-                "FILE BACKED VIRTUAL" => "виртуальный диск",
+                "FILE BACKED VIRTUAL" => L.T("виртуальный диск"),
                 "RAID" => ssd ? "SSD (RAID)" : hdd ? "HDD (RAID)" : "RAID",
-                _ => ssd ? "SSD" : hdd ? "HDD" : "диск",
+                _ => ssd ? "SSD" : hdd ? "HDD" : L.T("диск"),
             };
             r.Disks.Add(disk);
         }
         r.Disks = r.Disks.OrderByDescending(d => d.IsSystem).ThenBy(d => d.Bus == "USB").ThenBy(d => d.Number).ToList();
 
         // Одна строка на диск: тип, объём и свободное место его томов. Модели — в отчёте (Disks).
-        string Free(ScanVolume v) => $"{v.Letter}: свободно {FreeSize(v.Free)}";
+        string Free(ScanVolume v) => L.F("{0}: свободно {1}", v.Letter, FreeSize(v.Free));
         var lines = new List<string>();
         var shown = new HashSet<string>();
         foreach (var d in r.Disks)
@@ -719,43 +727,43 @@ public static class SystemScan
             lines.Add($"{d.Kind} {DiskSize(d.Bytes)}" + (vols.Count > 0 ? " · " + string.Join(", ", vols.Select(Free)) : ""));
         }
         foreach (var v in r.Volumes.Where(v => !shown.Contains(v.Letter)).OrderBy(v => v.Letter)) lines.Add(Free(v));
-        c.Passport("Диски", string.Join("\n", lines));
+        c.Passport(L.T("Диски"), string.Join("\n", lines));
 
         // Система на жёстком диске
         var sys = r.Disks.FirstOrDefault(d => d.IsSystem);
         if (sys != null && sys.Kind.StartsWith("HDD"))
-            c.Add(Severity.Warn, "Windows стоит на жёстком диске (HDD)",
-                "С жёсткого диска Windows и игры загружаются в несколько раз дольше, чем с SSD, а в открытых мирах бывают подгрузки и рывки. Самое заметное улучшение для этого компьютера — SSD под систему и игры.");
+            c.Add(Severity.Warn, L.T("Windows стоит на жёстком диске (HDD)"),
+                L.T("С жёсткого диска Windows и игры загружаются в несколько раз дольше, чем с SSD, а в открытых мирах бывают подгрузки и рывки. Самое заметное улучшение для этого компьютера — SSD под систему и игры."));
 
         // Место
         foreach (var v in r.Volumes.OrderByDescending(v => v.IsSystem))
         {
-            string text = $"Свободно {Fmt.Size(v.Free)} из {Fmt.Size(v.Total)}.";
+            string text = L.F("Свободно {0} из {1}.", Fmt.Size(v.Free), Fmt.Size(v.Total));
             if (v.IsSystem && (v.FreePct < 10 || v.Free < 10L << 30))
-                c.Add(Severity.Bad, $"На системном  : почти нет места",
-                    text + " Windows и играм нужно место под обновления, файл подкачки и кэш шейдеров. Освободите хотя бы 15 %.", 5);
+                c.Add(Severity.Bad, L.F("На системном диске {0}: почти нет места", v.Letter),
+                    text + " " + L.T("Windows и играм нужно место под обновления, файл подкачки и кэш шейдеров. Освободите хотя бы 15 %."), 5);
             else if (v.IsSystem && v.FreePct < 15)
-                c.Add(Severity.Warn, $"На системном  : мало места", text + " Когда свободно меньше 10 %, Windows начинает работать медленнее.", 5);
+                c.Add(Severity.Warn, L.F("На системном диске {0}: мало места", v.Letter), text + " " + L.T("Когда свободно меньше 10 %, Windows начинает работать медленнее."), 5);
             else if (!v.IsSystem && v.FreePct < 10)
-                c.Add(Severity.Warn, $" : заполнен на {100 - v.FreePct:0} %", text + " Игры на почти заполненном диске могут не обновиться: обновлениям нужно свободное место.", -1);
+                c.Add(Severity.Warn, L.F("Диск {0}: заполнен на {1:0} %", v.Letter, 100 - v.FreePct), text + " " + L.T("Игры на почти заполненном диске могут не обновиться: обновлениям нужно свободное место."), -1);
         }
 
         // Состояние
         foreach (var d in r.Disks)
         {
             if (d.Health != "" && !d.Health.Equals("Healthy", StringComparison.OrdinalIgnoreCase))
-                c.Add(Severity.Bad, $"Диск {d.Name} сообщает о неисправности",
-                    $"Состояние — «{d.Health}». Скопируйте важные данные на другой диск как можно скорее.", 4);
+                c.Add(Severity.Bad, L.F("Диск {0} сообщает о неисправности", d.Name),
+                    L.F("Состояние — «{0}». Скопируйте важные данные на другой диск как можно скорее.", d.Health), 4);
             else if (d.ReadErrors > 0)
-                c.Add(Severity.Warn, $"Диск {d.Name}: ошибки чтения",
-                    $"Неисправленных ошибок чтения: {d.ReadErrors:0}. Не храните на нём единственную копию важного.", 4);
+                c.Add(Severity.Warn, L.F("Диск {0}: ошибки чтения", d.Name),
+                    L.F("Неисправленных ошибок чтения: {0:0}. Не храните на нём единственную копию важного.", d.ReadErrors), 4);
             else if (d.Wear >= 80)
-                c.Add(Severity.Warn, $"Диск {d.Name} изношен на {d.Wear:0} %", "Ресурс записи подходит к концу. Сделайте копию важных данных и присмотрите замену.", 4);
+                c.Add(Severity.Warn, L.F("Диск {0} изношен на {1:0} %", d.Name, d.Wear), L.T("Ресурс записи подходит к концу. Сделайте копию важных данных и присмотрите замену."), 4);
         }
 
         var sysVol = r.Volumes.FirstOrDefault(v => v.IsSystem);
         string count = r.Disks.Count > 0 ? Fmt.Plural(r.Disks.Count, "диск", "диска", "дисков") : Fmt.Plural(r.Volumes.Count, "том", "тома", "томов");
-        return sysVol != null ? $"{count} · {sysVol.Letter}: свободно {sysVol.FreePct:0} %" : count;
+        return sysVol != null ? count + " · " + L.F("{0}: свободно {1:0} %", sysVol.Letter, sysVol.FreePct) : count;
     }
 
     // ───────────────────────────── 6. Монитор ─────────────────────────────
@@ -803,27 +811,26 @@ public static class SystemScan
         if (r.Monitors.Count == 1 && r.Monitors[0].Name == "" && wmiNames.Count == 1) r.Monitors[0].Name = wmiNames[0].Name;
         r.Monitors = r.Monitors.OrderByDescending(m => m.Primary).ToList();
         for (int i = 0; i < r.Monitors.Count; i++)
-            if (r.Monitors[i].Name == "") r.Monitors[i].Name = r.Monitors.Count == 1 ? "Монитор" : $"Монитор {i + 1}";
+            if (r.Monitors[i].Name == "") r.Monitors[i].Name = r.Monitors.Count == 1 ? L.T("Монитор") : L.F("Монитор {0}", i + 1);
 
-        c.Passport("Монитор", string.Join("\n", r.Monitors.Select(m =>
-            $"{m.Name} · {m.Width} × {m.Height} · {m.Hz} Гц" + (m.MaxHz > m.Hz ? $" (можно {m.MaxHz})" : ""))));
+        c.Passport(L.T("Монитор"), string.Join("\n", r.Monitors.Select(m =>
+            $"{m.Name} · {m.Width} × {m.Height} · " + L.F("{0} Гц", m.Hz) + (m.MaxHz > m.Hz ? " " + L.F("(можно {0})", m.MaxHz) : ""))));
 
         foreach (var m in r.Monitors)
         {
             if (m.MaxHz - m.Hz >= 15)
             {
                 var level = m.Hz <= 75 && m.MaxHz >= 100 ? Severity.Bad : Severity.Warn;
-                c.Add(level, $"Монитор работает на {m.Hz} Гц вместо {m.MaxHz}",
-                    $"{m.Name} поддерживает {m.MaxHz} Гц при {m.Width} × {m.Height}, а Windows выставила {m.Hz} Гц, и картинка в играх менее плавная. " +
-                    $"Как исправить: Параметры → Система → Дисплей → Расширенные параметры дисплея → Частота обновления → {m.MaxHz} Гц.");
+                c.Add(level, L.F("Монитор работает на {0} Гц вместо {1}", m.Hz, m.MaxHz),
+                    L.F("{0} поддерживает {1} Гц при {2} × {3}, а Windows выставила {4} Гц, и картинка в играх менее плавная. Как исправить: Параметры → Система → Дисплей → Расширенные параметры дисплея → Частота обновления → {1} Гц.", m.Name, m.MaxHz, m.Width, m.Height, m.Hz));
             }
             if ((long)m.Width * m.Height < (long)m.NativeWidth * m.NativeHeight && m.NativeWidth > 0)
-                c.Add(Severity.Info, $"Разрешение ниже родного: {m.Width} × {m.Height}",
-                    $"{m.Name} поддерживает {m.NativeWidth} × {m.NativeHeight}. Если меньшее разрешение выбрано не намеренно, верните родное: Параметры → Система → Дисплей. Картинка станет чётче.");
+                c.Add(Severity.Info, L.F("Разрешение ниже родного: {0} × {1}", m.Width, m.Height),
+                    L.F("{0} поддерживает {1} × {2}. Если меньшее разрешение выбрано не намеренно, верните родное: Параметры → Система → Дисплей. Картинка станет чётче.", m.Name, m.NativeWidth, m.NativeHeight));
         }
 
         var p = r.Monitors.FirstOrDefault();
-        return p == null ? "не найден" : $"{p.Width}×{p.Height} · {p.Hz} Гц" + (r.Monitors.Count > 1 ? $" · ещё {r.Monitors.Count - 1}" : "");
+        return p == null ? L.T("не найден") : $"{p.Width}×{p.Height} · " + L.F("{0} Гц", p.Hz) + (r.Monitors.Count > 1 ? " · " + L.F("ещё {0}", r.Monitors.Count - 1) : "");
     }
 
     // ───────────────────────────── 7. Windows ─────────────────────────────
@@ -854,43 +861,46 @@ public static class SystemScan
 
         var tweaks = Ctx.Wait(c.Tweaks, 40000) ?? new List<TweakItem>();
         bool? Tw(string part) => tweaks.FirstOrDefault(t => t.Title.Contains(part, StringComparison.OrdinalIgnoreCase))?.Applied;
-        string OnOff(bool? v, bool invert = false) => v == null ? "?" : (v.Value ^ invert) ? "вкл." : "выкл.";
+        string OnOff(bool? v, bool invert = false) => v == null ? "?" : (v.Value ^ invert) ? L.T("вкл.") : L.T("выкл.");
         var gameMode = Tw("Игровой режим"); var dvrOff = Tw("Фоновая запись"); var hags = Tw("HAGS");
-        c.Passport("Windows", $"{r.Os} ({r.OsBuild})\nпитание: «{(scheme == "" ? "?" : scheme)}»\n" +
-                              $"игровой режим {OnOff(gameMode)} · HAGS {OnOff(hags)}\nзапись игр в фоне {OnOff(dvrOff, true)}");
+        c.Passport("Windows", $"{r.Os} ({r.OsBuild})\n" + L.F("питание: «{0}»", scheme == "" ? "?" : scheme) + "\n" +
+                              L.F("игровой режим {0} · HAGS {1}", OnOff(gameMode), OnOff(hags)) + "\n" + L.F("запись игр в фоне {0}", OnOff(dvrOff, true)));
 
         // Схема питания
         if (planGuid == new Guid("a1841308-3541-4fab-bc81-f71556f20b4a"))
-            c.AddSection(r.IsLaptop ? Severity.Info : Severity.Warn, "Схема питания «Экономия энергии»",
-                "Процессор и видеокарта ограничены ради экономии энергии. В разделе «Питание» можно включить полную скорость на время игры или насовсем.", "Питание");
+            c.AddSection(r.IsLaptop ? Severity.Info : Severity.Warn, L.T("Схема питания «Экономия энергии»"),
+                L.T("Процессор и видеокарта ограничены ради экономии энергии. В разделе «Питание» можно включить полную скорость на время игры или насовсем."), "Питание");
 
         // Игровые настройки Windows
         var checkedItems = tweaks.Where(t => t.Applied != null).ToList();
         var missing = checkedItems.Where(t => t.Applied == false).ToList();
         if (missing.Count > 0)
         {
-            string names = string.Join(", ", missing.Take(3).Select(t => "«" + ShortTweak(t.Title) + "»")) + (missing.Count > 3 ? $" и ещё {missing.Count - 3}" : "");
-            c.Add(missing.Count >= 3 ? Severity.Warn : Severity.Info, $"Игровые настройки Windows: {checkedItems.Count - missing.Count} из {checkedItems.Count}",
-                $"Не включены: {names}. Включить их можно на вкладке «Оптимизация», там же их можно и выключить.", 6);
+            string names = string.Join(", ", missing.Take(3).Select(t => Q(TweakName(t.Title)))) + (missing.Count > 3 ? " " + L.F("и ещё {0}", missing.Count - 3) : "");
+            c.Add(missing.Count >= 3 ? Severity.Warn : Severity.Info, L.F("Игровые настройки Windows: {0} из {1}", checkedItems.Count - missing.Count, checkedItems.Count),
+                L.F("Не включены: {0}. Включить их можно на вкладке «Оптимизация», там же их можно и выключить.", names), 6);
         }
 
         if (PendingReboot())
-            c.Add(Severity.Warn, "Windows ждёт перезагрузки", "Обновление или установка закончится только после перезагрузки.");
+            c.Add(Severity.Warn, L.T("Windows ждёт перезагрузки"), L.T("Обновление или установка закончится только после перезагрузки."));
         if (r.Uptime.TotalDays >= 7)
-            c.Add(Severity.Info, $"Компьютер не перезагружался {Fmt.Plural((int)r.Uptime.TotalDays, "день", "дня", "дней")}",
-                "Перезагрузка освобождает память, которую не вернули программы, и устанавливает отложенные обновления.");
+            c.Add(Severity.Info, L.F("Компьютер не перезагружался {0}", Fmt.Plural((int)r.Uptime.TotalDays, "день", "дня", "дней")),
+                L.T("Перезагрузка освобождает память, которую не вернули программы, и устанавливает отложенные обновления."));
         if (buildNo > 0 && buildNo < 22000)
-            c.Add(Severity.Info, "Windows 10 больше не обновляется",
-                "Обычная поддержка Windows 10 закончилась в октябре 2025 года. Если компьютер подходит, стоит перейти на Windows 11.");
+            c.Add(Severity.Info, L.T("Windows 10 больше не обновляется"),
+                L.T("Обычная поддержка Windows 10 закончилась в октябре 2025 года. Если компьютер подходит, стоит перейти на Windows 11."));
         if (FastStartup())
-            c.Add(Severity.Info, "Включён быстрый запуск Windows",
-                "При «Завершении работы» Windows не выключается начисто, а сохраняет своё ядро на диск. Если после включения что-то работает странно, выбирайте «Перезагрузку» — она всегда полная.");
+            c.Add(Severity.Info, L.T("Включён быстрый запуск Windows"),
+                L.T("При «Завершении работы» Windows не выключается начисто, а сохраняет своё ядро на диск. Если после включения что-то работает странно, выбирайте «Перезагрузку» — она всегда полная."));
         if (!r.IsAdmin)
-            c.Add(Severity.Info, "Осмотр без прав администратора",
-                "Состояние дисков (износ, ошибки чтения) и часть журналов доступны только с правами администратора.");
+            c.Add(Severity.Info, L.T("Осмотр без прав администратора"),
+                L.T("Состояние дисков (износ, ошибки чтения) и часть журналов доступны только с правами администратора."));
 
         return r.Os == "" ? "Windows" : r.Os;
     }
+
+    /// <summary>Название игровой настройки для замечания: по-русски без «включён/выключено», по-английски — перевод названия.</summary>
+    private static string TweakName(string title) => L.En ? L.T(title) : ShortTweak(title);
 
     private static string ShortTweak(string title) => Regex.Replace(title, @"\s+(включён|включено|выключена|выключено|выключены|выключен)$", "", RegexOptions.IgnoreCase);
 
@@ -945,17 +955,20 @@ public static class SystemScan
         var withTips = tunes.Where(t => t.CanEdit && t.Changes.Count > 0).ToList();
         r.GamesWithTips = withTips.Count;
 
-        string list = r.Games.Count == 0 ? "не найдены (ищу в Steam, Epic Games, Riot, Astrum Play)"
-            : Fmt.Plural(r.Games.Count, "игра", "игры", "игр") + ": " + string.Join(", ", r.Games.Take(3)) + (r.Games.Count > 3 ? $" и ещё {r.Games.Count - 3}" : "");
-        c.Passport("Игры", list + (withTips.Count > 0 ? $"\nрекомендации по графике — для {Fmt.Plural(withTips.Count, "игры", "игр", "игр")}" : ""));
+        string list = r.Games.Count == 0 ? L.T("не найдены (ищу в Steam, Epic Games, Riot, Astrum Play)")
+            : Fmt.Plural(r.Games.Count, "игра", "игры", "игр") + ": " + string.Join(", ", r.Games.Take(3)) + (r.Games.Count > 3 ? " " + L.F("и ещё {0}", r.Games.Count - 3) : "");
+        c.Passport(L.T("Игры"), list + (withTips.Count > 0 ? "\n" + L.F("рекомендации по графике — для {0}", GamesFor(withTips.Count)) : ""));
 
         if (withTips.Count > 0)
-            c.Add(Severity.Info, $"Настройки графики: есть рекомендации для {Fmt.Plural(withTips.Count, "игры", "игр", "игр")}",
-                string.Join(", ", withTips.Take(3).Select(t => t.Game)) + (withTips.Count > 3 ? $" и ещё {withTips.Count - 3}" : "") +
-                ". Что поменять и почему — на вкладке «Оптимизация»; перед изменением программа сохраняет копию файла настроек.", 6);
+            c.Add(Severity.Info, L.F("Настройки графики: есть рекомендации для {0}", GamesFor(withTips.Count)),
+                L.F("{0}. Что поменять и почему — на вкладке «Оптимизация»; перед изменением программа сохраняет копию файла настроек.",
+                    string.Join(", ", withTips.Take(3).Select(t => t.Game)) + (withTips.Count > 3 ? " " + L.F("и ещё {0}", withTips.Count - 3) : "")), 6);
 
-        return r.Games.Count == 0 ? "игры не найдены" : Fmt.Plural(r.Games.Count, "игра", "игры", "игр");
+        return r.Games.Count == 0 ? L.T("игры не найдены") : Fmt.Plural(r.Games.Count, "игра", "игры", "игр");
     }
+
+    /// <summary>«для 3 игр»: по-русски родительный падеж, по-английски обычное «3 games».</summary>
+    private static string GamesFor(int n) => L.En ? Fmt.Plural(n, "игра", "игры", "игр") : Fmt.Plural(n, "игры", "игр", "игр");
 
     // ───────────────────────────── 9. Программы ─────────────────────────────
 
@@ -998,19 +1011,19 @@ public static class SystemScan
         foreach (var (name, v) in byName.OrderByDescending(x => x.Value.Bytes).Take(5))
             r.TopMemory.Add(new ScanProcess { Name = Describe(name, v.Pid), Bytes = v.Bytes });
 
-        string top = r.TopMemory.Count > 0 ? "\nбольше всего памяти: " + string.Join(", ", r.TopMemory.Take(3).Select(t => $"{t.Name} {Fmt.Size(t.Bytes)}")) : "";
-        c.Passport("Программы", $"установлено {r.ProgramsInstalled} · в автозагрузке {startup}{top}");
+        string top = r.TopMemory.Count > 0 ? "\n" + L.F("больше всего памяти: {0}", string.Join(", ", r.TopMemory.Take(3).Select(t => $"{t.Name} {Fmt.Size(t.Bytes)}"))) : "";
+        c.Passport(L.T("Программы"), L.F("установлено {0} · в автозагрузке {1}", r.ProgramsInstalled, startup) + top);
 
         if (startup > 8)
-            c.Add(Severity.Warn, $"В автозагрузке {Fmt.Plural(startup, "программа", "программы", "программ")}",
-                "Все они запускаются вместе с Windows: загрузка дольше, а в игре они занимают память и процессор. Выключить лишнее можно на вкладке «Система», раздел «Автозагрузка».", 7);
+            c.Add(Severity.Warn, L.F("В автозагрузке {0}", Fmt.Plural(startup, "программа", "программы", "программ")),
+                L.T("Все они запускаются вместе с Windows: загрузка дольше, а в игре они занимают память и процессор. Выключить лишнее можно на вкладке «Система», раздел «Автозагрузка»."), 7);
 
         var (totalGb, availGb) = Metrics.ReadRam();
         if (totalGb > 0 && availGb / totalGb < 0.25 && r.TopMemory.Count > 0)
-            c.Add(Severity.Info, $"Сейчас свободно {Fmt.Gb(availGb)} памяти из {Fmt.Gb(totalGb)}",
-                "Больше всего занимают: " + string.Join(", ", r.TopMemory.Take(3).Select(t => $"{t.Name} ({Fmt.Size(t.Bytes)})")) + ". Перед игрой их стоит закрыть.");
+            c.Add(Severity.Info, L.F("Сейчас свободно {0} памяти из {1}", Fmt.Gb(availGb), Fmt.Gb(totalGb)),
+                L.F("Больше всего занимают: {0}. Перед игрой их стоит закрыть.", string.Join(", ", r.TopMemory.Take(3).Select(t => $"{t.Name} ({Fmt.Size(t.Bytes)})"))));
 
-        return startup > 8 ? $"{r.ProgramsInstalled} · в автозагрузке {startup}" : Fmt.Plural(r.ProgramsInstalled, "программа", "программы", "программ");
+        return startup > 8 ? L.F("{0} · в автозагрузке {1}", r.ProgramsInstalled, startup) : Fmt.Plural(r.ProgramsInstalled, "программа", "программы", "программ");
     }
 
     private static string Describe(string processName, int pid)
@@ -1073,44 +1086,44 @@ public static class SystemScan
         r.Net = n;
         if (!n.Connected)
         {
-            c.Passport("Сеть", "нет подключения к сети");
-            c.Add(Severity.Warn, "Нет подключения к сети", "Компьютер не подключён к роутеру. Сетевые проверки пропущены.", 3);
-            return "нет подключения";
+            c.Passport(L.T("Сеть"), L.T("нет подключения к сети"));
+            c.Add(Severity.Warn, L.T("Нет подключения к сети"), L.T("Компьютер не подключён к роутеру. Сетевые проверки пропущены."), 3);
+            return L.T("нет подключения");
         }
 
-        string speed = n.SpeedBps <= 0 ? "" : n.SpeedBps >= 1_000_000_000 ? " · " + Ru(n.SpeedBps / 1e9, "0.#") + " Гбит/с" : $" · {n.SpeedBps / 1e6:0} Мбит/с";
-        string Ms(double v) => double.IsNaN(v) ? "нет ответа" : $"{v:0} мс";
+        string speed = n.SpeedBps <= 0 ? "" : n.SpeedBps >= 1_000_000_000 ? " · " + L.F("{0:0.#} Гбит/с", n.SpeedBps / 1e9) : " · " + L.F("{0:0} Мбит/с", n.SpeedBps / 1e6);
+        string Ms(double v) => double.IsNaN(v) ? L.T("нет ответа") : L.F("{0:0} мс", v);
         double jitMax = new[] { n.RouterJitter, n.InternetJitter }.Where(x => !double.IsNaN(x)).DefaultIfEmpty(double.NaN).Max();
         double lossMax = new[] { n.RouterLoss, n.InternetLoss }.Where(x => !double.IsNaN(x)).DefaultIfEmpty(0).Max();
-        c.Passport("Сеть", $"{(n.WiFi ? "Wi-Fi" : "кабель")}{speed}\n" +
-                          $"пинг: роутер {Ms(n.RouterAvg)}, {n.InternetHost} — {Ms(n.InternetAvg)}\n" +
-                          (double.IsNaN(jitMax) ? "" : jitMax < 1 ? "разброс меньше 1 мс, " : $"разброс до {jitMax:0} мс, ") + (lossMax > 0 ? $"потери {lossMax:0} %" : "потерь нет"));
+        c.Passport(L.T("Сеть"), (n.WiFi ? "Wi-Fi" : L.T("кабель")) + speed + "\n" +
+                          L.F("пинг: роутер {0}, {1} — {2}", Ms(n.RouterAvg), n.InternetHost, Ms(n.InternetAvg)) + "\n" +
+                          (double.IsNaN(jitMax) ? "" : jitMax < 1 ? L.T("разброс меньше 1 мс, ") : L.F("разброс до {0:0} мс, ", jitMax)) + (lossMax > 0 ? L.F("потери {0:0} %", lossMax) : L.T("потерь нет")));
 
         if (n.WiFi)
-            c.Add(Severity.Info, "Подключение по Wi-Fi",
-                "Для игр лучше кабель: по Wi-Fi пинг скачет, а пакеты теряются от помех и соседних сетей. Если кабель протянуть нельзя — держите роутер поближе и подключайтесь на 5 ГГц.", 3);
+            c.Add(Severity.Info, L.T("Подключение по Wi-Fi"),
+                L.T("Для игр лучше кабель: по Wi-Fi пинг скачет, а пакеты теряются от помех и соседних сетей. Если кабель протянуть нельзя — держите роутер поближе и подключайтесь на 5 ГГц."), 3);
         else if (n.SpeedBps > 0 && n.SpeedBps <= 100_000_000 && Regex.IsMatch(n.Adapter, @"GbE|Gigabit|2\.5G|I21\d|I22\d|E2[0-9]00|E3100|Killer|1G", RegexOptions.IgnoreCase))
-            c.Add(Severity.Info, "Сетевая карта работает на 100 Мбит/с",
-                "Карта гигабитная, а соединение установилось на 100 Мбит/с. Обычно виноват кабель (нужен с восемью жилами, категории 5e или 6) или порт роутера.", 3);
+            c.Add(Severity.Info, L.T("Сетевая карта работает на 100 Мбит/с"),
+                L.T("Карта гигабитная, а соединение установилось на 100 Мбит/с. Обычно виноват кабель (нужен с восемью жилами, категории 5e или 6) или порт роутера."), 3);
 
         double rl = double.IsNaN(n.RouterLoss) ? 0 : n.RouterLoss, il = double.IsNaN(n.InternetLoss) ? 0 : n.InternetLoss;
         if (!double.IsNaN(n.RouterAvg) && rl >= 5)
-            c.Add(Severity.Bad, $"Потери до роутера: {rl:0} %",
-                "Пакеты теряются уже между компьютером и роутером — в играх это «телепорты» и запоздалые действия. Проверьте кабель, а для Wi-Fi — расстояние и помехи.", 3);
+            c.Add(Severity.Bad, L.F("Потери до роутера: {0:0} %", rl),
+                L.T("Пакеты теряются уже между компьютером и роутером — в играх это «телепорты» и запоздалые действия. Проверьте кабель, а для Wi-Fi — расстояние и помехи."), 3);
         else if (!double.IsNaN(n.InternetAvg) && il >= 5)
-            c.Add(Severity.Bad, $"Потери до интернета: {il:0} %",
-                "До роутера всё в порядке, пакеты теряются дальше — у провайдера. Если это повторяется, напишите провайдеру.", 3);
+            c.Add(Severity.Bad, L.F("Потери до интернета: {0:0} %", il),
+                L.T("До роутера всё в порядке, пакеты теряются дальше — у провайдера. Если это повторяется, напишите провайдеру."), 3);
         if (!double.IsNaN(n.RouterJitter) && n.RouterJitter > (n.WiFi ? 15 : 5))
-            c.Add(Severity.Warn, $"Пинг до роутера скачет на {n.RouterJitter:0} мс",
-                n.WiFi ? "Wi-Fi ловит помехи: стены, соседние сети, микроволновка. С кабелем этой проблемы нет." : "Для кабеля это много: проверьте кабель и порт роутера и выключите энергосбережение сетевой карты на вкладке «Оптимизация».", 3);
+            c.Add(Severity.Warn, L.F("Пинг до роутера скачет на {0:0} мс", n.RouterJitter),
+                n.WiFi ? L.T("Wi-Fi ловит помехи: стены, соседние сети, микроволновка. С кабелем этой проблемы нет.") : L.T("Для кабеля это много: проверьте кабель и порт роутера и выключите энергосбережение сетевой карты на вкладке «Оптимизация»."), 3);
         else if (!double.IsNaN(n.InternetJitter) && n.InternetJitter > 15)
-            c.Add(Severity.Warn, $"Пинг до интернета скачет на {n.InternetJitter:0} мс",
-                "Ровный пинг важнее низкого. Если в это время ничего не скачивалось, понаблюдайте на вкладке «Сеть», в какие часы это повторяется.", 3);
+            c.Add(Severity.Warn, L.F("Пинг до интернета скачет на {0:0} мс", n.InternetJitter),
+                L.T("Ровный пинг важнее низкого. Если в это время ничего не скачивалось, понаблюдайте на вкладке «Сеть», в какие часы это повторяется."), 3);
         if (double.IsNaN(n.InternetAvg) && !double.IsNaN(n.RouterAvg))
-            c.Add(Severity.Info, "Интернет не отвечает на пинг",
-                "Роутер отвечает, а 1.1.1.1 и 8.8.8.8 — нет. Возможно, нет интернета или провайдер блокирует пинг.", 3);
+            c.Add(Severity.Info, L.T("Интернет не отвечает на пинг"),
+                L.T("Роутер отвечает, а 1.1.1.1 и 8.8.8.8 — нет. Возможно, нет интернета или провайдер блокирует пинг."), 3);
 
-        return (n.WiFi ? "Wi-Fi" : "кабель") + (double.IsNaN(n.InternetAvg) ? "" : $" · {n.InternetAvg:0} мс");
+        return (n.WiFi ? "Wi-Fi" : L.T("кабель")) + (double.IsNaN(n.InternetAvg) ? "" : " · " + L.F("{0:0} мс", n.InternetAvg));
     }
 
     private static ScanNet MeasureNet()
@@ -1205,11 +1218,11 @@ public static class SystemScan
             var top = sizes.Where(x => x.Value >= 100L << 20).OrderByDescending(x => x.Value).Take(2).ToList();
             var sysVol = r.Volumes.FirstOrDefault(v => v.IsSystem);
             bool tight = sysVol != null && sysVol.FreePct < 15;
-            c.Add(r.JunkBytes >= 10L << 30 || tight ? Severity.Warn : Severity.Info, $"Временные файлы и кэш: {Fmt.Size(r.JunkBytes)}",
-                (top.Count > 0 ? "Больше всего — " + string.Join(" и ", top.Select(x => $"«{x.Key}» ({Fmt.Size(x.Value)})")) + ". " : "") +
-                "Посмотреть по видам и удалить — на вкладке «Очистка».", 5);
+            c.Add(r.JunkBytes >= 10L << 30 || tight ? Severity.Warn : Severity.Info, L.F("Временные файлы и кэш: {0}", Fmt.Size(r.JunkBytes)),
+                (top.Count > 0 ? L.F("Больше всего — {0}.", string.Join(L.Pick(" и ", " and "), top.Select(x => Q(L.T(x.Key)) + $" ({Fmt.Size(x.Value)})"))) + " " : "") +
+                L.T("Посмотреть по видам и удалить — на вкладке «Очистка»."), 5);
         }
-        return sizes.Count == 0 ? "не удалось посчитать" : r.JunkBytes > 0 ? Fmt.Size(r.JunkBytes) : "мусора нет";
+        return sizes.Count == 0 ? L.T("не удалось посчитать") : r.JunkBytes > 0 ? Fmt.Size(r.JunkBytes) : L.T("мусора нет");
     }
 
     // ───────────────────────────── 12. Журнал Windows ─────────────────────────────
@@ -1238,29 +1251,29 @@ public static class SystemScan
         var r = c.R;
         try { c.Log.Wait(20000); } catch { }
         // У отмеченного вида период — «после отметки 19 ноября», у остальных — «за 7 дней».
-        string Days(string kind) => LogMarks.SeenWithin(kind, LogDays) is DateTime seen ? LogMarks.SeenText(seen) : $"за {LogDays} дней";
-        string days = $"за {LogDays} дней";
+        string Days(string kind) => LogMarks.SeenWithin(kind, LogDays) is DateTime seen ? LogMarks.SeenText(seen) : L.F("за {0} дней", LogDays);
+        string days = L.F("за {0} дней", LogDays);
         if (r.Bsods > 0)
-            c.Add(Severity.Bad, $"Синие экраны: {r.Bsods} {Days(LogMarks.Bsod)}",
-                "Windows аварийно останавливалась. Обычно виноваты драйвер, нестабильный разгон или память. Подробности — на вкладке «Диагностика».", 4);
+            c.Add(Severity.Bad, L.F("Синие экраны: {0} {1}", r.Bsods, Days(LogMarks.Bsod)),
+                L.T("Windows аварийно останавливалась. Обычно виноваты драйвер, нестабильный разгон или память. Подробности — на вкладке «Диагностика»."), 4);
         if (r.Whea > 0)
-            c.Add(Severity.Bad, $"Аппаратные ошибки: {r.Whea} {Days(LogMarks.Whea)}",
-                "Процессор, память или шина PCIe сообщили об ошибке. Если включён разгон или XMP — проверьте стабильность без него.", 4);
+            c.Add(Severity.Bad, L.F("Аппаратные ошибки: {0} {1}", r.Whea, Days(LogMarks.Whea)),
+                L.T("Процессор, память или шина PCIe сообщили об ошибке. Если включён разгон или XMP — проверьте стабильность без него."), 4);
         if (r.UnexpectedShutdowns > 0)
-            c.Add(Severity.Warn, $"Аварийные выключения: {r.UnexpectedShutdowns} {Days(LogMarks.Shutdown)}",
-                "Компьютер выключался без завершения работы: зависание, сбой питания или выключение кнопкой. Если выключали не вы — проверьте блок питания и охлаждение.", 4);
+            c.Add(Severity.Warn, L.F("Аварийные выключения: {0} {1}", r.UnexpectedShutdowns, Days(LogMarks.Shutdown)),
+                L.T("Компьютер выключался без завершения работы: зависание, сбой питания или выключение кнопкой. Если выключали не вы — проверьте блок питания и охлаждение."), 4);
         if (r.DisplayDriverErrors > 0)
-            c.AddSection(Severity.Warn, $"Сбои драйвера видеокарты: {r.DisplayDriverErrors} {Days(LogMarks.Gpu)}",
-                "Драйвер видеокарты сообщал о сбоях. Что это за записи, были ли они во время игр и что делать — на вкладке «Система», раздел «Драйвер».", "Драйвер");
+            c.AddSection(Severity.Warn, L.F("Сбои драйвера видеокарты: {0} {1}", r.DisplayDriverErrors, Days(LogMarks.Gpu)),
+                L.T("Драйвер видеокарты сообщал о сбоях. Что это за записи, были ли они во время игр и что делать — на вкладке «Система», раздел «Драйвер»."), "Драйвер");
         if (r.DiskErrors > 0)
-            c.Add(Severity.Bad, $"Ошибки дисков в журнале: {r.DiskErrors} {Days(LogMarks.Disk)}",
-                "Windows не смогла прочитать или записать данные. Сделайте копию важного и проверьте диски на вкладке «Диагностика».", 4);
+            c.Add(Severity.Bad, L.F("Ошибки дисков в журнале: {0} {1}", r.DiskErrors, Days(LogMarks.Disk)),
+                L.T("Windows не смогла прочитать или записать данные. Сделайте копию важного и проверьте диски на вкладке «Диагностика»."), 4);
         if (r.WheaCorrected > 0 && r.Whea == 0)
-            c.Add(Severity.Info, $"Исправленные аппаратные ошибки: {r.WheaCorrected} {Days(LogMarks.Whea)}",
-                "Оборудование само исправило ошибки, на работу это не повлияло. Если их сотни — проверьте разгон и обновите BIOS.", 4);
+            c.Add(Severity.Info, L.F("Исправленные аппаратные ошибки: {0} {1}", r.WheaCorrected, Days(LogMarks.Whea)),
+                L.T("Оборудование само исправило ошибки, на работу это не повлияло. Если их сотни — проверьте разгон и обновите BIOS."), 4);
 
         int serious = r.Bsods + r.Whea + r.UnexpectedShutdowns + r.DisplayDriverErrors + r.DiskErrors;
-        if (serious == 0) return r.HiddenKinds > 0 ? "новых сбоев после отметки нет" : $"сбоев нет {days}";
+        if (serious == 0) return r.HiddenKinds > 0 ? L.T("новых сбоев после отметки нет") : L.F("сбоев нет {0}", days);
         var parts = new List<string>();
         if (r.Bsods > 0) parts.Add(Fmt.Plural(r.Bsods, "синий экран", "синих экрана", "синих экранов"));
         if (r.UnexpectedShutdowns > 0) parts.Add(Fmt.Plural(r.UnexpectedShutdowns, "аварийное выключение", "аварийных выключения", "аварийных выключений"));

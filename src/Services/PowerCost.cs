@@ -315,6 +315,7 @@ public static class PowerCost
         if (double.IsNaN(v)) return "—";
         if (v < 10) return v.ToString("0.00", CultureInfo.CurrentCulture);
         if (v < 100) return v.ToString("0.0", CultureInfo.CurrentCulture);
+        if (L.En) return Math.Round(v).ToString("#,0", L.Culture);         // «1,240»
         return Math.Round(v).ToString("#,0", CultureInfo.InvariantCulture).Replace(",", " ");
     }
 
@@ -379,7 +380,7 @@ public static class PowerCost
         Check("без статистики: время игр по сессиям, простой неизвестен", !rs.IdleKnown && rs.Days == 2 && Math.Abs(rs.Game.HoursPerDay - 1.5) < 1e-9);
         var empty = Build(Array.Empty<FanMinute>(), Array.Empty<GameSession>(), "", 6, 0, now);
         Check("нет данных — нет прогноза", !empty.HasForecast && empty.Days == 0 && empty.Games.Count == 0);
-        Check("числа: 1 240 ₽ с неразрывным пробелом, 0,42 кВт·ч", Money(1240.4) == "1 240" && Kwh(0.4216).Length == 4);
+        Check("числа: 1 240 ₽ с неразрывным пробелом, 0,42 кВт·ч", Money(1240.4) == (L.En ? "1,240" : "1 240") && Kwh(0.4216).Length == 4);
 
         // ---- что видно на этом ПК (только чтение)
         sb.AppendLine();

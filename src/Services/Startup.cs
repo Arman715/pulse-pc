@@ -59,11 +59,11 @@ public static class StartupManager
     public static List<StartupItem> Load()
     {
         var items = new List<StartupItem>();
-        ReadRun(items, RegistryHive.CurrentUser, RunPath, "Run", "для вас");
-        ReadRun(items, RegistryHive.LocalMachine, RunPath, "Run", "для всех пользователей");
-        ReadRun(items, RegistryHive.LocalMachine, RunPath32, "Run32", "для всех пользователей");
-        ReadFolder(items, RegistryHive.CurrentUser, Environment.GetFolderPath(Environment.SpecialFolder.Startup), "папка автозагрузки");
-        ReadFolder(items, RegistryHive.LocalMachine, Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup), "общая папка автозагрузки");
+        ReadRun(items, RegistryHive.CurrentUser, RunPath, "Run", L.T("для вас"));
+        ReadRun(items, RegistryHive.LocalMachine, RunPath, "Run", L.T("для всех пользователей"));
+        ReadRun(items, RegistryHive.LocalMachine, RunPath32, "Run32", L.T("для всех пользователей"));
+        ReadFolder(items, RegistryHive.CurrentUser, Environment.GetFolderPath(Environment.SpecialFolder.Startup), L.T("папка автозагрузки"));
+        ReadFolder(items, RegistryHive.LocalMachine, Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup), L.T("общая папка автозагрузки"));
         ReadStoreApps(items);
         return items.OrderByDescending(i => i.Enabled).ThenBy(i => i.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
@@ -87,7 +87,7 @@ public static class StartupManager
                 {
                     Title = title,
                     Caption = (string.IsNullOrEmpty(exe) ? command : Path.GetFileName(exe)) + " · " + scope,
-                    Advice = exists ? advice : "программа удалена — запись ни на что не влияет",
+                    Advice = exists ? advice : L.T("программа удалена — запись ни на что не влияет"),
                     Locked = locked,
                 };
                 item.SetSilently(IsApproved(hive, approvedName, name));
@@ -138,7 +138,7 @@ public static class StartupManager
                     var (title, advice, locked) = Describe(family.Replace(".", ""), null);
                     if (title == family.Replace(".", "")) title = Regex.Replace(family, @"^[0-9A-F]{6,}\.|^[A-Za-z0-9]+\.(?=[A-Z])", "");
                     string path = AppModel + "\\" + package + "\\" + task;
-                    var item = new StartupItem { Title = title, Caption = "приложение из Магазина · для вас", Advice = advice, Locked = locked };
+                    var item = new StartupItem { Title = title, Caption = L.T("приложение из Магазина · для вас"), Advice = advice, Locked = locked };
                     item.SetSilently(state == 2);
                     item.Write = on =>
                     {
@@ -155,7 +155,7 @@ public static class StartupManager
     private static (string Title, string Advice, bool Locked) Describe(string name, string exe)
     {
         foreach (var k in Known)
-            if (name.IndexOf(k.Key, StringComparison.OrdinalIgnoreCase) >= 0) return (k.Name, k.Advice, k.Locked);
+            if (name.IndexOf(k.Key, StringComparison.OrdinalIgnoreCase) >= 0) return (L.T(k.Name), L.T(k.Advice), k.Locked);
 
         string title = Regex.Replace(name, "_[0-9A-Fa-f]{8,}$", "");
         try

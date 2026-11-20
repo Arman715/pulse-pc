@@ -42,7 +42,7 @@ public sealed class ScreenInfo
     public bool HdrKnown, HdrSupported, HdrOn;
 
     public int MaxHz => Rates.Length > 0 ? Rates[^1] : 0;
-    public string Title => (Maker.Length > 0 && !Model.StartsWith(Maker, StringComparison.OrdinalIgnoreCase) ? Maker + " " : "") + (Model.Length > 0 ? Model : Internal ? "Встроенный экран" : "Монитор");
+    public string Title => (Maker.Length > 0 && !Model.StartsWith(Maker, StringComparison.OrdinalIgnoreCase) ? Maker + " " : "") + (Model.Length > 0 ? Model : Internal ? L.T("Встроенный экран") : L.T("Монитор"));
     public bool NativeKnown => NativeWidth > 0 && NativeHeight > 0;
     public bool AtNative => !NativeKnown || (NativeWidth == Width && NativeHeight == Height);
 }
@@ -88,8 +88,6 @@ public static class DisplayCheck
     /// <summary>Сколько секунд ждать подтверждения новой частоты, прежде чем вернуть прежнюю.</summary>
     public const int ConfirmSeconds = 15;
 
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
-    private const string Nb = " ";
 
     private static PanelHost host;
     private static bool inited;
@@ -157,8 +155,8 @@ public static class DisplayCheck
             {
                 int code = ResetToRegistry(s.Gdi);
                 Log.Info($"Монитор: частота {p.Value.ToHz} Гц не была подтверждена до закрытия программы — режим из реестра возвращён (код {code})");
-                Done(code == 0 ? $"«{s.Title}»: {p.Value.ToHz}{Nb}Гц не было подтверждено до закрытия программы — вернул прежнюю частоту."
-                               : $"Не удалось вернуть прежнюю частоту «{s.Title}»: {Explain(code)}. Она вернётся после перезагрузки.");
+                Done(code == 0 ? L.F("«{0}»: {1}\u00A0Гц не было подтверждено до закрытия программы — вернул прежнюю частоту.", s.Title, p.Value.ToHz)
+                               : L.F("Не удалось вернуть прежнюю частоту «{0}»: {1}. Она вернётся после перезагрузки.", s.Title, Explain(code)));
             }
             ClearPendingMark();
         }
@@ -189,10 +187,10 @@ public static class DisplayCheck
             h.Settings.Set(key, DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             SaveSettings(h);
             bool game = GameHooks.InGame;
-            string title = $"{(game ? "В игре монитор" : "Монитор")} работает на {HzText(s.Hz)}{Nb}Гц";
+            string title = game ? L.F("В игре монитор работает на {0}\u00A0Гц", HzText(s.Hz)) : L.F("Монитор работает на {0}\u00A0Гц", HzText(s.Hz));
             string text = game
-                ? $"«{s.Title}» умеет {target}{Nb}Гц. Если в настройках игры есть частота обновления, выберите там {target}{Nb}Гц; иначе включите её в разделе «Монитор»."
-                : $"«{s.Title}» умеет {target}{Nb}Гц. Включить можно в разделе «Монитор».";
+                ? L.F("«{0}» умеет {1}\u00A0Гц. Если в настройках игры есть частота обновления, выберите там {1}\u00A0Гц; иначе включите её в разделе «Монитор».", s.Title, target)
+                : L.F("«{0}» умеет {1}\u00A0Гц. Включить можно в разделе «Монитор».", s.Title, target);
             h.Ui(() => h.Notify(title, text, true, () => h.Open("sys:Монитор")));
         }
     }
@@ -223,7 +221,7 @@ public static class DisplayCheck
         modes.Where(m => m.W == w && m.H == h && !m.Interlaced && m.Hz > 1).Select(m => m.Hz).Distinct().OrderBy(x => x).ToArray();
 
     /// <summary>«164,96», «60», «59,94» — частота без лишних нулей.</summary>
-    public static string HzText(double hz) => double.IsNaN(hz) ? "—" : Math.Round(hz, 2).ToString("0.##", Ru);
+    public static string HzText(double hz) => double.IsNaN(hz) ? "—" : Math.Round(hz, 2).ToString("0.##", L.Culture);
 
     /// <summary>Трёхбуквенный код производителя из EDID (два байта, старший первым; Windows отдаёт их переставленными).</summary>
     internal static string EdidMaker(ushort raw)
@@ -275,10 +273,10 @@ public static class DisplayCheck
         0 => "VGA",
         4 => "DVI",
         5 => "HDMI",
-        6 or 11 or 13 or 0x80000000 => "встроенный",
+        6 or 11 or 13 or 0x80000000 => L.T("встроенный"),
         10 => "DisplayPort",
         12 => "UDI",
-        15 => "беспроводной (Miracast)",
+        15 => L.T("беспроводной (Miracast)"),
         16 or 17 => "",
         18 => "USB-C (DisplayPort)",
         _ => "",
@@ -405,11 +403,11 @@ public static class DisplayCheck
     public static (bool Ok, string Message) Apply(string screenKey, int hz)
     {
         var h = host;
-        if (h == null || !h.Admin) return (false, "Менять частоту можно только с правами администратора.");
+        if (h == null || !h.Admin) return (false, L.T("Менять частоту можно только с правами администратора."));
         var s = ReadScreens().FirstOrDefault(x => x.Key == screenKey);
-        if (s == null) return (false, "Экран не найден: возможно, его отключили. Откройте раздел ещё раз.");
-        if (!s.Rates.Contains(hz)) return (false, $"При разрешении {s.Width}×{s.Height} драйвер не предлагает {hz}{Nb}Гц.");
-        if (!Current(s.Gdi, out var was)) return (false, "Windows не отдала текущий режим экрана.");
+        if (s == null) return (false, L.T("Экран не найден: возможно, его отключили. Откройте раздел ещё раз."));
+        if (!s.Rates.Contains(hz)) return (false, L.F("При разрешении {0}×{1} драйвер не предлагает {2}\u00A0Гц.", s.Width, s.Height, hz));
+        if (!Current(s.Gdi, out var was)) return (false, L.T("Windows не отдала текущий режим экрана."));
 
         var backup = LoadBackup(BackupFile);
         if (!backup.ContainsKey(s.Key))
@@ -419,13 +417,13 @@ public static class DisplayCheck
         }
 
         int code = SetMode(s.Gdi, (int)was.dmPelsWidth, (int)was.dmPelsHeight, hz, test: true);
-        if (code != 0) return (false, $"Драйвер не принял {hz}{Nb}Гц ({Explain(code)}). Частота не менялась.");
+        if (code != 0) return (false, L.F("Драйвер не принял {0}\u00A0Гц ({1}). Частота не менялась.", hz, Explain(code)));
         // Сначала отметка «ждём подтверждения», потом смена: при сбое между ними следующий запуск вернёт режим из реестра.
         try { SavePendingMark(PendingFile, s.Key, (int)was.dmPelsWidth, (int)was.dmPelsHeight, (int)was.dmDisplayFrequency, hz); }
-        catch (Exception ex) { return (false, "Не удалось записать отметку для отката, поэтому частота не менялась: " + ex.Message); }
+        catch (Exception ex) { return (false, L.F("Не удалось записать отметку для отката, поэтому частота не менялась: {0}", ex.Message)); }
         // Без записи в реестр: до «Оставить» новая частота живёт только в текущем сеансе.
         code = SetMode(s.Gdi, (int)was.dmPelsWidth, (int)was.dmPelsHeight, hz, test: false, persist: false);
-        if (code != 0) { ClearPendingMark(); return (false, $"Не удалось включить {hz}{Nb}Гц: {Explain(code)}."); }
+        if (code != 0) { ClearPendingMark(); return (false, L.F("Не удалось включить {0}\u00A0Гц: {1}.", hz, Explain(code))); }
 
         Thread.Sleep(1500);
         var now = ReadScreens().FirstOrDefault(x => x.Key == screenKey);
@@ -434,7 +432,7 @@ public static class DisplayCheck
         {
             ResetToRegistry(s.Gdi);
             ClearPendingMark();
-            Done($"Windows приняла {hz}{Nb}Гц, но экран работает на {HzText(read)}{Nb}Гц. Вернул прежнюю частоту.");
+            Done(L.F("Windows приняла {0}\u00A0Гц, но экран работает на {1}\u00A0Гц. Вернул прежнюю частоту.", hz, HzText(read)));
             return (false, LastAction.Text);
         }
 
@@ -449,7 +447,7 @@ public static class DisplayCheck
             confirmTimer = new Timer(_ => ConfirmExpired(), null, ConfirmSeconds * 1000, Timeout.Infinite);
         }
         Changed?.Invoke();
-        return (true, $"Экран работает на {HzText(read)}{Nb}Гц. Если картинка в порядке, нажмите «Оставить».");
+        return (true, L.F("Экран работает на {0}\u00A0Гц. Если картинка в порядке, нажмите «Оставить».", HzText(read)));
     }
 
     /// <summary>Пользователь видит картинку: новая частота остаётся — только теперь она записывается в реестр.</summary>
@@ -458,50 +456,52 @@ public static class DisplayCheck
         DisplayPending p;
         lock (Gate) { p = pending; pending = null; confirmTimer?.Dispose(); confirmTimer = null; }
         if (p == null) return;
-        if (p.Fake) { Done($"«{p.Title}»: оставлено {p.ToHz}{Nb}Гц."); return; }
+        if (p.Fake) { Done(L.F("«{0}»: оставлено {1}\u00A0Гц.", p.Title, p.ToHz)); return; }
         var s = ReadScreens().FirstOrDefault(x => x.Key == p.Key);
         int code = s == null ? -1 : SetMode(s.Gdi, p.Width, p.Height, p.ToHz, test: false, persist: true);
         ClearPendingMark();
-        Done(code == 0 ? $"«{p.Title}»: оставлено {p.ToHz}{Nb}Гц."
-                       : $"«{p.Title}»: {p.ToHz}{Nb}Гц работает сейчас, но Windows не записала его ({Explain(code)}) — после перезагрузки вернётся {p.FromHz}{Nb}Гц.");
+        Done(code == 0 ? L.F("«{0}»: оставлено {1}\u00A0Гц.", p.Title, p.ToHz)
+                       : L.F("«{0}»: {1}\u00A0Гц работает сейчас, но Windows не записала его ({2}) — после перезагрузки вернётся {3}\u00A0Гц.", p.Title, p.ToHz, Explain(code), p.FromHz));
     }
 
     /// <summary>Отказ от новой частоты до истечения времени (кнопка «Вернуть»).</summary>
-    public static void Reject() => RevertPending("Вернул прежнюю частоту по вашей кнопке.");
+    public static void Reject() => RevertPending(L.T("Вернул прежнюю частоту по вашей кнопке."));
 
-    private static void ConfirmExpired() => RevertPending("Подтверждения не было — вернул прежнюю частоту.");
+    private static void ConfirmExpired() => RevertPending(L.T("Подтверждения не было — вернул прежнюю частоту."));
 
     private static void RevertPending(string why)
     {
         DisplayPending p;
         lock (Gate) { p = pending; pending = null; confirmTimer?.Dispose(); confirmTimer = null; }
         if (p == null) return;
-        if (p.Fake) { Done("Проверка: подставное ожидание снято, в системе ничего не менялось."); return; }
+        if (p.Fake) { Done(L.T("Проверка: подставное ожидание снято, в системе ничего не менялось.")); return; }
         var s = ReadScreens().FirstOrDefault(x => x.Key == p.Key);
         // Новая частота в реестр не записывалась: возвращаем режим из реестра, то есть прежний.
         int code = s == null ? -1 : ResetToRegistry(s.Gdi);
         if (code == 0 && s != null && !Applied(ReadScreens().FirstOrDefault(x => x.Key == p.Key)?.Hz ?? double.NaN, p.FromHz))
             code = SetMode(s.Gdi, p.Width, p.Height, p.FromHz, test: false, persist: false);
         if (code == 0) ClearPendingMark();
-        Done(code == 0 ? $"«{p.Title}»: {p.FromHz}{Nb}Гц. {why}" : $"Не удалось вернуть {p.FromHz}{Nb}Гц: {Explain(code)}. Верните частоту кнопкой «Вернуть как было».");
+        Done(code == 0 ? L.F("«{0}»: {1}\u00A0Гц. {2}", p.Title, p.FromHz, why) : L.F("Не удалось вернуть {0}\u00A0Гц: {1}. Верните частоту кнопкой «Вернуть как было».", p.FromHz, Explain(code)));
     }
 
     /// <summary>Вернуть режим из копии «как было» и удалить копию этого экрана. Только с правами администратора.</summary>
     public static (bool Ok, string Message) Restore(string screenKey)
     {
         var h = host;
-        if (h == null || !h.Admin) return (false, "Менять частоту можно только с правами администратора.");
+        if (h == null || !h.Admin) return (false, L.T("Менять частоту можно только с правами администратора."));
         lock (Gate) { if (pending?.Key == screenKey) { pending = null; confirmTimer?.Dispose(); confirmTimer = null; } }
         var backup = LoadBackup(BackupFile);
-        if (!backup.TryGetValue(screenKey, out var was)) return (false, "Копии «как было» нет: программа частоту этого экрана не меняла.");
+        if (!backup.TryGetValue(screenKey, out var was)) return (false, L.T("Копии «как было» нет: программа частоту этого экрана не меняла."));
         var s = ReadScreens().FirstOrDefault(x => x.Key == screenKey);
-        if (s == null) return (false, "Экран не найден: возможно, его отключили.");
+        if (s == null) return (false, L.T("Экран не найден: возможно, его отключили."));
         int code = SetMode(s.Gdi, was.W, was.H, was.Hz, test: false, persist: true);
-        if (code == 0) ClearPendingMark();
-        if (code != 0) return (false, $"Не удалось вернуть {was.Hz}{Nb}Гц: {Explain(code)}. Копия сохранена.");
+        // Отметка «ждём подтверждения» снимается, только если она про этот экран: отметку другого экрана, который ещё
+        // ждёт «Оставить», стирать нельзя — без неё после сбоя его неподтверждённая частота не вернулась бы.
+        if (code == 0 && LoadPendingMark(PendingFile)?.Key == screenKey) ClearPendingMark();
+        if (code != 0) return (false, L.F("Не удалось вернуть {0}\u00A0Гц: {1}. Копия сохранена.", was.Hz, Explain(code)));
         backup.Remove(screenKey);
         SaveBackup(BackupFile, backup);
-        Done($"«{s.Title}»: вернул {was.W}×{was.H}, {was.Hz}{Nb}Гц — как было до изменений.");
+        Done(L.F("«{0}»: вернул {1}×{2}, {3}\u00A0Гц — как было до изменений.", s.Title, was.W, was.H, was.Hz));
         return (true, LastAction.Text);
     }
 
@@ -513,14 +513,14 @@ public static class DisplayCheck
 
     private static string Explain(int code) => code switch
     {
-        1 => "нужна перезагрузка",
-        -1 => "драйвер отказал",
-        -2 => "такого режима нет",
-        -3 => "Windows не записала настройку",
-        -4 => "неверные параметры",
-        -5 => "неверные параметры",
-        -6 => "настройку блокирует политика",
-        _ => "код " + code,
+        1 => L.T("нужна перезагрузка"),
+        -1 => L.T("драйвер отказал"),
+        -2 => L.T("такого режима нет"),
+        -3 => L.T("Windows не записала настройку"),
+        -4 => L.T("неверные параметры"),
+        -5 => L.T("неверные параметры"),
+        -6 => L.T("настройку блокирует политика"),
+        _ => L.F("код {0}", code),
     };
 
     // ---------- копия «как было»: «ключ|ширина|высота|частота» в строке ----------
@@ -556,7 +556,7 @@ public static class DisplayCheck
 
     internal static void SavePendingMark(string file, string key, int w, int h, int fromHz, int toHz)
     {
-        if (!ValidMode(key, w, h, fromHz) || !ValidMode(key, w, h, toHz)) throw new InvalidOperationException("неверный режим экрана");
+        if (!ValidMode(key, w, h, fromHz) || !ValidMode(key, w, h, toHz)) throw new InvalidOperationException(L.T("неверный режим экрана"));
         AtomicFile.WriteAllText(file, $"{key}|{w}|{h}|{fromHz}|{toHz}\n");
     }
 
@@ -601,7 +601,7 @@ public static class DisplayCheck
             RatesFor(modes, 2560, 1440).SequenceEqual(new[] { 60, 100, 144, 165 }));
         Check("другое разрешение не подмешивается", RatesFor(modes, 1920, 1080).SequenceEqual(new[] { 240 }));
         Check("проверка применения: 164,96 при цели 165 — применилось, 60 — нет", Applied(164.96, 165) && !Applied(60, 165) && !Applied(double.NaN, 165));
-        Check("подпись частоты: 164,96 / 60 / 59,94", HzText(164.956) == "164,96" && HzText(60.0001) == "60" && HzText(59.94) == "59,94");
+        Check("подпись частоты: 164,96 / 60 / 59,94", HzText(164.956) == L.Pick("164,96", "164.96") && HzText(60.0001) == "60" && HzText(59.94) == L.Pick("59,94", "59.94"));
 
         Check("код производителя EDID: SAM ↔ Samsung", EdidMaker(EdidEncode("SAM")) == "SAM" && MakerName("SAM") == "Samsung" && MakerName("ZZZ") == "");
         var dx = ParseDirectX("VRROptimizeEnable=0;SwapEffectUpgradeEnable=1;");

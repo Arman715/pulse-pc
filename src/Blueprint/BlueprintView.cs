@@ -74,12 +74,26 @@ public sealed class BlueprintView : FrameworkElement
         SnapsToDevicePixels = false;
         RenderOptions.SetEdgeMode(this, EdgeMode.Unspecified);
         Focusable = false;
-        // Надписи на деталях пришли из паспорта компьютера — перестроить сцену.
-        BlueprintLabels.Changed += () => Dispatcher.BeginInvoke(new Action(() =>
+        // Надписи на деталях пришли из паспорта компьютера — перестроить сцену. Подписка — только пока вид в окне:
+        // статическое событие держало бы закрытое окно осмотра со всеми его элементами до выхода из программы.
+        Loaded += (_, _) =>
         {
-            model = null; layout = null; staticCache = null;
-            InvalidateVisual();
-        }));
+            BlueprintLabels.Changed -= OnLabelsChanged;
+            BlueprintLabels.Changed += OnLabelsChanged;
+            if (labelsSeen != BlueprintLabels.Version) ResetLabels();     // надписи сменились, пока вид был вне окна
+        };
+        Unloaded += (_, _) => BlueprintLabels.Changed -= OnLabelsChanged;
+    }
+
+    private int labelsSeen = BlueprintLabels.Version;
+
+    private void OnLabelsChanged() => Dispatcher.BeginInvoke(new Action(ResetLabels));
+
+    private void ResetLabels()
+    {
+        labelsSeen = BlueprintLabels.Version;
+        model = null; layout = null; staticCache = null;
+        InvalidateVisual();
     }
 
     // ───────────────────────────── модель и раскладка ─────────────────────────────

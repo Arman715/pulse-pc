@@ -12,6 +12,18 @@ namespace PulsePC.Services;
 
 public enum SetupMode { Install, Uninstall }
 
+/// <summary>Что второстепенное при установке не вышло (ярлык, автозапуск).</summary>
+public enum SetupWarningKind { StartMenu, Desktop, OldDesktop, Autostart, OldAutostart }
+
+/// <summary>
+/// Предупреждение установки: вид — для решений окна (где лежат ярлыки), текст «что не вышло: причина» — на языке интерфейса.
+/// ToString — текст (так он попадает в журнал установки без окна).
+/// </summary>
+public sealed record SetupWarning(SetupWarningKind Kind, string Text)
+{
+    public override string ToString() => Text;
+}
+
 /// <summary>
 /// Как запущен файл: установщик, удаление или обычная программа (тогда Parse возвращает null).
 /// Установщик — тот же PulsePC.exe: имя файла начинается с «PulsePC-Setup» или ключ --setup; удаление — --uninstall.
@@ -153,23 +165,23 @@ public static class Installer
 
     public static string[] InstallSteps(bool autostart) => new[]
     {
-        "Закрыть запущенную программу",
-        "Скопировать программу",
-        "Распаковать PresentMon",
-        autostart ? "Создать ярлыки и автозапуск" : "Создать ярлыки",
-        "Добавить в список установленных программ",
+        L.T("Закрыть запущенную программу"),
+        L.T("Скопировать программу"),
+        L.T("Распаковать PresentMon"),
+        autostart ? L.T("Создать ярлыки и автозапуск") : L.T("Создать ярлыки"),
+        L.T("Добавить в список установленных программ"),
     };
 
     public static string[] UninstallSteps(bool purge)
     {
         var steps = new List<string>
         {
-            "Закрыть запущенную программу",
-            "Удалить ярлыки",
-            "Убрать из списка программ, автозапуска и брандмауэра",
-            "Удалить файлы программы и загрузки",
+            L.T("Закрыть запущенную программу"),
+            L.T("Удалить ярлыки"),
+            L.T("Убрать из списка программ, автозапуска и брандмауэра"),
+            L.T("Удалить файлы программы и загрузки"),
         };
-        if (purge) steps.Add("Удалить историю, настройки и копии для отката");
+        if (purge) steps.Add(L.T("Удалить историю, настройки и копии для отката"));
         return steps.ToArray();
     }
 
@@ -256,8 +268,13 @@ public static class Installer
 
     // ------------------------------------------------------------------ установка
 
-    public static void Install(SetupTarget t, bool desktopShortcut, bool autostart, Action<int> step)
+    /// <summary>
+    /// Установка. Возвращает предупреждения: ярлык или автозапуск, которые Windows или антивирус не дали создать.
+    /// Из-за них установка не прерывается — программа ставится до конца и попадает в список установленных.
+    /// </summary>
+    public static List<SetupWarning> Install(SetupTarget t, bool desktopShortcut, bool autostart, Action<int> step)
     {
+        var warnings = new List<SetupWarning>();
         step?.Invoke(0);
         CloseRunning(t);
 
@@ -269,7 +286,7 @@ public static class Installer
 
         step?.Invoke(2);
         string pmDir = Path.Combine(t.Dir, "PresentMon");
-        if (FpsCapture.Extract(pmDir) == null) throw new InvalidOperationException("В установщике нет встроенного PresentMon: скачайте установщик заново.");
+        if (FpsCapture.Extract(pmDir) == null) throw new InvalidOperationException(L.T("В установщике нет встроенного PresentMon: скачайте установщик заново."));
         File.WriteAllText(Path.Combine(t.Dir, ThirdPartyFile),
             "Пульс ПК использует сторонний компонент:\r\n\r\n" +
             "PresentMon — Intel Corporation, лицензия MIT.\r\n" +
@@ -278,20 +295,53 @@ public static class Installer
         if (!t.Test) LockTree(new DirectoryInfo(t.Dir));       // ещё раз: всё, что легло, — владелец «Администраторы», права только по наследству
 
         step?.Invoke(3);
-        Directory.CreateDirectory(t.StartMenuDir);
-        CreateShortcut(Path.Combine(t.StartMenuDir, ShortcutName), t.Exe, t.Dir);
+        // Что не вышло — по виду (окно установщика решает по нему, где лежат ярлыки) и текстом на языке интерфейса.
+        void Try(SetupWarningKind kind, string what, Action action)
+        {
+            try { action(); }
+            catch (Exception ex) { warnings.Add(new SetupWarning(kind, what + ": " + Reason(ex))); Log.Error("установка: " + kind, ex); }
+        }
+        Try(SetupWarningKind.StartMenu, L.T("ярлык в меню «Пуск» не создан"), () =>
+        {
+            Directory.CreateDirectory(t.StartMenuDir);
+            CreateShortcut(Path.Combine(t.StartMenuDir, ShortcutName), t.Exe, t.Dir);
+        });
         string desk = Path.Combine(t.DesktopDir, ShortcutName);
         if (desktopShortcut)
-        {
-            Directory.CreateDirectory(t.DesktopDir);
-            CreateShortcut(desk, t.Exe, t.Dir);
-        }
-        else DeleteShortcutIfOurs(desk, t.Exe);    // при обновлении без ярлыка старый убираем
-        if (autostart) CreateAutostart(t);
-        else DeleteAutostart(t);
+            Try(SetupWarningKind.Desktop, L.T("ярлык на рабочем столе не создан"), () =>
+            {
+                Directory.CreateDirectory(t.DesktopDir);
+                CreateShortcut(desk, t.Exe, t.Dir);
+            });
+        else Try(SetupWarningKind.OldDesktop, L.T("старый ярлык на рабочем столе не удалён"), () => DeleteShortcutIfOurs(desk, t.Exe));    // при обновлении без ярлыка старый убираем
+        if (autostart) Try(SetupWarningKind.Autostart, L.T("автозапуск не включён"), () => CreateAutostart(t));
+        else Try(SetupWarningKind.OldAutostart, L.T("старый автозапуск не убран"), () => DeleteAutostart(t));
 
         step?.Invoke(4);
         WriteUninstallKey(t);
+        return warnings;
+    }
+
+    /// <summary>
+    /// Понятная причина ошибки: настоящая ошибка из-под обёрток .NET (TargetInvocationException, AggregateException)
+    /// и расшифровка частых кодов Windows. Раньше в окне оставалось «Exception has been thrown by the target of an invocation».
+    /// </summary>
+    public static string Reason(Exception ex)
+    {
+        while (ex is TargetInvocationException or AggregateException && ex.InnerException != null) ex = ex.InnerException;
+        int code = ex.HResult;
+        string hint = code switch
+        {
+            unchecked((int)0x80070005) => L.T("Windows или антивирус запретили запись (нет доступа). Если включён «Контролируемый доступ к папкам» или сторонний антивирус, разрешите в нём программу Пульс ПК либо снимите отметку «Ярлык на рабочем столе»."),
+            unchecked((int)0x80070020) or unchecked((int)0x80070021) => L.T("файл занят другой программой. Закройте её и нажмите «Повторить»."),
+            unchecked((int)0x80070003) => L.T("папка не найдена."),
+            unchecked((int)0x800700E1) => L.T("антивирус заблокировал действие как подозрительное. Разрешите в нём Пульс ПК."),
+            _ => null,
+        };
+        if (hint != null) return hint;
+        if (ex is UnauthorizedAccessException) return L.T("нет доступа: Windows или антивирус запретили запись.");
+        string msg = (ex.Message ?? "").Trim();
+        return msg.Length > 0 ? msg : ex.GetType().Name + $" (0x{code:X8})";
     }
 
     // ------------------------------------------------------------------ папка установки и права
@@ -305,20 +355,25 @@ public static class Installer
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(dir) || !Path.IsPathFullyQualified(dir)) return "Папка установки указана не полностью.";
+            if (string.IsNullOrWhiteSpace(dir) || !Path.IsPathFullyQualified(dir)) return L.T("Папка установки указана не полностью.");
             string full = Path.GetFullPath(dir);
-            if (full.StartsWith(@"\\")) return "Сетевая папка не подходит: программу ставят на диск этого компьютера.";
+            if (full.StartsWith(@"\\")) return L.T("Сетевая папка не подходит: программу ставят на диск этого компьютера.");
             if (!test)
             {
                 var drive = new DriveInfo(Path.GetPathRoot(full));
-                if (drive.DriveType is DriveType.Network or DriveType.CDRom) return "Этот диск не подходит: программу ставят на диск этого компьютера.";
+                if (drive.DriveType is DriveType.Network or DriveType.CDRom) return L.T("Этот диск не подходит: программу ставят на диск этого компьютера.");
                 string fmt = drive.IsReady ? drive.DriveFormat : "";
                 if (!fmt.Equals("NTFS", StringComparison.OrdinalIgnoreCase) && !fmt.Equals("ReFS", StringComparison.OrdinalIgnoreCase))
-                    return $"Диск {drive.Name.TrimEnd('\\')} {(fmt == "" ? "недоступен" : "в формате " + fmt)}: на нём нельзя запретить другим программам менять файлы. Выберите диск NTFS, например {Path.GetPathRoot(DefaultDir).TrimEnd('\\')}.";
+                {
+                    string name = drive.Name.TrimEnd('\\'), example = Path.GetPathRoot(DefaultDir).TrimEnd('\\');
+                    return fmt == ""
+                        ? L.F("Диск {0} недоступен: на нём нельзя запретить другим программам менять файлы. Выберите диск NTFS, например {1}.", name, example)
+                        : L.F("Диск {0} в формате {1}: на нём нельзя запретить другим программам менять файлы. Выберите диск NTFS, например {2}.", name, fmt, example);
+                }
             }
             for (var d = new DirectoryInfo(full); d != null; d = d.Parent)
                 if (d.Exists && d.Attributes.HasFlag(FileAttributes.ReparsePoint) && d.Parent != null)
-                    return $"«{d.FullName}» — ссылка на другую папку. Выберите обычную папку.";
+                    return L.F("«{0}» — ссылка на другую папку. Выберите обычную папку.", d.FullName);
             if (Directory.Exists(full))
             {
                 var ours = new HashSet<string>(AppFiles.Select(Path.GetFileName).Concat(ListedFiles(full)), StringComparer.OrdinalIgnoreCase);
@@ -328,11 +383,11 @@ public static class Installer
                     .Where(n => Regex.IsMatch(n, @"\.(dll|exe|json|config|manifest|local)$", RegexOptions.IgnoreCase) || n.EndsWith(".local", StringComparison.OrdinalIgnoreCase))
                     .Take(4).ToList();
                 if (foreign.Count > 0)
-                    return "В папке уже лежат чужие программы или библиотеки (" + string.Join(", ", foreign) + "). Ставить рядом с ними небезопасно — выберите пустую папку.";
+                    return L.F("В папке уже лежат чужие программы или библиотеки ({0}). Ставить рядом с ними небезопасно — выберите пустую папку.", string.Join(", ", foreign));
             }
             return null;
         }
-        catch (Exception ex) { return "Папку проверить не удалось: " + ex.Message; }
+        catch (Exception ex) { return L.F("Папку проверить не удалось: {0}", ex.Message); }
     }
 
     private static SecurityIdentifier Admins => new(WellKnownSidType.BuiltinAdministratorsSid, null);
@@ -361,7 +416,7 @@ public static class Installer
         if (t.Test) { Directory.CreateDirectory(t.Dir); return; }
         var di = new DirectoryInfo(t.Dir);
         if (di.Exists && di.Attributes.HasFlag(FileAttributes.ReparsePoint))
-            throw new InvalidOperationException($"«{t.Dir}» — ссылка на другую папку. Установка остановлена.");
+            throw new InvalidOperationException(L.F("«{0}» — ссылка на другую папку. Установка остановлена.", t.Dir));
         var sec = InstallDirSecurity();
         if (!di.Exists)
         {
@@ -370,7 +425,7 @@ public static class Installer
         }
         else di.SetAccessControl(sec);
         di.Refresh();
-        if (di.Attributes.HasFlag(FileAttributes.ReparsePoint)) throw new InvalidOperationException($"«{t.Dir}» подменили ссылкой во время установки. Установка остановлена.");
+        if (di.Attributes.HasFlag(FileAttributes.ReparsePoint)) throw new InvalidOperationException(L.F("«{0}» подменили ссылкой во время установки. Установка остановлена.", t.Dir));
         LockTree(di);
     }
 
@@ -448,11 +503,11 @@ public static class Installer
             foreach (var entry in zip.Entries)
             {
                 if (entry.FullName.EndsWith("/")) continue;
-                if (!SafeName(entry.FullName)) throw new InvalidDataException("В установщике испорчен архив программы (" + entry.FullName + "): скачайте установщик заново.");
+                if (!SafeName(entry.FullName)) throw new InvalidDataException(L.F("В установщике испорчен архив программы ({0}): скачайте установщик заново.", entry.FullName));
                 items.Add(new Item(entry.FullName, entry.Open));
             }
             if (!items.Any(i => i.Name.Equals(ExeName, StringComparison.OrdinalIgnoreCase)))
-                throw new InvalidDataException("В установщике нет программы " + ExeName + ": скачайте установщик заново.");
+                throw new InvalidDataException(L.F("В установщике нет программы {0}: скачайте установщик заново.", ExeName));
         }
         else
         {
@@ -501,7 +556,7 @@ public static class Installer
                 catch (Exception back) { Log.Error("откат файла " + dst, back); }
             }
             foreach (var it in items) DeleteFile(Path.Combine(t.Dir, it.Name + ".new"));
-            throw new IOException("Не удалось заменить файлы программы (" + ex.Message + "). Прежняя версия возвращена на место.", ex);
+            throw new IOException(L.F("Не удалось заменить файлы программы ({0}). Прежняя версия возвращена на место.", ex.Message), ex);
         }
 
         // 3. Готово: копии .bak и то, что осталось от прежней раскладки, больше не нужны.
@@ -558,7 +613,7 @@ public static class Installer
     {
         using var root = RegistryKey.OpenBaseKey(t.Hive, RegistryView.Registry64);
         using var key = root.CreateSubKey(UninstallRoot + t.KeyName, true)
-                        ?? throw new InvalidOperationException("Не удалось создать запись в списке программ.");
+                        ?? throw new InvalidOperationException(L.T("Не удалось создать запись в списке программ."));
         string exe = t.Exe;
         string uninstall = t.Test ? $"\"{exe}\" --uninstall-test \"{t.Dir}\"" : $"\"{exe}\" --uninstall";
         long bytes = InstalledBytes(t);
@@ -740,9 +795,9 @@ $@"<?xml version=""1.0"" encoding=""UTF-16""?>
         // SecureStore при сбое отдаёт папку пользователя — туда описание задачи с правами администратора не пишем.
         if (!t.Test && Environment.GetEnvironmentVariable("PULSEPC_DATA") is not { Length: > 0 }
             && !string.Equals(Path.GetFullPath(dir).TrimEnd('\\'), Path.GetFullPath(t.SecureDir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Защищённая папка " + t.SecureDir + " недоступна: автозапуск не создан.");
+            throw new InvalidOperationException(L.F("Защищённая папка {0} недоступна: автозапуск не создан.", t.SecureDir));
         Directory.CreateDirectory(dir);
-        if (File.GetAttributes(dir).HasFlag(FileAttributes.ReparsePoint)) throw new InvalidOperationException("Папка «" + dir + "» подменена ссылкой: автозапуск не создан.");
+        if (File.GetAttributes(dir).HasFlag(FileAttributes.ReparsePoint)) throw new InvalidOperationException(L.F("Папка «{0}» подменена ссылкой: автозапуск не создан.", dir));
         string file = Path.Combine(dir, "task-" + Guid.NewGuid().ToString("N") + ".xml");
         try
         {
@@ -752,7 +807,7 @@ $@"<?xml version=""1.0"" encoding=""UTF-16""?>
                 fs.Write(bytes, 0, bytes.Length);
             }
             var (code, output) = Shell.Run(SchTasks, $"/Create /TN \"{TaskName(t)}\" /XML \"{file}\" /F", 30000);
-            if (code != 0) throw new InvalidOperationException("Не удалось создать задачу автозапуска: " + output.Trim());
+            if (code != 0) throw new InvalidOperationException(L.F("Не удалось создать задачу автозапуска: {0}", output.Trim()));
         }
         finally { try { File.Delete(file); } catch { } }
     }
@@ -846,53 +901,88 @@ $@"<?xml version=""1.0"" encoding=""UTF-16""?>
     private static bool SamePath(string a, string b) =>
         string.Equals(Path.GetFullPath(a).TrimEnd('\\'), Path.GetFullPath(b).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Ярлык через WScript.Shell (COM, есть в любой Windows).</summary>
+    /// <summary>
+    /// Ярлык через системный интерфейс IShellLink — так же, как его создаёт Проводник. Раньше ярлыки делались через
+    /// WScript.Shell (сценарии Windows): часть антивирусов такое блокирует, а ошибка доходила до окна невнятной обёрткой.
+    /// </summary>
     private static void CreateShortcut(string lnk, string target, string workDir)
     {
-        WithShell(shell =>
+        var link = (IShellLinkW)new ShellLink();
+        try
         {
-            object sc = Call(shell, "CreateShortcut", lnk);
-            try
+            link.SetPath(target);
+            link.SetWorkingDirectory(workDir);
+            link.SetIconLocation(target, 0);
+            link.SetDescription(L.T("Пульс ПК — состояние компьютера и игровые сессии"));
+            if (File.Exists(lnk))
             {
-                Set(sc, "TargetPath", target);
-                Set(sc, "WorkingDirectory", workDir);
-                Set(sc, "IconLocation", target + ",0");
-                Set(sc, "Description", "Пульс ПК — состояние компьютера и игровые сессии");
-                Call(sc, "Save");
+                // Ярлык прошлой версии мог остаться «только для чтения» — тогда сохранить поверх нельзя.
+                var attrs = File.GetAttributes(lnk);
+                if (attrs.HasFlag(FileAttributes.ReadOnly)) File.SetAttributes(lnk, attrs & ~FileAttributes.ReadOnly);
             }
-            finally { Marshal.FinalReleaseComObject(sc); }
-        });
+            ((IPersistFile)link).Save(lnk, true);
+        }
+        finally { Marshal.FinalReleaseComObject(link); }
     }
 
     /// <summary>Удалить ярлык, только если он ведёт на эту программу.</summary>
     private static void DeleteShortcutIfOurs(string lnk, string exe)
     {
         if (!File.Exists(lnk)) return;
-        string target = null;
-        try
-        {
-            WithShell(shell =>
-            {
-                object sc = Call(shell, "CreateShortcut", lnk);
-                try { target = sc.GetType().InvokeMember("TargetPath", BindingFlags.GetProperty, null, sc, null) as string; }
-                finally { Marshal.FinalReleaseComObject(sc); }
-            });
-        }
-        catch { return; }
+        string target = ShortcutTarget(lnk);
         if (target != null && SamePath(target, exe)) File.Delete(lnk);
     }
 
-    private static void WithShell(Action<object> action)
+    /// <summary>Куда ведёт ярлык (null — не прочитать).</summary>
+    internal static string ShortcutTarget(string lnk)
     {
-        var type = Type.GetTypeFromProgID("WScript.Shell") ?? throw new InvalidOperationException("Windows не дала создать ярлык: компонент WScript.Shell недоступен.");
-        object shell = Activator.CreateInstance(type);
-        try { action(shell); }
-        finally { Marshal.FinalReleaseComObject(shell); }
+        object obj = null;
+        try
+        {
+            obj = new ShellLink();
+            ((IPersistFile)obj).Load(lnk, 0);
+            var sb = new StringBuilder(1024);
+            ((IShellLinkW)obj).GetPath(sb, sb.Capacity, IntPtr.Zero, 0);
+            return sb.Length > 0 ? sb.ToString() : null;
+        }
+        catch { return null; }
+        finally { if (obj != null) Marshal.FinalReleaseComObject(obj); }
     }
 
-    private static object Call(object com, string method, params object[] args) =>
-        com.GetType().InvokeMember(method, BindingFlags.InvokeMethod, null, com, args);
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+    private class ShellLink { }
 
-    private static void Set(object com, string prop, object value) =>
-        com.GetType().InvokeMember(prop, BindingFlags.SetProperty, null, com, new[] { value });
+    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
+    private interface IShellLinkW
+    {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszFile, int cch, IntPtr pfd, uint fFlags);
+        void GetIDList(out IntPtr ppidl);
+        void SetIDList(IntPtr pidl);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszName, int cch);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string pszName);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszDir, int cch);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string pszDir);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszArgs, int cch);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string pszArgs);
+        void GetHotkey(out short pwHotkey);
+        void SetHotkey(short wHotkey);
+        void GetShowCmd(out int piShowCmd);
+        void SetShowCmd(int iShowCmd);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszIconPath, int cch, out int piIcon);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string pszIconPath, int iIcon);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pszPathRel, uint dwReserved);
+        void Resolve(IntPtr hwnd, uint fFlags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string pszFile);
+    }
+
+    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("0000010b-0000-0000-C000-000000000046")]
+    private interface IPersistFile
+    {
+        void GetClassID(out Guid pClassID);
+        [PreserveSig] int IsDirty();
+        void Load([MarshalAs(UnmanagedType.LPWStr)] string pszFileName, uint dwMode);
+        void Save([MarshalAs(UnmanagedType.LPWStr)] string pszFileName, [MarshalAs(UnmanagedType.Bool)] bool fRemember);
+        void SaveCompleted([MarshalAs(UnmanagedType.LPWStr)] string pszFileName);
+        void GetCurFile([MarshalAs(UnmanagedType.LPWStr)] out string ppszFileName);
+    }
 }

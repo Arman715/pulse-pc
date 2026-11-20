@@ -28,6 +28,7 @@ public static class GameLibrary
         try { AddRiot(games); } catch { }
         try { AddAstrum(games); } catch { }
         try { AddEpic(games); } catch { }
+        try { AddCustom(games); } catch { }
         return games.OrderByDescending(g => g.LastPlayed).ThenBy(g => g.Title).ToList();
     }
 
@@ -61,7 +62,7 @@ public static class GameLibrary
                 yield return new GameEntry
                 {
                     Title = name,
-                    Caption = "Steam · " + (played > 0 ? "играли " + last.ToString("d MMM") : "ещё не запускалась"),
+                    Caption = "Steam · " + (played > 0 ? L.F("играли {0}", last.ToString(L.Pick("d MMM", "MMM d"))) : L.T("ещё не запускалась")),
                     Target = "steam://rungameid/" + id,
                     LastPlayed = last,
                     InstallDir = dir == "" ? null : Path.Combine(apps, "common", dir),
@@ -125,6 +126,22 @@ public static class GameLibrary
         }
     }
 
+    // Игры, добавленные вручную на вкладке «Сессии».
+    private static void AddCustom(List<GameEntry> games)
+    {
+        foreach (var g in AppSettings.CurrentCustom())
+        {
+            if (string.IsNullOrWhiteSpace(g.Name) || !File.Exists(g.Exe) || games.Any(x => x.Title.Equals(g.Name, StringComparison.OrdinalIgnoreCase))) continue;
+            DateTime last = DateTime.MinValue;
+            try { last = File.GetLastAccessTime(g.Exe); } catch { }
+            games.Add(new GameEntry
+            {
+                Title = g.Name, Caption = L.T("добавлена вручную"), Target = g.Exe,
+                LastPlayed = last, InstallDir = Path.GetDirectoryName(g.Exe),
+            });
+        }
+    }
+
     // Игры Astrum Play записаны в «Установке и удалении программ» под ключами вида gcgame_<номер>.
     private static void AddAstrum(List<GameEntry> games)
     {
@@ -151,8 +168,10 @@ public static class GameLibrary
         if (string.IsNullOrEmpty(game.Arguments)) OpenAsUser(game.Target);
         else
         {
-            // Проводник не передаёт программе параметры, поэтому запускаем через временный ярлык.
-            string lnk = Path.Combine(Path.GetTempPath(), "PulsePC-launch.lnk");
+            // Проводник не передаёт программе параметры, поэтому запускаем через временный ярлык. Имя случайное: папка TEMP
+            // доступна пользователю на запись, и подложенная по известному имени ссылка перенаправила бы запись программы
+            // с правами администратора в чужой файл. Ярлык удаляется через минуту, когда игра уже запущена.
+            string lnk = Path.Combine(Path.GetTempPath(), "PulsePC-launch-" + Guid.NewGuid().ToString("N") + ".lnk");
             dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell"));
             dynamic shortcut = shell.CreateShortcut(lnk);
             shortcut.TargetPath = game.Target;
@@ -160,6 +179,7 @@ public static class GameLibrary
             shortcut.WorkingDirectory = Path.GetDirectoryName(game.Target);
             shortcut.Save();
             OpenAsUser(lnk);
+            _ = Task.Delay(TimeSpan.FromMinutes(1)).ContinueWith(_ => { try { File.Delete(lnk); } catch { } });
         }
     }
 
@@ -169,6 +189,6 @@ public static class GameLibrary
     /// </summary>
     public static void OpenAsUser(string target)
     {
-        Process.Start(new ProcessStartInfo("explorer.exe", "\"" + target + "\"") { UseShellExecute = false });
+        Process.Start(new ProcessStartInfo("explorer.exe", "\"" + target + "\"") { UseShellExecute = false })?.Dispose();     // описатель процесса не держим
     }
 }

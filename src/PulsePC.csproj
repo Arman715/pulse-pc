@@ -10,7 +10,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>PulsePC</AssemblyName>
     <RootNamespace>PulsePC</RootNamespace>
-    <Version>1.4.2</Version>
+    <Version>1.4.3</Version>
     <SatelliteResourceLanguages>ru</SatelliteResourceLanguages>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <!-- Обычная сборка требует прав администратора (нужны для дисков, служб и очистки).
@@ -25,6 +25,8 @@
     <Resource Include="app.ico" />
     <!-- Значок панели на телефоне: «на экран Домой» и профиль для iPhone. -->
     <EmbeddedResource Include="Assets\apple-touch-icon.png" LogicalName="apple-touch-icon.png" />
+    <!-- Английский интерфейс: словари «русская строка → английская» (см. L.cs). -->
+    <EmbeddedResource Include="Lang\en\*.json" LogicalName="lang.en.%(Filename).json" />
   </ItemGroup>
 
   <ItemGroup>

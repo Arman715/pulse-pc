@@ -24,9 +24,9 @@ public class GpuSample
     public DateTime At = DateTime.MinValue;
 
     /// <summary>Потребление для экрана: ватты, если драйвер их сообщает, иначе доля от предела.</summary>
-    public string PowerText => !double.IsNaN(Power) ? $"{Power:0} Вт" : !double.IsNaN(PowerPct) ? $"{PowerPct:0} % от макс." : "—";
+    public string PowerText => !double.IsNaN(Power) ? L.F("{0:0} Вт", Power) : !double.IsNaN(PowerPct) ? L.F("{0:0} % от макс.", PowerPct) : "—";
     /// <summary>Вентилятор для экрана: проценты, иначе обороты; «—» — датчика нет.</summary>
-    public string FanText => !double.IsNaN(Fan) ? $"{Fan:0} %" : !double.IsNaN(FanRpm) ? $"{FanRpm:0} об/мин" : "—";
+    public string FanText => !double.IsNaN(Fan) ? Fan.ToString("0", L.Culture) + (L.En ? "%" : " %") : !double.IsNaN(FanRpm) ? L.F("{0:0} об/мин", FanRpm) : "—";
 }
 
 /// <summary>Дополнительные показания для разбора игровой сессии.</summary>
@@ -207,7 +207,7 @@ public sealed class Metrics : IDisposable
                     if ((dead || silent) && now >= nextSmiStart)
                     {
                         if (had)        // не запустился вовсе — об этом уже сказал StartGpuStream
-                            Health.Fail(GpuPart, dead ? "nvidia-smi завершился — перезапускаю" : "nvidia-smi молчит больше 10 с — перезапускаю");
+                            Health.Fail(GpuPart, dead ? L.T("nvidia-smi завершился — перезапускаю") : L.T("nvidia-smi молчит больше 10 с — перезапускаю"));
                         StopSmi();
                         StartGpuStream();
                         nextSmiStart = now + smiBackoff;
@@ -315,7 +315,7 @@ public sealed class Metrics : IDisposable
                     // вывод «игра упирается в процессор». Показаний нет, видеокарта ищется заново.
                     load = double.NaN; used = double.NaN;
                     reopen = true;
-                    Health.Fail(GpuPart, "видеокарта сменила номер в Windows (переустановка драйвера?) — ищу заново");
+                    Health.Fail(GpuPart, L.T("видеокарта сменила номер в Windows (переустановка драйвера?) — ищу заново"));
                 }
                 else if (engines != null && double.IsNaN(load) && luid != "" && (adapterSeen || next.Count > 0)) load = 0;   // адаптер на месте, программ с графикой нет
 
@@ -345,9 +345,9 @@ public sealed class Metrics : IDisposable
                     At = DateTime.Now,
                 };
                 if (!double.IsNaN(load) || !double.IsNaN(perf.TempC)) Health.Ok(GpuPart);
-                else if (engines == null) Health.Fail(GpuPart, "Windows не отдаёт ни загрузку, ни датчики видеокарты");
+                else if (engines == null) Health.Fail(GpuPart, L.T("Windows не отдаёт ни загрузку, ни датчики видеокарты"));
             }
-            catch (Exception ex) { Health.Fail(GpuPart, "счётчики Windows: " + ex.Message); }
+            catch (Exception ex) { Health.Fail(GpuPart, L.F("счётчики Windows: {0}", ex.Message)); }
             Thread.Sleep(2000);
         }
         Kmt.Close(handle);
@@ -454,7 +454,7 @@ public sealed class Metrics : IDisposable
             try { ghz = perf.NextValue() / 100.0 * CpuBaseMhz / 1000.0; CounterOk(); }
             catch (Exception ex) { CounterFailed(ex); }
         }
-        if (double.IsNaN(load) && Volatile.Read(ref prevTotal) == 0) Health.Fail(CpuPart, "Windows не отдаёт время работы процессора");
+        if (double.IsNaN(load) && Volatile.Read(ref prevTotal) == 0) Health.Fail(CpuPart, L.T("Windows не отдаёт время работы процессора"));
         else
         {
             // Главное — загрузка — считается: часть работает. Вспомогательные счётчики (частота, подкачка, простой диска)
@@ -650,7 +650,7 @@ public sealed class Metrics : IDisposable
                 }
                 // Нет nvidia-smi — показания берутся у Windows, новая попытка — позже (пауза растёт).
                 smi = null;
-                Health.Fail(GpuPart, "nvidia-smi не запускается: " + ex.Message);
+                Health.Fail(GpuPart, L.F("nvidia-smi не запускается: {0}", ex.Message));
             }
         }
     }
@@ -783,7 +783,7 @@ public sealed class Metrics : IDisposable
                         // «нужны права администратора» на полчаса. Повторы исчерпаны — тогда уже честно «пусто».
                         failures++;
                         if (failures > DiskRetries) DisksLoaded = true;
-                        Health.Fail(DiskPart, error ?? "Windows не отдала сведения о дисках");
+                        Health.Fail(DiskPart, error ?? L.T("Windows не отдала сведения о дисках"));
                     }
                 }
             }

@@ -16,8 +16,6 @@ namespace PulsePC.Setup;
 /// </summary>
 public partial class SetupWindow : Window
 {
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
-
     private readonly SetupRequest request;
     private readonly bool uninstall;
     private SetupTarget target;
@@ -39,9 +37,9 @@ public partial class SetupWindow : Window
     {
         try
         {
-            if (r.Mode == SetupMode.Install) Installer.Install(InstallTarget(r), !r.NoDesktop, r.Autostart, null);
-            else Installer.Uninstall(Installer.UninstallTarget(r), r.PurgeData, null);
-            Log(r, "OK");
+            var warnings = r.Mode == SetupMode.Install ? Installer.Install(InstallTarget(r), !r.NoDesktop, r.Autostart, null) : null;
+            if (r.Mode != SetupMode.Install) Installer.Uninstall(Installer.UninstallTarget(r), r.PurgeData, null);
+            Log(r, warnings is { Count: > 0 } ? "OK\nWARN " + string.Join("\nWARN ", warnings) : "OK");
             return 0;
         }
         catch (Exception ex)
@@ -67,6 +65,7 @@ public partial class SetupWindow : Window
     public SetupWindow(SetupRequest r)
     {
         InitializeComponent();
+        WindowFit.Attach(this);
         request = r;
         uninstall = r.Mode == SetupMode.Uninstall;
         Motion.Init(this);
@@ -74,18 +73,18 @@ public partial class SetupWindow : Window
         target = uninstall ? Installer.UninstallTarget(r) : InstallTarget(r);
         upgrade = !uninstall && Installer.InstalledDir(target) != null;
 
-        string title = uninstall ? "Пульс ПК — удаление" : "Пульс ПК — установка";
+        string title = uninstall ? L.T("Пульс ПК — удаление") : L.T("Пульс ПК — установка");
         Title = title;
         CaptionText.Text = title;
-        Header.Title = uninstall ? "ДЕМОНТАЖ" : "МОНТАЖ";
-        Header.Line1 = "ПУЛЬС ПК · ВЕРСИЯ " + Installer.Version;
-        Header.Line2 = "ЛИСТ ОБЩИХ ДАННЫХ";
+        Header.Title = uninstall ? L.T("ДЕМОНТАЖ") : L.T("МОНТАЖ");
+        Header.Line1 = L.F("ПУЛЬС ПК · ВЕРСИЯ {0}", Installer.Version);
+        Header.Line2 = L.T("ЛИСТ ОБЩИХ ДАННЫХ");
         SheetNo.Text = Ink.Track("ЛИСТ 1/1", 2);
-        WorkLabel.Source = uninstall ? "ХОД ДЕМОНТАЖА" : "ХОД МОНТАЖА";
+        WorkLabel.Source = uninstall ? L.T("ХОД ДЕМОНТАЖА") : L.T("ХОД МОНТАЖА");
 
         if (uninstall) SetupUninstallForm(); else SetupInstallForm();
         UpdateFolder();
-        if (r.TestDir != null) FooterText.Text = "Проверка: запись в HKCU, ярлыки и данные — в папке «…-env» рядом.";
+        if (r.TestDir != null) FooterText.Text = L.T("Проверка: запись в HKCU, ярлыки и данные — в папке «…-env» рядом.");
 
         Loaded += (_, _) =>
         {
@@ -101,15 +100,15 @@ public partial class SetupWindow : Window
 
     private void SetupInstallForm()
     {
-        NotesLabel.Source = "НАЗНАЧЕНИЕ";
+        NotesLabel.Source = L.T("НАЗНАЧЕНИЕ");
         AddNotes(
-            "Загрузка процессора, видеокарты и памяти.",
-            "Запись игр: FPS, просадки, пинг.",
-            "Поиск сбоев в журналах Windows и на дисках.",
-            "Очистка временных файлов по выбору.",
-            "Игровые настройки Windows — любую можно вернуть.");
-        FolderLabel.Source = "ПАПКА УСТАНОВКИ";
-        BtnMain.Content = upgrade ? "Обновить" : "Установить";
+            L.T("Загрузка процессора, видеокарты и памяти."),
+            L.T("Запись игр: FPS, просадки, пинг."),
+            L.T("Поиск сбоев в журналах Windows и на дисках."),
+            L.T("Очистка временных файлов по выбору."),
+            L.T("Игровые настройки Windows — любую можно вернуть."));
+        FolderLabel.Source = L.T("ПАПКА УСТАНОВКИ");
+        BtnMain.Content = upgrade ? L.T("Обновить") : L.T("Установить");
         if (upgrade)
         {
             // Обновление: папку не меняем, автозапуск — как был.
@@ -117,36 +116,36 @@ public partial class SetupWindow : Window
             ChkAutostart.IsChecked = Installer.AutostartExists(target);
         }
         FooterText.Text = upgrade
-            ? "Новая версия заменит старую, история и настройки сохранятся."
-            : "Программа ставится для всех пользователей этого компьютера.";
-        BuildTitleBlock(("ВЕРСИЯ", Installer.Version), ("ОБЪЁМ", FormatSize(Installer.PayloadBytes())), ("СИСТЕМА", "Windows 10/11 x64"));
+            ? L.T("Новая версия заменит старую, история и настройки сохранятся.")
+            : L.T("Программа ставится для всех пользователей этого компьютера.");
+        BuildTitleBlock((L.T("ВЕРСИЯ"), Installer.Version), (L.T("ОБЪЁМ"), FormatSize(Installer.PayloadBytes())), (L.T("СИСТЕМА"), "Windows 10/11 x64"));
     }
 
     private void SetupUninstallForm()
     {
-        NotesLabel.Source = "БУДЕТ УДАЛЕНО";
+        NotesLabel.Source = L.T("БУДЕТ УДАЛЕНО");
         AddNotes(
-            "Программа и PresentMon из папки ниже.",
-            "Ярлыки в меню «Пуск» и на рабочем столе.",
-            "Автозапуск и запись в списке установленных программ.",
-            "Разрешения брандмауэра Windows для программы.",
-            "Скачанные обновления.");
+            L.T("Программа и PresentMon из папки ниже."),
+            L.T("Ярлыки в меню «Пуск» и на рабочем столе."),
+            L.T("Автозапуск и запись в списке установленных программ."),
+            L.T("Разрешения брандмауэра Windows для программы."),
+            L.T("Скачанные обновления."));
         WarnNote.Visibility = Visibility.Visible;
-        WarnText.Text = "Удаление не возвращает настройки, которые меняла программа. Если нужно, верните их до удаления: настройки Windows и игр — на вкладке «Оптимизация», схему питания и ускорение мыши — в разделах «Питание» и «Клавиатура и мышь» вкладки «Система».";
-        FolderLabel.Source = "ПАПКА ПРОГРАММЫ";
+        WarnText.Text = L.T("Удаление не возвращает настройки, которые меняла программа. Если нужно, верните их до удаления: настройки Windows и игр — на вкладке «Оптимизация», схему питания и ускорение мыши — в разделах «Питание» и «Клавиатура и мышь» вкладки «Система».");
+        FolderLabel.Source = L.T("ПАПКА ПРОГРАММЫ");
         BtnFolder.Visibility = Visibility.Collapsed;
         OptDesktop.Visibility = OptLaunch.Visibility = OptAutostart.Visibility = Visibility.Collapsed;
         OptPurge.Visibility = Visibility.Visible;
         long data = Installer.UserDataBytes(target);
-        if (data > 0) PurgeText.Text = target.UserDataDir + " и " + target.SecureDir + " · " + FormatSize(data);
-        else { PurgeText.Text = "Папок с историей и копиями для отката нет — удалять нечего."; ChkPurge.IsEnabled = false; }
-        PurgeText.ToolTip = "История и настройки: " + target.UserDataDir + "\nКопии для отката настроек: " + target.SecureDir;
-        BtnMain.Content = "Удалить";
+        if (data > 0) PurgeText.Text = target.UserDataDir + " " + L.T("и") + " " + target.SecureDir + " · " + FormatSize(data);
+        else { PurgeText.Text = L.T("Папок с историей и копиями для отката нет — удалять нечего."); ChkPurge.IsEnabled = false; }
+        PurgeText.ToolTip = L.F("История и настройки: {0}\nКопии для отката настроек: {1}", target.UserDataDir, target.SecureDir);
+        BtnMain.Content = L.T("Удалить");
         BtnMain.Style = (Style)FindResource("Destructive");
         BtnMain.Margin = new Thickness(0);
-        FooterText.Text = "Удаляется только то, что поставил установщик.";
-        BuildTitleBlock(("ВЕРСИЯ", Installer.Version), ("ПРОГРАММА", FormatSize(Installer.InstalledBytes(target))),
-            ("ИСТОРИЯ", data > 0 ? FormatSize(data) : "нет"));
+        FooterText.Text = L.T("Удаляется только то, что поставил установщик.");
+        BuildTitleBlock((L.T("ВЕРСИЯ"), Installer.Version), (L.T("ПРОГРАММА"), FormatSize(Installer.InstalledBytes(target))),
+            (L.T("ИСТОРИЯ"), data > 0 ? FormatSize(data) : L.T("нет")));
     }
 
     /// <summary>Пояснения пронумерованы, как технические требования на чертеже.</summary>
@@ -211,7 +210,7 @@ public partial class SetupWindow : Window
     {
         using var dialog = new System.Windows.Forms.FolderBrowserDialog
         {
-            Description = "Папка для программы «Пульс ПК»",
+            Description = L.T("Папка для программы «Пульс ПК»"),
             UseDescriptionForTitle = true,
             ShowNewFolderButton = true,
             SelectedPath = Path.GetDirectoryName(target.Dir) ?? target.Dir,
@@ -233,7 +232,7 @@ public partial class SetupWindow : Window
         }
         target = request.TestDir != null ? SetupTarget.ForTest(dir) : SetupTarget.Real(dir);
         UpdateFolder();
-        FooterText.Text = "Программа ставится для всех пользователей этого компьютера. Менять её файлы смогут только администраторы.";
+        FooterText.Text = L.T("Программа ставится для всех пользователей этого компьютера. Менять её файлы смогут только администраторы.");
         Motion.Reveal(FolderText, 0, 4);
     }
 
@@ -270,12 +269,13 @@ public partial class SetupWindow : Window
         }
 
         Exception error = null;
+        List<SetupWarning> warnings = null;
         try
         {
             await RunSta(() =>
             {
                 if (uninstall) Installer.Uninstall(t, purge, Step);
-                else Installer.Install(t, desktop, autostart, Step);
+                else warnings = Installer.Install(t, desktop, autostart, Step);
                 Step(steps.Length);
             });
         }
@@ -284,7 +284,7 @@ public partial class SetupWindow : Window
         busy = false;
         BtnX.IsEnabled = true;
         if (error != null) ShowError(current, error);
-        else ShowDone(desktop);
+        else ShowDone(desktop, warnings);
     }
 
     private static Task RunSta(Action action)
@@ -295,7 +295,7 @@ public partial class SetupWindow : Window
             try { action(); done.SetResult(); }
             catch (Exception ex) { done.SetException(ex); }
         }) { IsBackground = true };
-        thread.SetApartmentState(ApartmentState.STA);     // WScript.Shell для ярлыков
+        thread.SetApartmentState(ApartmentState.STA);     // COM-объект ярлыков (IShellLink)
         thread.Start();
         return done.Task;
     }
@@ -347,38 +347,49 @@ public partial class SetupWindow : Window
 
     private void SetCounter(int step, int n, double fraction = 0)
     {
-        StepCounter.Text = $"ШАГ {step} ИЗ {n}";
-        PercentText.Text = Math.Round(fraction * 100).ToString(Ru) + " %";
+        StepCounter.Text = L.F("ШАГ {0} ИЗ {1}", step, n);
+        PercentText.Text = Math.Round(fraction * 100).ToString(L.Culture) + L.Pick(" %", "%");
     }
 
-    private void ShowDone(bool desktop)
+    private void ShowDone(bool desktop, List<SetupWarning> warnings = null)
     {
         ProgressBlock.Visibility = Visibility.Collapsed;
         Verdict.Visibility = Visibility.Visible;
         DoneButtons.Visibility = Visibility.Visible;
         VerdictMark.Level = Severity.Ok;
-        VerdictTitle.Text = "Готово";
+        VerdictTitle.Text = L.T("Готово");
         VerdictTitle.Foreground = (Brush)FindResource("Ink1");
 
         if (uninstall)
         {
             VerdictText.Text = ChkPurge.IsChecked == true
-                ? "Пульс ПК удалён вместе с историей, настройками и копиями для отката."
-                : "Пульс ПК удалён. История сессий и настройки остались в " + target.UserDataDir + ", копии для отката — в " + target.SecureDir + ".";
+                ? L.T("Пульс ПК удалён вместе с историей, настройками и копиями для отката.")
+                : L.F("Пульс ПК удалён. История сессий и настройки остались в {0}, копии для отката — в {1}.", target.UserDataDir, target.SecureDir);
             BtnLaunch.Visibility = Visibility.Collapsed;
             BtnClose.Style = (Style)FindResource("Primary");
             BtnClose.Margin = new Thickness(0);
             Drawing.Visibility = Visibility.Hidden;       // остался только пунктир: «демонтировано»
-            FooterText.Text = "Остаток папки программы удалится, когда вы закроете это окно.";
+            FooterText.Text = L.T("Остаток папки программы удалится, когда вы закроете это окно.");
         }
         else
         {
-            string where = "Ярлык — в меню «Пуск»" + (desktop ? " и на рабочем столе." : ".");
-            VerdictText.Text = (upgrade ? "Пульс ПК обновлён до версии " + Installer.Version + ". " : "Пульс ПК установлен. ") + where;
+            // По виду предупреждения, а не по тексту: текст — на языке интерфейса.
+            bool startOk = warnings == null || !warnings.Any(w => w.Kind == SetupWarningKind.StartMenu);
+            bool deskOk = warnings == null || !warnings.Any(w => w.Kind == SetupWarningKind.Desktop);
+            string where = startOk ? (desktop && deskOk ? L.T("Ярлык — в меню «Пуск» и на рабочем столе.") : L.T("Ярлык — в меню «Пуск»."))
+                         : desktop && deskOk ? L.T("Ярлык — на рабочем столе.") : L.F("Программа — в папке {0}.", target.Dir);
+            VerdictText.Text = (upgrade ? L.F("Пульс ПК обновлён до версии {0}.", Installer.Version) : L.T("Пульс ПК установлен.")) + " " + where;
+            if (warnings is { Count: > 0 })
+            {
+                // Установка прошла; что-то второстепенное не вышло — говорим, что именно и почему, но не пугаем «ошибкой».
+                VerdictMark.Level = Severity.Warn;
+                VerdictTitle.Text = L.T("Готово, с замечанием");
+                VerdictText.Text += "\n\n" + string.Join("\n", warnings.Select(w => char.ToUpper(w.Text[0]) + w.Text[1..]));
+            }
             Motion.To(Ghost, OpacityProperty, 0, Motion.Normal);
             if (ChkLaunch.IsChecked == true && Launch())
             {
-                VerdictText.Text += " Программа запущена.";
+                VerdictText.Text += " " + L.T("Программа запущена.");
                 BtnLaunch.Visibility = Visibility.Collapsed;
                 BtnClose.Style = (Style)FindResource("Primary");
                 BtnClose.Margin = new Thickness(0);
@@ -386,6 +397,7 @@ public partial class SetupWindow : Window
             else BtnLaunch.Visibility = Visibility.Visible;
         }
         Motion.Reveal(Verdict, 0, 6);
+        Dispatcher.BeginInvoke(new Action(() => WorkScroll.ScrollToEnd()), System.Windows.Threading.DispatcherPriority.Loaded);
         Motion.Reveal(DoneButtons, 60, 4);
         (BtnLaunch.Visibility == Visibility.Visible ? BtnLaunch : BtnClose).Focus();
     }
@@ -399,13 +411,14 @@ public partial class SetupWindow : Window
         BtnLaunch.Visibility = Visibility.Collapsed;
         BtnRetry.Visibility = Visibility.Visible;
         VerdictMark.Level = Severity.Bad;
-        VerdictTitle.Text = "Не удалось";
+        VerdictTitle.Text = L.T("Не удалось");
         VerdictTitle.Foreground = (Brush)FindResource("Bad");
         string reason = ex is UnauthorizedAccessException
-            ? "Нет доступа к папке или реестру. Запустите установщик от имени администратора."
-            : ex.Message;
-        VerdictText.Text = (failedStep >= 0 && failedStep < rows.Length ? "Шаг «" + rows[failedStep].Title + "»: " : "") + reason;
+            ? L.T("Нет доступа к папке или реестру. Запустите установщик от имени администратора.")
+            : Installer.Reason(ex);
+        VerdictText.Text = (failedStep >= 0 && failedStep < rows.Length ? L.F("Шаг «{0}»: ", rows[failedStep].Title) : "") + reason;
         Motion.Reveal(Verdict, 0, 6);
+        Dispatcher.BeginInvoke(new Action(() => WorkScroll.ScrollToEnd()), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private bool Launch()
@@ -423,7 +436,7 @@ public partial class SetupWindow : Window
         if (Launch()) Close();
         else
         {
-            VerdictText.Text = "Не удалось запустить " + target.Exe + ". Откройте программу ярлыком в меню «Пуск».";
+            VerdictText.Text = L.F("Не удалось запустить {0}. Откройте программу ярлыком в меню «Пуск».", target.Exe);
             Motion.Reveal(VerdictText, 0, 4);
         }
     }
@@ -434,9 +447,9 @@ public partial class SetupWindow : Window
     private static string FormatSize(long bytes)
     {
         double mb = bytes / 1048576.0;
-        if (mb >= 10) return mb.ToString("0", Ru) + " МБ";
-        if (mb >= 0.1) return mb.ToString("0.0", Ru) + " МБ";
-        return Math.Max(1, bytes / 1024).ToString(Ru) + " КБ";
+        if (mb >= 10) return mb.ToString("0", L.Culture) + " " + Fmt.MbUnit;
+        if (mb >= 0.1) return mb.ToString("0.0", L.Culture) + " " + Fmt.MbUnit;
+        return Math.Max(1, bytes / 1024).ToString(L.Culture) + " " + Fmt.KbUnit;
     }
 
     // ================================================================== строка шага
@@ -480,7 +493,7 @@ public partial class SetupWindow : Window
                 _ => "Ink2",
             });
             text.FontWeight = state == StepState.Active ? FontWeights.SemiBold : FontWeights.Normal;
-            time.Text = state == StepState.Done ? seconds.ToString(seconds < 10 ? "0.00" : "0.0", Ru) + " с" : "";
+            time.Text = state == StepState.Done ? seconds.ToString(seconds < 10 ? "0.00" : "0.0", L.Culture) + L.Pick(" с", " s") : "";
             if (state is StepState.Active or StepState.Done) Motion.Reveal(state == StepState.Done ? time : text, 0, state == StepState.Done ? 3 : 0, Motion.Fast);
         }
     }

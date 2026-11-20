@@ -25,7 +25,7 @@ public sealed class PagefileDrive
     public string Kind = "";
     public long SizeBytes, FreeBytes;
     public bool IsSsd => Kind is "nvme" or "ssd";
-    public string KindText => Kind switch { "nvme" => "SSD NVMe", "ssd" => "SSD", "hdd" => "жёсткий диск", _ => "тип не определён" };
+    public string KindText => Kind switch { "nvme" => "SSD NVMe", "ssd" => "SSD", "hdd" => L.T("жёсткий диск"), _ => L.T("тип не определён") };
 }
 
 /// <summary>Конфигурация файла подкачки: то, что записывается в систему и хранится в копии «как было».</summary>
@@ -35,9 +35,9 @@ public sealed class PagefilePlan
     public List<(string Path, long InitialMb, long MaximumMb)> Files = new();
 
     public string Describe() =>
-        Auto ? "размером управляет Windows"
-        : Files.Count == 0 ? "файл подкачки выключен"
-        : string.Join("; ", Files.Select(f => f.Path + (f.InitialMb == 0 && f.MaximumMb == 0 ? " — размер выбирает Windows" : $" — от {Pagefile.Mb(f.InitialMb)} до {Pagefile.Mb(f.MaximumMb)}")));
+        Auto ? L.T("размером управляет Windows")
+        : Files.Count == 0 ? L.T("файл подкачки выключен")
+        : string.Join("; ", Files.Select(f => f.Path + " — " + (f.InitialMb == 0 && f.MaximumMb == 0 ? L.T("размер выбирает Windows") : L.F("от {0} до {1}", Pagefile.Mb(f.InitialMb), Pagefile.Mb(f.MaximumMb)))));
 
     public bool Same(PagefilePlan other) =>
         other != null && Auto == other.Auto
@@ -154,10 +154,10 @@ public static class Pagefile
         {
             var (code, output) = Shell.PowerShell(ReadScript, 60000);
             int start = output?.IndexOf('{') ?? -1;
-            if (start < 0) { st.Error = "Windows не ответила на запрос о файле подкачки."; return st; }
+            if (start < 0) { st.Error = L.T("Windows не ответила на запрос о файле подкачки."); return st; }
             using var doc = JsonDocument.Parse(output[start..]);
             var r = doc.RootElement;
-            if (!B(r, "Read")) { st.Error = "Windows не отдала сведения о памяти и файле подкачки."; return st; }
+            if (!B(r, "Read")) { st.Error = L.T("Windows не отдала сведения о памяти и файле подкачки."); return st; }
 
             st.Auto = B(r, "Auto");
             st.RamGb = N(r, "Ram") / Fmt.Gib;
@@ -197,7 +197,7 @@ public static class Pagefile
             if (!st.Auto) foreach (var f in st.Files.Where(x => x.HasSetting)) st.Current.Files.Add((f.Path, f.InitialMb, f.MaximumMb));
             st.Loaded = true;
         }
-        catch (Exception ex) { st.Error = "Не удалось прочитать настройку файла подкачки: " + ex.Message; return st; }
+        catch (Exception ex) { st.Error = L.F("Не удалось прочитать настройку файла подкачки: {0}", ex.Message); return st; }
 
         st.Games = Summarize(sessions);
         st.Advice = Advise(st);
@@ -243,20 +243,20 @@ public static class Pagefile
         // 1. Файла нет вовсе.
         if (!st.Auto && configured.Count == 0)
         {
-            string tail = used.Count > 0 ? " Сейчас файл ещё работает: выключение вступит в силу после перезагрузки." : "";
+            string tail = used.Count > 0 ? " " + L.T("Сейчас файл ещё работает: выключение вступит в силу после перезагрузки.") : "";
             if (st.RamGb <= 33)
             {
                 a.Level = Severity.Bad;
-                a.Verdict = "Файл подкачки выключен.";
-                a.Title = "Включить файл подкачки и отдать его размер Windows";
-                a.Why = $"Когда память заполнится, Windows будет некуда убрать лишнее — игра или программа закроется с ошибкой «недостаточно памяти». При {ram} памяти в тяжёлых играх так и бывает.{tail}";
+                a.Verdict = L.T("Файл подкачки выключен.");
+                a.Title = L.T("Включить файл подкачки и отдать его размер Windows");
+                a.Why = L.F("Когда память заполнится, Windows будет некуда убрать лишнее — игра или программа закроется с ошибкой «недостаточно памяти». При {0} памяти в тяжёлых играх так и бывает.", ram) + tail;
             }
             else
             {
                 a.Level = Severity.Info;
-                a.Verdict = "Файл подкачки выключен.";
-                a.Title = "Надёжнее включить файл подкачки";
-                a.Why = $"При {ram} памяти без файла подкачки обычно можно обойтись, но некоторые игры и программы без него закрываются с ошибкой, даже когда память свободна. С файлом, которым управляет Windows, такого не бывает.{tail}";
+                a.Verdict = L.T("Файл подкачки выключен.");
+                a.Title = L.T("Надёжнее включить файл подкачки");
+                a.Why = L.F("При {0} памяти без файла подкачки обычно можно обойтись, но некоторые игры и программы без него закрываются с ошибкой, даже когда память свободна. С файлом, которым управляет Windows, такого не бывает.", ram) + tail;
             }
             a.Plan = auto;
             return a;
@@ -266,9 +266,9 @@ public static class Pagefile
         if (used.Any(f => f.Temporary))
         {
             a.Level = Severity.Warn;
-            a.Verdict = "Файл подкачки настроен с ошибкой.";
-            a.Title = "Отдать управление файлом подкачки Windows";
-            a.Why = "Windows не смогла создать файл подкачки с заданными настройками и работает на временном. Обычно причина — нет места на диске или указан диск, которого больше нет.";
+            a.Verdict = L.T("Файл подкачки настроен с ошибкой.");
+            a.Title = L.T("Отдать управление файлом подкачки Windows");
+            a.Why = L.T("Windows не смогла создать файл подкачки с заданными настройками и работает на временном. Обычно причина — нет места на диске или указан диск, которого больше нет.");
             a.Plan = auto;
             return a;
         }
@@ -289,12 +289,12 @@ public static class Pagefile
             {
                 bool toSystem = ssd.Letter.Equals(st.SystemDrive, StringComparison.OrdinalIgnoreCase);
                 a.Level = Severity.Warn;
-                a.Verdict = "Файл подкачки лежит на жёстком диске.";
-                a.Title = $"Перенести файл подкачки на SSD —  :";
-                a.Why = $"Сейчас файл лежит на  : ({hddName}). Когда Windows обращается к нему во время игры, жёсткий диск отвечает в десятки раз медленнее SSD — получаются долгие подвисания. " +
-                        $"На  : ({Named(ssd)}) свободно {Fmt.Size(ssd.FreeBytes)} — файл поместится." +
-                        (toSystem ? " Это системный диск, поэтому достаточно отдать управление Windows."
-                                  : " Размер файла на новом месте выберет Windows. Учтите: когда файла нет на системном диске, Windows при сбое может не записать снимок памяти для разбора ошибки — на работу и игры это не влияет.");
+                a.Verdict = L.T("Файл подкачки лежит на жёстком диске.");
+                a.Title = L.F("Перенести файл подкачки на SSD — диск {0}:", ssd.Letter);
+                a.Why = L.F("Сейчас файл лежит на диске {0}: ({1}). Когда Windows обращается к нему во время игры, жёсткий диск отвечает в десятки раз медленнее SSD — получаются долгие подвисания.", onHdd[0].Letter, hddName) + " " +
+                        L.F("На диске {0}: ({1}) свободно {2} — файл поместится.", ssd.Letter, Named(ssd), Fmt.Size(ssd.FreeBytes)) + " " +
+                        (toSystem ? L.T("Это системный диск, поэтому достаточно отдать управление Windows.")
+                                  : L.T("Размер файла на новом месте выберет Windows. Учтите: когда файла нет на системном диске, Windows при сбое может не записать снимок памяти для разбора ошибки — на работу и игры это не влияет."));
                 a.Plan = toSystem ? auto : new PagefilePlan { Files = { (ssd.Letter + @":\pagefile.sys", 0, 0) } };
                 return a;
             }
@@ -302,11 +302,11 @@ public static class Pagefile
             {
                 bool anySsd = st.Drives.Any(d => d.IsSsd);
                 a.Level = Severity.Info;
-                a.Verdict = "Файл подкачки лежит на жёстком диске.";
-                a.Title = anySsd ? "На SSD не хватает места для файла подкачки" : "Быстрее сделать нельзя: SSD в компьютере нет";
-                a.Why = $"Файл лежит на  : ({hddName}). " +
-                        (anySsd ? $"На SSD для него нужно около {Fmt.Size(need)} свободного места. Освободите место — и рекомендация появится."
-                                : "Обращения к нему во время игры — это подвисания. Настройкой это не исправить: поможет SSD или больше памяти.");
+                a.Verdict = L.T("Файл подкачки лежит на жёстком диске.");
+                a.Title = anySsd ? L.T("На SSD не хватает места для файла подкачки") : L.T("Быстрее сделать нельзя: SSD в компьютере нет");
+                a.Why = L.F("Файл лежит на диске {0}: ({1}).", onHdd[0].Letter, hddName) + " " +
+                        (anySsd ? L.F("На SSD для него нужно около {0} свободного места. Освободите место — и рекомендация появится.", Fmt.Size(need))
+                                : L.T("Обращения к нему во время игры — это подвисания. Настройкой это не исправить: поможет SSD или больше памяти."));
                 return a;
             }
         }
@@ -317,22 +317,22 @@ public static class Pagefile
             long peak = st.TotalPeakMb;
             long suggest = Math.Max(4096, (long)Math.Ceiling(peak * 1.5 / 1024.0) * 1024);
             a.Level = Severity.Warn;
-            a.Verdict = "Файл подкачки задан вручную и слишком мал.";
-            a.Title = "Отдать размер файла подкачки Windows";
-            a.Why = smallWhy + " Если места не хватит, программы начнут закрываться с ошибкой. Windows сама увеличивает файл, когда нужно. " +
-                    $"Если хотите оставить свой размер — задайте начальный не меньше {Mb(suggest)}.";
+            a.Verdict = L.T("Файл подкачки задан вручную и слишком мал.");
+            a.Title = L.T("Отдать размер файла подкачки Windows");
+            a.Why = smallWhy + " " + L.T("Если места не хватит, программы начнут закрываться с ошибкой. Windows сама увеличивает файл, когда нужно.") + " " +
+                    L.F("Если хотите оставить свой размер — задайте начальный не меньше {0}.", Mb(suggest));
             a.Plan = auto;
             return a;
         }
 
         // 5. Всё как надо.
         a.Level = Severity.Ok;
-        a.Verdict = "Файл подкачки настроен как надо.";
-        a.Title = "Менять ничего не нужно";
-        string place = where.Count == 0 ? "" : allSsd ? $" Файл лежит на SSD —  : ({Named(where[0])})." : $"  : — {where[0].KindText}.";
+        a.Verdict = L.T("Файл подкачки настроен как надо.");
+        a.Title = L.T("Менять ничего не нужно");
+        string place = where.Count == 0 ? "" : " " + (allSsd ? L.F("Файл лежит на SSD — диск {0}: ({1}).", where[0].Letter, Named(where[0])) : L.F("Диск {0}: — {1}.", where[0].Letter, where[0].KindText));
         a.Why = st.Auto
-            ? "Размером управляет Windows: файл растёт, когда памяти не хватает, и не занимает лишнего." + place
-            : $"Размер задан вручную ({st.Current.Describe()}). С включения компьютера было занято не больше {Mb(st.TotalPeakMb)} — запас есть." + place;
+            ? L.T("Размером управляет Windows: файл растёт, когда памяти не хватает, и не занимает лишнего.") + place
+            : L.F("Размер задан вручную ({0}). С включения компьютера было занято не больше {1} — запас есть.", st.Current.Describe(), Mb(st.TotalPeakMb)) + place;
         return a;
     }
 
@@ -345,15 +345,15 @@ public static class Pagefile
         if (fixedFiles.Count == 0 || configured.Any(f => f.MaximumMb == 0)) return false;     // хотя бы один файл растит сама Windows
         long initial = fixedFiles.Sum(f => f.InitialMb), max = fixedFiles.Sum(f => f.MaximumMb), peak = st.TotalPeakMb;
         if (peak <= 0) return false;
-        string size = initial == max ? Mb(max) : $"от {Mb(initial)} до {Mb(max)}";
+        string size = initial == max ? Mb(max) : L.F("от {0} до {1}", Mb(initial), Mb(max));
         if (peak >= 0.8 * max)
         {
-            why = $"Размер задан вручную: {size}. С включения компьютера в нём было занято до {Mb(peak)} — почти весь.";
+            why = L.F("Размер задан вручную: {0}. С включения компьютера в нём было занято до {1} — почти весь.", size, Mb(peak));
             return true;
         }
         if (peak > initial)
         {
-            why = $"Размер задан вручную: {size}. С включения компьютера в нём было занято до {Mb(peak)} — больше начального размера, файл приходилось увеличивать на ходу, а это рывки.";
+            why = L.F("Размер задан вручную: {0}. С включения компьютера в нём было занято до {1} — больше начального размера, файл приходилось увеличивать на ходу, а это рывки.", size, Mb(peak));
             return true;
         }
         return false;
@@ -364,12 +364,16 @@ public static class Pagefile
     {
         var g = st.Games;
         if (g.Sessions == 0 || g.Tight == 0 || g.Tight * 4 < g.Sessions) return "";       // тесно реже, чем в каждой четвёртой игре
-        string range = Math.Round(g.TightMinGb, 1) == Math.Round(g.TightMaxGb, 1) ? Fmt.Gb(g.TightMinGb) : $"{g.TightMinGb:0.0}–{g.TightMaxGb:0.0} ГБ";
-        string often = g.Tight == g.Sessions ? "во всех записанных играх" : $"в {g.Tight} из {Fmt.Plural(g.Sessions, "записанной игры", "записанных игр", "записанных игр")}";
-        string cure = st.RamGb <= 20 ? "Настоящее решение — добавить память: 32 ГБ современным играм хватает с запасом."
-            : "Настоящее решение — закрывать тяжёлые программы перед игрой или добавить память.";
-        return $"В играх на этом компьютере свободной памяти оставалось {range} из {Ram(st.RamGb)} ({often}). " +
-               "Файл подкачки не даёт играм закрываться с ошибкой, но память не заменяет: с диска данные читаются в сотни раз медленнее, отсюда рывки. " + cure;
+        string range = Math.Round(g.TightMinGb, 1) == Math.Round(g.TightMaxGb, 1) ? Fmt.Gb(g.TightMinGb)
+            : g.TightMinGb.ToString("0.0", L.Culture) + "–" + g.TightMaxGb.ToString("0.0", L.Culture) + " " + Fmt.GbUnit;
+        string seen = g.Tight == g.Sessions
+            ? L.F("В играх на этом компьютере свободной памяти оставалось {0} из {1} (во всех записанных играх).", range, Ram(st.RamGb))
+            : L.F("В играх на этом компьютере свободной памяти оставалось {0} из {1} (в {2} из {3}).", range, Ram(st.RamGb), g.Tight,
+                  Fmt.Plural(g.Sessions, "записанной игры", "записанных игр", "записанных игр"));
+        string cure = st.RamGb <= 20 ? L.T("Настоящее решение — добавить память: 32 ГБ современным играм хватает с запасом.")
+            : L.T("Настоящее решение — закрывать тяжёлые программы перед игрой или добавить память.");
+        return seen + " " +
+               L.T("Файл подкачки не даёт играм закрываться с ошибкой, но память не заменяет: с диска данные читаются в сотни раз медленнее, отсюда рывки.") + " " + cure;
     }
 
     // ------------------------------------------------------------------ запись (только с правами администратора)
@@ -407,7 +411,7 @@ public static class Pagefile
     public static Dictionary<string, string> PlanEnv(PagefilePlan plan)
     {
         if (!plan.Auto && plan.Files.Any(f => !ValidFile(f.Path, f.InitialMb, f.MaximumMb)))
-            throw new InvalidOperationException("в конфигурации файла подкачки недопустимый путь или размер");
+            throw new InvalidOperationException(L.T("в конфигурации файла подкачки недопустимый путь или размер"));
         return new Dictionary<string, string>
         {
             ["PULSE_PAGEFILES"] = plan.Auto ? "" : string.Join("\n", plan.Files.Select(f => $"{f.Path}|{f.InitialMb}|{f.MaximumMb}")),
@@ -491,59 +495,59 @@ public static class Pagefile
     /// <summary>Записать рекомендацию. Прежняя конфигурация сохраняется в копию до записи.</summary>
     public static (bool Ok, string Message) Apply(PagefilePlan plan)
     {
-        if (plan == null) return (false, "Менять нечего.");
-        if (!Shell.IsAdmin()) return (false, "Нужны права администратора.");
+        if (plan == null) return (false, L.T("Менять нечего."));
+        if (!Shell.IsAdmin()) return (false, L.T("Нужны права администратора."));
         try
         {
             var current = ReadPlan();
-            if (current == null) return (false, "Не удалось прочитать текущую настройку, поэтому ничего не изменено.");
-            if (current.Same(plan)) return (true, "Эта настройка уже записана. Если компьютер после этого не перезагружался — перезагрузите его.");
+            if (current == null) return (false, L.T("Не удалось прочитать текущую настройку, поэтому ничего не изменено."));
+            if (current.Same(plan)) return (true, L.T("Эта настройка уже записана. Если компьютер после этого не перезагружался — перезагрузите его."));
             bool hadBackup = LoadBackup() != null;
-            if (!SaveBackup(current)) return (false, "Не удалось сохранить копию прежней настройки, поэтому ничего не изменено.");
+            if (!SaveBackup(current)) return (false, L.T("Не удалось сохранить копию прежней настройки, поэтому ничего не изменено."));
 
             var (code, output) = Write(plan);
             var now = ReadPlan();
             if (code == 0 && (output ?? "").Contains("PULSE-DONE") && now != null && now.Same(plan))
-                return (true, $"Записано: {plan.Describe()}. Изменение вступит в силу после перезагрузки компьютера. Прежняя настройка сохранена — её вернёт кнопка «Вернуть как было».");
+                return (true, L.F("Записано: {0}. Изменение вступит в силу после перезагрузки компьютера. Прежняя настройка сохранена — её вернёт кнопка «Вернуть как было».", plan.Describe()));
 
             // Запись оборвалась на полпути: нельзя оставлять систему с наполовину записанной настройкой — возвращаем прежнюю сразу.
             string reason = Short(output);
             if (now != null && now.Same(current))
             {
                 if (!hadBackup) DeleteBackup();
-                return (false, "Windows не приняла настройку: " + reason + " Ничего не изменилось.");
+                return (false, L.F("Windows не приняла настройку: {0} Ничего не изменилось.", reason));
             }
             Write(current);
             var after = ReadPlan();
             if (after != null && after.Same(current))
             {
                 if (!hadBackup) DeleteBackup();
-                return (false, "Windows не приняла настройку: " + reason + " Прежняя настройка возвращена, ничего не изменилось.");
+                return (false, L.F("Windows не приняла настройку: {0} Прежняя настройка возвращена, ничего не изменилось.", reason));
             }
-            return (false, "Windows не приняла настройку: " + reason + " Сейчас записано: " + (after?.Describe() ?? "прочитать не удалось") +
-                           ". Нажмите «Вернуть как было», чтобы вернуть прежнюю настройку, и не перезагружайте компьютер до этого.");
+            return (false, L.F("Windows не приняла настройку: {0} Сейчас записано: {1}. Нажмите «Вернуть как было», чтобы вернуть прежнюю настройку, и не перезагружайте компьютер до этого.",
+                               reason, after?.Describe() ?? L.T("прочитать не удалось")));
         }
-        catch (Exception ex) { return (false, "Не удалось изменить настройку: " + ex.Message); }
+        catch (Exception ex) { return (false, L.F("Не удалось изменить настройку: {0}", ex.Message)); }
     }
 
     /// <summary>Вернуть конфигурацию из копии и удалить копию.</summary>
     public static (bool Ok, string Message) Restore()
     {
-        if (!Shell.IsAdmin()) return (false, "Нужны права администратора.");
+        if (!Shell.IsAdmin()) return (false, L.T("Нужны права администратора."));
         try
         {
             var saved = LoadBackup();
-            if (saved == null) return (false, "Копии прежней настройки нет: программа файл подкачки не меняла.");
+            if (saved == null) return (false, L.T("Копии прежней настройки нет: программа файл подкачки не меняла."));
             var (code, output) = Write(saved);
             var now = ReadPlan();
             if (code == 0 && (output ?? "").Contains("PULSE-DONE") && now != null && now.Same(saved))
             {
                 DeleteBackup();
-                return (true, $"Возвращено как было: {saved.Describe()}. Вступит в силу после перезагрузки компьютера.");
+                return (true, L.F("Возвращено как было: {0}. Вступит в силу после перезагрузки компьютера.", saved.Describe()));
             }
-            return (false, "Windows не приняла прежнюю настройку: " + Short(output) + " Копия сохранена, можно попробовать ещё раз.");
+            return (false, L.F("Windows не приняла прежнюю настройку: {0} Копия сохранена, можно попробовать ещё раз.", Short(output)));
         }
-        catch (Exception ex) { return (false, "Не удалось вернуть настройку: " + ex.Message); }
+        catch (Exception ex) { return (false, L.F("Не удалось вернуть настройку: {0}", ex.Message)); }
     }
 
     // ------------------------------------------------------------------ самопроверка
@@ -596,14 +600,14 @@ public static class Pagefile
 
     /// <summary>«512 МБ», «4 ГБ», «23,5 ГБ».</summary>
     public static string Mb(long mb) =>
-        mb < 1024 ? mb + " МБ" : (mb / 1024.0).ToString(mb % 1024 == 0 ? "0" : "0.0", CultureInfo.CurrentCulture) + " ГБ";
+        mb < 1024 ? mb + " " + Fmt.MbUnit : (mb / 1024.0).ToString(mb % 1024 == 0 ? "0" : "0.0", L.Culture) + " " + Fmt.GbUnit;
 
     /// <summary>Объём памяти, как его называют: 15,8 ГБ по счёту Windows — это «16 ГБ».</summary>
     public static string Ram(double gb)
     {
         int[] usual = { 4, 6, 8, 12, 16, 20, 24, 32, 48, 64, 96, 128, 192, 256 };
-        foreach (int u in usual) if (gb > u * 0.93 && gb <= u * 1.01) return u + " ГБ";
-        return Math.Round(gb) + " ГБ";
+        foreach (int u in usual) if (gb > u * 0.93 && gb <= u * 1.01) return u + " " + Fmt.GbUnit;
+        return Math.Round(gb).ToString(L.Culture) + " " + Fmt.GbUnit;
     }
 
     private static string Named(PagefileDrive d) => d.DiskName == "" ? d.KindText : d.KindText + ", " + d.DiskName;
@@ -612,7 +616,7 @@ public static class Pagefile
     {
         string text = (output ?? "").Replace("PULSE-DONE", "").Trim();
         string first = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault() ?? "";
-        if (first == "") return "причина не названа.";
+        if (first == "") return L.T("причина не названа.");
         if (first.Length > 200) first = first[..200] + "…";
         return first.EndsWith('.') ? first : first + ".";
     }

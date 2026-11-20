@@ -19,24 +19,24 @@ public sealed class TrayIcon : IDisposable
         this.settings = settings;
 
         var menu = new WinForms.ContextMenuStrip();
-        menu.Items.Add("Открыть Пульс ПК", null, (_, _) => ShowRequested?.Invoke());
+        menu.Items.Add(L.T("Открыть Пульс ПК"), null, (_, _) => ShowRequested?.Invoke());
         menu.Items.Add(new WinForms.ToolStripSeparator());
-        alertsItem = new WinForms.ToolStripMenuItem("Показывать предупреждения") { CheckOnClick = true, Checked = settings.AlertsEnabled };
+        alertsItem = new WinForms.ToolStripMenuItem(L.T("Показывать предупреждения")) { CheckOnClick = true, Checked = settings.AlertsEnabled };
         alertsItem.CheckedChanged += (_, _) => { settings.AlertsEnabled = alertsItem.Checked; settings.Save(); };
-        closeToTrayItem = new WinForms.ToolStripMenuItem("При закрытии сворачивать к часам") { CheckOnClick = true, Checked = settings.CloseToTray };
+        closeToTrayItem = new WinForms.ToolStripMenuItem(L.T("При закрытии сворачивать к часам")) { CheckOnClick = true, Checked = settings.CloseToTray };
         closeToTrayItem.CheckedChanged += (_, _) => { settings.CloseToTray = closeToTrayItem.Checked; settings.Save(); };
-        var fpsItem = new WinForms.ToolStripMenuItem("Записывать FPS в играх") { CheckOnClick = true, Checked = settings.RecordFps };
+        var fpsItem = new WinForms.ToolStripMenuItem(L.T("Записывать FPS в играх")) { CheckOnClick = true, Checked = settings.RecordFps };
         fpsItem.CheckedChanged += (_, _) => { settings.RecordFps = fpsItem.Checked; settings.Save(); SettingsChanged?.Invoke(); };
         menu.Items.Add(alertsItem);
         menu.Items.Add(fpsItem);
         menu.Items.Add(closeToTrayItem);
         menu.Items.Add(new WinForms.ToolStripSeparator());
-        menu.Items.Add("Выход", null, (_, _) => ExitRequested?.Invoke());
+        menu.Items.Add(L.T("Выход"), null, (_, _) => ExitRequested?.Invoke());
 
         icon = new WinForms.NotifyIcon
         {
             Icon = LoadIcon(),
-            Text = "Пульс ПК",
+            Text = L.T("Пульс ПК"),
             ContextMenuStrip = menu,
             Visible = true,
         };
@@ -109,14 +109,14 @@ public sealed class Alerts
         if (hot >= 3 && now - lastHot > Cooldown)
         {
             lastHot = now;
-            tray.Notify("Видеокарта перегревается", $"Сейчас {gpuTemp:0} °C. Проверьте, крутятся ли вентиляторы и не забит ли корпус пылью.", true);
+            tray.Notify(L.T("Видеокарта перегревается"), L.F("Сейчас {0:0} °C. Проверьте, крутятся ли вентиляторы и не забит ли корпус пылью.", gpuTemp), true);
         }
 
         lowRam = ramAvailGb > 0 && ramAvailGb < 1.0 ? lowRam + 1 : 0;
         if (lowRam >= 4 && now - lastRam > Cooldown)
         {
             lastRam = now;
-            tray.Notify("Заканчивается память", $"Доступно {ramAvailGb:0.0} ГБ. Закройте тяжёлые программы — список на вкладке «Оптимизация».", true);
+            tray.Notify(L.T("Заканчивается память"), L.F("Доступно {0:0.0} ГБ. Закройте тяжёлые программы — список на вкладке «Оптимизация».", ramAvailGb), true);
         }
 
         // Диск проверяется раз в пять минут, предупреждение - не чаще раза в сутки.
@@ -129,7 +129,7 @@ public sealed class Alerts
                 if (freePct < 10)
                 {
                     lastDisk = now;
-                    tray.Notify("Мало места на системном диске", $"Свободно {Fmt.Size(drive.AvailableFreeSpace)}. Вкладка «Очистка» покажет, что можно удалить.", true);
+                    tray.Notify(L.T("Мало места на системном диске"), L.F("Свободно {0}. Вкладка «Очистка» покажет, что можно удалить.", Fmt.Size(drive.AvailableFreeSpace)), true);
                 }
             }
             catch { }

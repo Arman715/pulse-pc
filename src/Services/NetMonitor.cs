@@ -30,6 +30,40 @@ public sealed class PingTarget
 
     public NetCounters Counters { get { lock (gate) return counters; } }
 
+    /// <summary>
+    /// Отметка начала отрезка (игровой сессии). Первый замер после отметки сравнивается с последним замером до неё —
+    /// эта разница не принадлежит отрезку и вычитается из разброса (см. End).
+    /// </summary>
+    public sealed class Mark
+    {
+        internal NetCounters Start;
+        internal bool Anchored, Seen;
+        internal double CrossDiff;
+    }
+
+    private readonly List<Mark> marks = new();
+
+    public Mark Begin()
+    {
+        lock (gate)
+        {
+            var m = new Mark { Start = counters, Anchored = !double.IsNaN(lastOk) };
+            marks.Add(m);
+            return m;
+        }
+    }
+
+    /// <summary>Счётчики за отрезок и разница через его начало (0, если её не было).</summary>
+    public NetCounters End(Mark m, out double crossDiff)
+    {
+        lock (gate)
+        {
+            marks.Remove(m);
+            crossDiff = m.Seen && m.Anchored ? m.CrossDiff : 0;
+            return counters.Minus(m.Start);
+        }
+    }
+
     public void Add(double ms)
     {
         lock (gate)
@@ -40,12 +74,24 @@ public sealed class PingTarget
             if (double.IsNaN(ms)) { counters.Lost++; return; }
             counters.Received++;
             counters.SumMs += ms;
-            if (!double.IsNaN(lastOk)) counters.SumAbsDiff += Math.Abs(ms - lastOk);
+            double diff = double.IsNaN(lastOk) ? 0 : Math.Abs(ms - lastOk);
+            if (!double.IsNaN(lastOk)) counters.SumAbsDiff += diff;
+            foreach (var m in marks)
+                if (!m.Seen) { m.Seen = true; m.CrossDiff = double.IsNaN(lastOk) ? 0 : diff; m.Anchored &= !double.IsNaN(lastOk); }
             lastOk = ms;
         }
     }
 
-    public void Reset() { lock (gate) { values.Clear(); lastOk = double.NaN; } }
+    public void Reset()
+    {
+        lock (gate)
+        {
+            values.Clear();
+            lastOk = double.NaN;
+            // Ряд начат заново: первый новый замер не сравнивается со старым, вычитать нечего.
+            foreach (var m in marks) if (!m.Seen) m.Anchored = false;
+        }
+    }
 
     public double[] Snapshot() { lock (gate) return values.ToArray(); }
 
@@ -153,15 +199,87 @@ public sealed class NetMonitor : IDisposable
 
                 string host = gateway.ToString();
                 if (Router.Host != host) { Router.Host = host; Router.Reset(); }
-                string kind = nic.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ? "Wi-Fi" : "кабель";
-                string speed = nic.Speed >= 1_000_000_000 ? $"{nic.Speed / 1e9:0.#} Гбит/с" : $"{nic.Speed / 1e6:0} Мбит/с";
-                AdapterText = $"{kind} · {nic.Description} · {speed} · роутер {host}";
+                string kind = nic.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ? "Wi-Fi" : L.T("кабель");
+                string speed = nic.Speed >= 1_000_000_000 ? L.F("{0:0.#} Гбит/с", nic.Speed / 1e9) : L.F("{0:0} Мбит/с", nic.Speed / 1e6);
+                AdapterText = $"{kind} · {nic.Description} · {speed} · " + L.F("роутер {0}", host);
                 return;
             }
-            AdapterText = "нет подключения к сети";
+            // Шлюза больше нет: старый роутер не пингуется и не рисуется, пока не появится новый.
+            if (Router.Host != null) { Router.Host = null; Router.Reset(); }
+            AdapterText = L.T("нет подключения к сети");
         }
         catch { }
     }
 
     public void Dispose() => disposed = true;
+}
+
+/// <summary>Самопроверка счётчиков пинга и сохранения сессий (на выдуманных данных, сеть и настоящие сессии не трогаются).</summary>
+public static class SessionChecks
+{
+    public static string SelfTest()
+    {
+        var fails = new List<string>();
+        void Check(string what, bool ok) { if (!ok) fails.Add(what); }
+
+        // Разброс внутри сессии: до записи 100 мс, в игре десять замеров по 10 мс — разброс 0, а не 10.
+        var t = new PingTarget();
+        t.Add(100);
+        var mark = t.Begin();
+        for (int i = 0; i < 10; i++) t.Add(10);
+        var d = t.End(mark, out double cross);
+        double jitter = Math.Max(0, d.SumAbsDiff - cross) / (d.Received - 1);
+        Check($"разброс без замера до сессии (получено {jitter:0.##})", d.Received == 10 && Math.Abs(jitter) < 1e-9);
+
+        // Без замера до сессии вычитать нечего: 10, 20, 10 → разброс 10.
+        var t2 = new PingTarget();
+        var m2 = t2.Begin();
+        foreach (var v in new double[] { 10, 20, 10 }) t2.Add(v);
+        var d2 = t2.End(m2, out double cross2);
+        Check("разброс сессии с первого замера", Math.Abs((d2.SumAbsDiff - cross2) / (d2.Received - 1) - 10) < 1e-9);
+
+        // Потерянный первый пакет не ломает подсчёт: 50 | потеря, 30, 30 → разница 50→30 не в сессии.
+        var t3 = new PingTarget();
+        t3.Add(50);
+        var m3 = t3.Begin();
+        t3.Add(double.NaN); t3.Add(30); t3.Add(30);
+        var d3 = t3.End(m3, out double cross3);
+        Check("потеря в начале сессии", d3.Received == 2 && Math.Abs(d3.SumAbsDiff - cross3) < 1e-9);
+
+        // Пауза в кадрах (игра свёрнута 30 с): после неё FPS «сейчас» и ряд — по кадрам после паузы, а не «около 0».
+        var cap = new FpsCapture();
+        cap.Feed("Application,ProcessID,TimeInSeconds,msBetweenPresents");
+        double clock = 0;
+        void Frame(double ms) { clock += ms / 1000; cap.Feed(FormattableString.Invariant($"game.exe,1,{clock:0.0000},{ms:0.000}")); }
+        for (int i = 0; i < 700; i++) Frame(10);
+        Frame(30000);
+        for (int i = 0; i < 150; i++) Frame(10);
+        var fr = cap.Result();
+        Check($"FPS после паузы в кадрах (сейчас {cap.LiveFps:0.#}, ряд {(fr == null ? "-" : string.Join("/", fr.Series.Select(v => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))))})",
+            cap.LiveFps > 90 && cap.LiveFps < 110 && fr != null && fr.Frames == 850 && fr.Series.Length >= 1 && fr.Series.All(v => v > 80));
+
+        // Сохранение сессии в папку, где на месте файла сессий — папка: Add должен вернуть причину, а не молчать.
+        string old = Environment.GetEnvironmentVariable("PULSEPC_DATA");
+        string box = Path.Combine(Path.GetTempPath(), "PulsePC-sessions-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(box, "sessions.json"));
+            Environment.SetEnvironmentVariable("PULSEPC_DATA", box);
+            string error = SessionStore.Add(new GameSession { Game = "проверка", Start = DateTime.Now, End = DateTime.Now });
+            Check("ошибка записи сессии возвращается", !string.IsNullOrEmpty(error));
+            Directory.Delete(Path.Combine(box, "sessions.json"));
+            Check("успешная запись сессии — без ошибки", SessionStore.Add(new GameSession { Game = "проверка", Start = DateTime.Now, End = DateTime.Now }) == null);
+            SessionStore.Add(new GameSession { Game = "другая", Start = DateTime.Now.AddDays(-100), End = DateTime.Now.AddDays(-100) });
+            var (removed, removeError) = SessionStore.Remove(s => (DateTime.Now - s.Start).TotalDays > 90);
+            var left = SessionStore.Load();
+            Check($"удаление старых сессий (удалено {removed}, осталось {left.Count})", removeError == null && removed == 1 && left.Count == 1 && left[0].Game == "проверка");
+        }
+        catch (Exception ex) { fails.Add("исключение: " + ex.Message); }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PULSEPC_DATA", old);
+            try { Directory.Delete(box, true); } catch { }
+        }
+        return fails.Count == 0 ? "OK (7 проверок)" : "FAIL: " + string.Join("; ", fails);
+    }
 }

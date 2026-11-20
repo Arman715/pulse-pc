@@ -68,9 +68,9 @@ public partial class MainWindow
             No = (i + 1).ToString(),
             Time = d.At.ToString("HH:mm:ss"),
             Fps = $"{d.FromFps:0} → {d.ToFps:0} FPS",
-            Length = $"{d.Seconds:0.#} с",
+            Length = L.F("{0:0.#} с", d.Seconds),
             Cause = CauseName(d.Cause),
-            Detail = d.Detail,
+            Detail = L.T(d.Detail),      // у старых сессий разбор записан по-русски
             CauseInk = d.Cause is "ram" or "gpu-heat" ? Palette.Warn : d.Cause == "unknown" ? Palette.Ink3 : Palette.Ink1,
         }).ToList();
     }
@@ -90,7 +90,7 @@ public partial class MainWindow
         double max = bars.Max(x => x.Pct);
         SessBoundBars.ItemsSource = bars.Select(x => new BarVm
         {
-            Label = x.Label, Fraction = x.Pct / 100, Text = $"{x.Pct:0} %", Ink = x.Pct == max ? Palette.Accent : Palette.Ink2,
+            Label = x.Label, Fraction = x.Pct / 100, Text = InsightPct(x.Pct), Ink = x.Pct == max ? Palette.Accent : Palette.Ink2,
         }).ToList();
     }
 
@@ -110,15 +110,15 @@ public partial class MainWindow
             sharedPath = path;
             bool copied = CopyImage(image, path);
             ShareResult.Text = copied
-                ? "Картинка сохранена в «Изображения\\Пульс ПК» и скопирована: её можно вставить в чат (Ctrl+V)."
-                : "Картинка сохранена в «Изображения\\Пульс ПК». Скопировать не вышло: буфер обмена занят другой программой.";
+                ? L.T("Картинка сохранена в «Изображения\\Пульс ПК» и скопирована: её можно вставить в чат (Ctrl+V).")
+                : L.T("Картинка сохранена в «Изображения\\Пульс ПК». Скопировать не вышло: буфер обмена занят другой программой.");
             ShareMark.Level = Severity.Ok;
             BtnShareFolder.Visibility = Visibility.Visible;
         }
         catch (Exception ex)
         {
             Log.Error("карточка сессии", ex);
-            ShareResult.Text = "Не удалось сохранить картинку: " + ex.Message;
+            ShareResult.Text = L.F("Не удалось сохранить картинку: {0}", ex.Message);
             ShareMark.Level = Severity.Bad;
             BtnShareFolder.Visibility = Visibility.Collapsed;
         }
@@ -154,7 +154,7 @@ public partial class MainWindow
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", "/select,\"" + sharedPath + "\"") { UseShellExecute = false });
             else GameLibrary.OpenAsUser(ShareCard.Folder);
         }
-        catch (Exception ex) { ShareResult.Text = "Не удалось открыть папку: " + ex.Message; }
+        catch (Exception ex) { ShareResult.Text = L.F("Не удалось открыть папку: {0}", ex.Message); }
     }
 
     private void ShowClocks(GameSession s)
@@ -166,27 +166,30 @@ public partial class MainWindow
         }
         SessClockBlock.Visibility = Visibility.Visible;
         var parts = new List<string>();
-        if (s.AvgGpuClock > 0) parts.Add($"Видеокарта под нагрузкой держала в среднем {s.AvgGpuClock:0} МГц");
-        if (s.AvgCpuGhz > 0) parts.Add($"процессор — {s.AvgCpuGhz:0.0#} ГГц");
+        if (s.AvgGpuClock > 0) parts.Add(L.F("Видеокарта под нагрузкой держала в среднем {0:0} МГц", s.AvgGpuClock));
+        if (s.AvgCpuGhz > 0) parts.Add(L.F("процессор — {0:0.0#} ГГц", s.AvgCpuGhz));
         string head = parts.Count > 0 ? string.Join(", ", parts) + ". " : "";
         bool heat = s.GpuThermalLimitPct >= 5 || s.GpuHardLimitPct >= 5 || s.CpuSlowPct >= 10;
         SessClockSummary.Text = head + (heat
-            ? "Частоты сбрасывались — это стоит проверить, подробности в выводах ниже."
-            : "Частоты не сбрасывались. Упор в лимит питания — нормальная работа видеокарты: она разгоняется, пока хватает питания.");
+            ? L.T("Частоты сбрасывались — это стоит проверить, подробности в выводах ниже.")
+            : L.T("Частоты не сбрасывались. Упор в лимит питания — нормальная работа видеокарты: она разгоняется, пока хватает питания."));
 
         var bars = new List<BarVm>();
         void Add(string label, double? pct, double warnFrom, Brush warnInk)
         {
             if (pct == null) return;
             double v = pct.Value;
-            bars.Add(new BarVm { Label = label, Fraction = v / 100, Text = $"{v:0} %", Ink = v >= warnFrom ? warnInk : Palette.Ink2 });
+            bars.Add(new BarVm { Label = label, Fraction = v / 100, Text = InsightPct(v), Ink = v >= warnFrom ? warnInk : Palette.Ink2 });
         }
-        Add("видеокарта: упор в лимит питания", s.GpuPowerLimitPct, 101, Palette.Ink2);
-        Add("видеокарта: снижение из-за нагрева", s.GpuThermalLimitPct, 5, Palette.Warn);
-        Add("видеокарта: аварийное снижение", s.GpuHardLimitPct, 5, Palette.Bad);
-        Add("процессор: ниже базовой частоты", s.CpuSlowPct, 10, Palette.Warn);
+        Add(L.T("видеокарта: упор в лимит питания"), s.GpuPowerLimitPct, 101, Palette.Ink2);
+        Add(L.T("видеокарта: снижение из-за нагрева"), s.GpuThermalLimitPct, 5, Palette.Warn);
+        Add(L.T("видеокарта: аварийное снижение"), s.GpuHardLimitPct, 5, Palette.Bad);
+        Add(L.T("процессор: ниже базовой частоты"), s.CpuSlowPct, 10, Palette.Warn);
         SessClockBars.ItemsSource = bars;
     }
+
+    /// <summary>«93 %» по-русски, «93%» по-английски.</summary>
+    private static string InsightPct(double v) => v.ToString("0", L.Culture) + (L.En ? "%" : " %");
 
     private void ShowServer(GameSession s)
     {
@@ -196,7 +199,7 @@ public partial class MainWindow
             return;
         }
         SessServerBlock.Visibility = Visibility.Visible;
-        SessServerAddr.Text = $"адрес {s.Server} — найден по сетевому трафику игры";
+        SessServerAddr.Text = L.F("адрес {0} — найден по сетевому трафику игры", s.Server);
         SessSrvPing.Value = s.ServerPingMs ?? double.NaN;
         SessSrvJitter.Value = s.ServerJitterMs ?? double.NaN;
         SessSrvLoss.Value = s.ServerLossPct ?? double.NaN;
@@ -207,15 +210,15 @@ public partial class MainWindow
 
         var notes = new List<string>();
         if (s.ServerPingBlocked)
-            notes.Add("Сервер не отвечает на пинг — многие игровые серверы так настроены, это нормально. Качество связи оценено по обрывам в потоке данных от него.");
+            notes.Add(L.T("Сервер не отвечает на пинг — многие игровые серверы так настроены, это нормально. Качество связи оценено по обрывам в потоке данных от него."));
         else if (s.ServerPingMs > 0 && s.AvgPingMs > 0 && s.ServerPingMs - s.AvgPingMs >= 30)
-            notes.Add($"До сервера на {s.ServerPingMs - s.AvgPingMs:0} мс дольше, чем до ближайшего узла интернета: сервер далеко. Если в игре можно выбрать регион — выберите ближайший.");
+            notes.Add(L.F("До сервера на {0:0} мс дольше, чем до ближайшего узла интернета: сервер далеко. Если в игре можно выбрать регион — выберите ближайший.", s.ServerPingMs - s.AvgPingMs));
         if (s.NetGaps >= 3)
             notes.Add(s.LossPct >= 1 || s.JitterMs >= 15
-                ? "Обрывы совпали с перебоями вашего подключения — подробности на вкладке «Сеть»."
-                : "Ваше подключение в это время работало нормально — обрывы на стороне сервера или по пути до него.");
+                ? L.T("Обрывы совпали с перебоями вашего подключения — подробности на вкладке «Сеть».")
+                : L.T("Ваше подключение в это время работало нормально — обрывы на стороне сервера или по пути до него."));
         else if (s.NetGaps != null)
-            notes.Add("Поток данных от сервера шёл ровно, без обрывов.");
+            notes.Add(L.T("Поток данных от сервера шёл ровно, без обрывов."));
         SessServerNote.Text = string.Join(" ", notes);
     }
 
@@ -231,15 +234,15 @@ public partial class MainWindow
         WeekReport.Visibility = Visibility.Visible;
 
         var w = Weekly.Build(sessions.ToList(), DateTime.Now);
-        WeekRange.Text = $"{w.From:d MMMM} — {w.To:d MMMM}";
+        WeekRange.Text = L.En ? $"{w.From:MMMM d} – {w.To:MMMM d}" : $"{w.From:d MMMM} — {w.To:d MMMM}";
         bool empty = w.Empty;
-        WeekTitle.Text = empty ? "За неделю игр не было" : "Неделя в играх";
+        WeekTitle.Text = empty ? L.T("За неделю игр не было") : L.T("Неделя в играх");
         WeekNumbers.Visibility = WeekGamesBlock.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
         WeekNotesLabel.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
         if (!empty)
         {
             WeekHours.Value = Math.Round(w.Hours, 1);
-            WeekHoursCap.Text = "в играх" + (w.PrevHours > 0 ? $"\nнеделей раньше — {Weekly.Hours(w.PrevHours)}" : "");
+            WeekHoursCap.Text = L.T("в играх") + (w.PrevHours > 0 ? "\n" + L.F("неделей раньше — {0}", Weekly.Hours(w.PrevHours)) : "");
             WeekSessions.Value = w.Sessions;
             WeekDips.Value = w.Dips;
             WeekTemp.Value = w.MaxTemp;
@@ -264,8 +267,11 @@ public partial class MainWindow
 
         var w = Weekly.Build(sessions.ToList(), now);
         if (w.Empty) return;
-        string top = w.Games.Count > 0 ? $" Больше всего — {w.Games[0].Game} ({w.Games[0].Hours})." : "";
-        tray.Notify("Неделя в играх", $"{Weekly.Hours(w.Hours)}, {Fmt.Plural(w.Sessions, "сессия", "сессии", "сессий")}.{top} Нажмите, чтобы открыть сводку.", false,
+        string hours = Weekly.Hours(w.Hours), count = Fmt.Plural(w.Sessions, "сессия", "сессии", "сессий");
+        string text = w.Games.Count > 0
+            ? L.F("{0}, {1}. Больше всего — {2} ({3}). Нажмите, чтобы открыть сводку.", hours, count, w.Games[0].Game, w.Games[0].Hours)
+            : L.F("{0}, {1}. Нажмите, чтобы открыть сводку.", hours, count);
+        tray.Notify(L.T("Неделя в играх"), text, false,
             () => { ShowFromTray(); ShowWeek(); });
     }
 
@@ -290,10 +296,10 @@ public partial class MainWindow
         {
             BootSeconds.Visibility = Visibility.Collapsed;
             BootCaption.Margin = new Thickness(0, 8, 0, 0);
-            BootCaption.Text = r.LastBoot > DateTime.MinValue ? $"Windows запущена {r.LastBoot:d MMMM, HH:mm}." : "";
+            BootCaption.Text = r.LastBoot > DateTime.MinValue ? L.F("Windows запущена {0:d MMMM, HH:mm}.", r.LastBoot) : "";
             BootChart.Visibility = Visibility.Collapsed;
             BootSlow.ItemsSource = null;
-            BootNote.Text = r.Error ?? "Замеров загрузки в журнале нет: Windows записывает их только при полной загрузке, а не при выходе из сна.";
+            BootNote.Text = r.Error ?? L.T("Замеров загрузки в журнале нет: Windows записывает их только при полной загрузке, а не при выходе из сна.");
             return;
         }
         var last = r.Boots[^1];
@@ -301,27 +307,27 @@ public partial class MainWindow
         BootCaption.Margin = new Thickness(0);
         BootSeconds.Value = Math.Round(last.Seconds);
         BootSeconds.Foreground = last.Seconds >= 90 ? Palette.Warn : Palette.Ink1;
-        BootCaption.Text = $"последняя полная загрузка {last.At:d MMMM, HH:mm}: рабочий стол через {last.MainSeconds:0} с, догрузка программ — ещё {last.PostSeconds:0} с";
+        BootCaption.Text = L.F("последняя полная загрузка {0:d MMMM, HH:mm}: рабочий стол через {1:0} с, догрузка программ — ещё {2:0} с", last.At, last.MainSeconds, last.PostSeconds);
         if (r.Boots.Count >= 2)
         {
             BootChart.Visibility = Visibility.Visible;
             BootChart.SetData(r.Boots.Select(b => b.Seconds).ToArray());
         }
         else BootChart.Visibility = Visibility.Collapsed;
-        BootSlow.ItemsSource = r.Slow.Select(x => new BootSlowVm { Name = x.Name, Kind = x.Kind, Text = $"+{x.Seconds:0.#} с" }).ToList();
+        BootSlow.ItemsSource = r.Slow.Select(x => new BootSlowVm { Name = x.Name, Kind = x.Kind, Text = L.F("+{0:0.#} с", x.Seconds) }).ToList();
         double avg = r.Boots.Average(b => b.Seconds);
         // Включение с «быстрым запуском» Windows не замеряет: тогда последний замер старше последнего включения.
         bool stale = r.LastBoot > DateTime.MinValue && (r.LastBoot - last.At).TotalDays >= 1;
         if (stale)
         {
-            BootCaption.Text = $"последний замер — {last.At:d MMMM}: рабочий стол через {last.MainSeconds:0} с, догрузка программ — ещё {last.PostSeconds:0} с";
-            BootNote.Text = $"Последнее включение ({r.LastBoot:d MMMM, HH:mm}) прошло через «быстрый запуск», а такие загрузки Windows не замеряет. "
-                            + "Свежая цифра появится после перезагрузки (Пуск → Перезагрузка)."
-                            + (r.Slow.Count > 0 ? " Список ниже относится к последней замеренной загрузке." : "");
+            BootCaption.Text = L.F("последний замер — {0:d MMMM}: рабочий стол через {1:0} с, догрузка программ — ещё {2:0} с", last.At, last.MainSeconds, last.PostSeconds);
+            BootNote.Text = L.F("Последнее включение ({0:d MMMM, HH:mm}) прошло через «быстрый запуск», а такие загрузки Windows не замеряет.", r.LastBoot)
+                            + " " + L.T("Свежая цифра появится после перезагрузки (Пуск → Перезагрузка).")
+                            + (r.Slow.Count > 0 ? " " + L.T("Список ниже относится к последней замеренной загрузке.") : "");
             return;
         }
         BootNote.Text = r.Slow.Count > 0
-            ? $"Windows отметила, кто затянул последнюю загрузку. Среднее за {Fmt.Plural(r.Boots.Count, "замер", "замера", "замеров")} — {avg:0} с."
-            : $"Windows не отметила ничего, что затягивало загрузку. Среднее за {Fmt.Plural(r.Boots.Count, "замер", "замера", "замеров")} — {avg:0} с. На графике — замеры по порядку, последний справа.";
+            ? L.F("Windows отметила, кто затянул последнюю загрузку. Среднее за {0} — {1:0} с.", Fmt.Plural(r.Boots.Count, "замер", "замера", "замеров"), avg)
+            : L.F("Windows не отметила ничего, что затягивало загрузку. Среднее за {0} — {1:0} с. На графике — замеры по порядку, последний справа.", Fmt.Plural(r.Boots.Count, "замер", "замера", "замеров"), avg);
     }
 }

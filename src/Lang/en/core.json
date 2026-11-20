@@ -1,0 +1,11 @@
+{
+  "Пульс ПК": "Pulse PC",
+  "Что-то пошло не так, но программа продолжает работать. Если ошибка повторяется, перезапустите её.": "Something went wrong, but the program keeps running. If the error repeats, restart it.",
+  "с": "s",
+  "ч": "h",
+  "мин": "min",
+  "об/мин": "RPM",
+  "МБ": "MB",
+  "ГГц": "GHz",
+  "Гц": "Hz"
+}

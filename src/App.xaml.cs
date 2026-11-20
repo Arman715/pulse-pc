@@ -30,6 +30,14 @@ public partial class App : Application
         };
         base.OnStartup(e);
 
+        // Язык интерфейса: выбор из настроек («Система» → «Язык») или язык Windows. До первого окна, в том числе установщика.
+        bool selfTest = e.Args.Any(a => a is "--selftest" or "--feature-test");
+        try { L.Init(selfTest ? "ru" : Services.AppSettings.LanguageSetting()); } catch (Exception ex) { Log.Error("язык интерфейса", ex); }
+        L.HookWindows();
+        // Тема: до первого окна, чтобы все стили и чертежи взяли её цвета.
+        try { Theme.Init(selfTest ? "light" : Services.AppSettings.ThemeSetting()); Theme.Apply(Resources); }
+        catch (Exception ex) { Log.Error("тема оформления", ex); }
+
         // Установка и удаление: тот же файл программы. Имя «PulsePC-Setup…» или --setup — установщик, --uninstall — удаление.
         // Решается до всего остального и без «одного экземпляра»: установщик должен уметь закрыть работающую программу.
         var setup = Services.SetupRequest.Parse(e.Args, Environment.ProcessPath);
@@ -94,7 +102,25 @@ public partial class App : Application
     {
         // После удаления: запущенный файл удаляется уже после выхода.
         Services.Installer.RunPendingCleanup();
+        if (restart)
+        {
+            // Смена языка: новая копия запускается, когда эта отпустила «один экземпляр».
+            try { single?.ReleaseMutex(); } catch { }
+            try { single?.Dispose(); single = null; } catch { }
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false })?.Dispose(); }
+            catch (Exception ex) { Log.Error("перезапуск программы", ex); }
+        }
         base.OnExit(e);
+    }
+
+    private static bool restart;
+
+    /// <summary>Перезапустить программу (после смены языка): идущая сессия сохраняется, временные изменения возвращаются, как при выходе.</summary>
+    public static void Restart()
+    {
+        restart = true;
+        try { (Current.MainWindow as PulsePC.MainWindow)?.PrepareExit(); } catch (Exception ex) { Log.Error("перезапуск: подготовка к выходу", ex); }
+        Current.Shutdown();
     }
 
     private static Mutex single;
@@ -187,7 +213,7 @@ public partial class App : Application
         // Ошибка на каждом такте таймера (раз в 1,5 с) завалила бы экран окнами — показываем не чаще раза в 10 минут.
         if ((DateTime.UtcNow - lastErrorBox).TotalMinutes < 10) return;
         lastErrorBox = DateTime.UtcNow;
-        MessageBox.Show("Что-то пошло не так, но программа продолжает работать. Если ошибка повторяется, перезапустите её.\n\n" + e.Exception.Message, "Пульс ПК", MessageBoxButton.OK, MessageBoxImage.Warning);
+        MessageBox.Show(L.T("Что-то пошло не так, но программа продолжает работать. Если ошибка повторяется, перезапустите её.") + "\n\n" + e.Exception.Message, L.T("Пульс ПК"), MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     /// <summary>Процесс сейчас завершится: записать причину и вернуть системе то, что программа меняла.</summary>

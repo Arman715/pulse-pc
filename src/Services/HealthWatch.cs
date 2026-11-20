@@ -117,7 +117,7 @@ public sealed class HealthWatch : Notifier
             lock (gate) tracks.TryGetValue(p.Name, out t);
             bool failing = p.LastFail > p.LastOk;
             bool hadError = p.LastFail > DateTime.MinValue && !string.IsNullOrWhiteSpace(p.Error);
-            string lastError = hadError ? $" Последняя ошибка {When(p.LastFail)}: {Plain(p.Error)}" : "";
+            string lastError = hadError ? " " + L.F("Последняя ошибка {0}: {1}", When(p.LastFail), Plain(p.Error)) : "";
 
             // Игровая часть ждёт: игры нет — или в текущей игре она не включалась (античит, запись кадров выключена).
             bool waitsForGame = IsGameOnly(p.Name) && (!GameHooks.InGame || p.LastOk.AddMinutes(1) < GameHooks.StartedAt);
@@ -126,9 +126,9 @@ public sealed class HealthWatch : Notifier
                 // Ошибка была в прошлой игре; сейчас часть ждёт следующей — красной метки нет.
                 list.Add(new PartState
                 {
-                    Name = p.Name, Level = Severity.Warn, Status = "ошибка в прошлой игре", Raw = p.Error ?? "",
-                    Detail = "Работает только во время игры." + (p.LastOk == DateTime.MinValue ? "" : $" Последний раз работала {When(p.LastOk)}.")
-                             + $" В прошлый раз была ошибка {When(p.LastFail)}: {Plain(p.Error)} В следующей игре программа попробует снова.",
+                    Name = p.Name, Level = Severity.Warn, Status = L.T("ошибка в прошлой игре"), Raw = p.Error ?? "",
+                    Detail = L.T("Работает только во время игры.") + (p.LastOk == DateTime.MinValue ? "" : " " + L.F("Последний раз работала {0}.", When(p.LastOk)))
+                             + " " + L.F("В прошлый раз была ошибка {0}: {1} В следующей игре программа попробует снова.", When(p.LastFail), Plain(p.Error)),
                 });
                 continue;
             }
@@ -136,11 +136,11 @@ public sealed class HealthWatch : Notifier
             {
                 var since = t?.FailingSince ?? p.LastFail;
                 bool lasting = now - since > TimeSpan.FromMinutes(AlarmMinutes);
-                string ok = p.LastOk == DateTime.MinValue ? "С запуска программы ни разу не сработала." : $"Последний раз работала {When(p.LastOk)}.";
+                string ok = p.LastOk == DateTime.MinValue ? L.T("С запуска программы ни разу не сработала.") : L.F("Последний раз работала {0}.", When(p.LastOk));
                 list.Add(new PartState
                 {
-                    Name = p.Name, Level = Severity.Bad, Status = "ошибка", Raw = p.Error ?? "", Alarm = lasting,
-                    Detail = Plain(p.Error) + " " + ok + (lasting ? $" Не работает уже {Span(now - since)}." : " Программа пробует снова сама."),
+                    Name = p.Name, Level = Severity.Bad, Status = L.T("ошибка"), Raw = p.Error ?? "", Alarm = lasting,
+                    Detail = Plain(p.Error) + " " + ok + " " + (lasting ? L.F("Не работает уже {0}.", Span(now - since)) : L.T("Программа пробует снова сама.")),
                 });
                 continue;
             }
@@ -153,24 +153,24 @@ public sealed class HealthWatch : Notifier
             {
                 list.Add(new PartState
                 {
-                    Name = p.Name, Level = Severity.Ok, Status = "работает", Raw = hadError ? p.Error : "",
-                    Detail = $"Последний раз отметилась {When(p.LastOk)}." + (hadError ? lastError : " Ошибок не было."),
+                    Name = p.Name, Level = Severity.Ok, Status = L.T("работает"), Raw = hadError ? p.Error : "",
+                    Detail = L.F("Последний раз отметилась {0}.", When(p.LastOk)) + (hadError ? lastError : " " + L.T("Ошибок не было.")),
                 });
             }
             else if (waitsForGame)
             {
                 list.Add(new PartState
                 {
-                    Name = p.Name, Level = Severity.Info, Status = "ждёт игры", Raw = hadError ? p.Error : "",
-                    Detail = $"Работает только во время игры. Последний раз — {When(p.LastOk)}." + lastError,
+                    Name = p.Name, Level = Severity.Info, Status = L.T("ждёт игры"), Raw = hadError ? p.Error : "",
+                    Detail = L.F("Работает только во время игры. Последний раз — {0}.", When(p.LastOk)) + lastError,
                 });
             }
             else
             {
                 list.Add(new PartState
                 {
-                    Name = p.Name, Level = Severity.Warn, Status = "нет данных " + Span(silent), Raw = hadError ? p.Error : "",
-                    Detail = $"Последний раз отметилась {When(p.LastOk)}. Если так и останется, перезапустите программу." + lastError,
+                    Name = p.Name, Level = Severity.Warn, Status = L.F("нет данных {0}", Span(silent)), Raw = hadError ? p.Error : "",
+                    Detail = L.F("Последний раз отметилась {0}. Если так и останется, перезапустите программу.", When(p.LastOk)) + lastError,
                 });
             }
         }
@@ -188,43 +188,41 @@ public sealed class HealthWatch : Notifier
 
     // ================================================================ тексты
 
-    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
-
     /// <summary>«в 21:40:05», «вчера в 21:40», «18 ноября в 21:40».</summary>
     public static string When(DateTime t)
     {
         int days = (DateTime.Today - t.Date).Days;
-        return days == 0 ? "в " + t.ToString("HH:mm:ss") : days == 1 ? "вчера в " + t.ToString("HH:mm") : t.ToString("d MMMM", Ru) + " в " + t.ToString("HH:mm");
+        return days == 0 ? L.F("в {0:HH:mm:ss}", t) : days == 1 ? L.F("вчера в {0:HH:mm}", t) : L.F("{0:d MMMM} в {0:HH:mm}", t);
     }
 
     /// <summary>«меньше минуты», «12 мин», «2 ч 5 мин».</summary>
     public static string Span(TimeSpan s)
     {
-        if (s.TotalMinutes < 1) return "меньше минуты";
-        if (s.TotalHours < 1) return $"{(int)s.TotalMinutes} мин";
-        return s.Minutes == 0 ? $"{(int)s.TotalHours} ч" : $"{(int)s.TotalHours} ч {s.Minutes} мин";
+        if (s.TotalMinutes < 1) return L.T("меньше минуты");
+        if (s.TotalHours < 1) return L.F("{0} мин", (int)s.TotalMinutes);
+        return s.Minutes == 0 ? L.F("{0} ч", (int)s.TotalHours) : L.F("{0} ч {1} мин", (int)s.TotalHours, s.Minutes);
     }
 
     /// <summary>Ошибка простыми словами. Незнакомый текст остаётся как есть (части пишут его по-русски).</summary>
     public static string Plain(string error)
     {
-        if (string.IsNullOrWhiteSpace(error)) return "Причина не записана.";
+        if (string.IsNullOrWhiteSpace(error)) return L.T("Причина не записана.");
         string e = error.Trim(), low = e.ToLowerInvariant();
         string plain =
             low.Contains("unauthorizedaccess") || low.Contains("access is denied") || low.Contains("отказано в доступе")
-                ? "Windows не дала доступ. Обычно помогает запуск программы с правами администратора."
+                ? L.T("Windows не дала доступ. Обычно помогает запуск программы с правами администратора.")
             : low.Contains("used by another process") || low.Contains("используется другим процессом")
-                ? "Файл занят другой программой."
+                ? L.T("Файл занят другой программой.")
             : low.Contains("timeout") || low.Contains("timed out") || low.Contains("время ожидания")
-                ? "Не дождалась ответа."
+                ? L.T("Не дождалась ответа.")
             : low.Contains("filenotfound") || low.Contains("directorynotfound") || low.Contains("could not find")
-                ? "Не найден нужный файл."
+                ? L.T("Не найден нужный файл.")
             : low.Contains("managementexception") || low.Contains("comexception") || low.Contains("rpc server")
-                ? "Служба Windows не ответила на запрос."
+                ? L.T("Служба Windows не ответила на запрос.")
             : low.Contains("outofmemory")
-                ? "Не хватило памяти."
+                ? L.T("Не хватило памяти.")
             : low.Contains("not enough space") || low.Contains("disk full") || low.Contains("недостаточно места")
-                ? "На диске нет места."
+                ? L.T("На диске нет места.")
             : null;
         if (plain != null) return plain;
         if (e.Length > 180) e = e[..180].TrimEnd() + "…";
@@ -243,9 +241,9 @@ public sealed class HealthWatch : Notifier
             string ubr = k?.GetValue("UBR") is int u ? "." + u : "";
             string display = k?.GetValue("DisplayVersion") as string;
             int.TryParse(build, out int b);
-            return $"Windows {(b >= 22000 ? "11" : "10")}, сборка {build}{ubr}" + (string.IsNullOrEmpty(display) ? "" : $" ({display})");
+            return L.F("Windows {0}, сборка {1}", b >= 22000 ? "11" : "10", build + ubr) + (string.IsNullOrEmpty(display) ? "" : $" ({display})");
         }
-        catch { return "Windows, сборка " + Environment.OSVersion.Version.Build; }
+        catch { return L.F("Windows, сборка {0}", Environment.OSVersion.Version.Build); }
     }
 
     /// <summary>
@@ -255,25 +253,25 @@ public sealed class HealthWatch : Notifier
     public static string Report(bool admin, int logLines = 100)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("Пульс ПК — отчёт о состоянии программы");
-        sb.AppendLine("Версия: " + Installer.Version);
+        sb.AppendLine(L.T("Пульс ПК — отчёт о состоянии программы"));
+        sb.AppendLine(L.F("Версия: {0}", Installer.Version));
         sb.AppendLine(WindowsBuild());
-        sb.AppendLine("Права администратора: " + (admin ? "есть" : "нет"));
-        sb.AppendLine("Папка данных: " + SessionStore.Folder);
-        sb.AppendLine("Составлен: " + DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"));
+        sb.AppendLine(L.F("Права администратора: {0}", admin ? L.T("есть") : L.T("нет")));
+        sb.AppendLine(L.F("Папка данных: {0}", SessionStore.Folder));
+        sb.AppendLine(L.F("Составлен: {0:dd.MM.yyyy HH:mm:ss}", DateTime.Now));
         sb.AppendLine();
-        sb.AppendLine("Части программы:");
+        sb.AppendLine(L.T("Части программы:"));
         var parts = Current.Snapshot();
-        if (parts.Count == 0) sb.AppendLine("— ни одна часть ещё не отметилась");
+        if (parts.Count == 0) sb.AppendLine(L.T("— ни одна часть ещё не отметилась"));
         foreach (var p in parts)
         {
-            sb.Append("— ").Append(p.Name).Append(": ").Append(p.Status).Append(". ").Append(p.Detail);
-            if (!string.IsNullOrWhiteSpace(p.Raw)) sb.Append(" [исходный текст: ").Append(p.Raw.Trim()).Append(']');
+            sb.Append("— ").Append(L.T(p.Name)).Append(": ").Append(p.Status).Append(". ").Append(p.Detail);
+            if (!string.IsNullOrWhiteSpace(p.Raw)) sb.Append(" [").Append(L.T("исходный текст:")).Append(' ').Append(p.Raw.Trim()).Append(']');
             sb.AppendLine();
         }
         sb.AppendLine();
         var log = Log.Tail(logLines);
-        sb.AppendLine($"Журнал, последние строки ({log.Count}):");
+        sb.AppendLine(L.F("Журнал, последние строки ({0}):", log.Count));
         foreach (var line in log) sb.AppendLine(line);
         return Scrub(sb.ToString());
     }
