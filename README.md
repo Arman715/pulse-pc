@@ -23,6 +23,8 @@
   &nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="https://t.me/pulsepc_official">Telegram</a>
   &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="https://t.me/pulsepc_official_bot">Telegram bot</a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="https://www.instagram.com/pulsepc_official/">Instagram</a>
   &nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="https://www.youtube.com/@pulsepc-w7d">YouTube</a>
@@ -245,6 +247,7 @@ The self-test (setting rollbacks, file deletion, data parsing) runs without chan
 The app installs an update only if the signature is valid — so a copy built by someone else can't pass itself off as a Pulse PC update.
 
 **Found a bug or have an idea?** Open an [issue](https://github.com/Arman715/pulse-pc/issues) — attach the report from **System** → **App status** → **Copy report**.
+Or write to the Telegram bot **[@pulsepc_official_bot](https://t.me/pulsepc_official_bot)**: it sends your message and files straight to the developer and also answers common questions.
 Send fixes as a pull request: describe what changes and how you tested it. Issues in English or Russian are both welcome.
 
 **License — [GPL-3.0](LICENSE).** You may use, modify and distribute the code, including your own versions,

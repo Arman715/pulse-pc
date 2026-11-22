@@ -23,6 +23,8 @@
   &nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="https://t.me/pulsepc_official">Telegram</a>
   &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="https://t.me/pulsepc_official_bot">Бот в Telegram</a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="https://www.instagram.com/pulsepc_official/">Instagram</a>
   &nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="https://www.youtube.com/@pulsepc-w7d">YouTube</a>
@@ -239,6 +241,7 @@ cd pulse-pc\src
 Программа устанавливает обновление, только если подпись верна, — поэтому копия, собранная кем-то другим, не сможет выдать себя за обновление «Пульс ПК».
 
 **Нашли ошибку или есть идея?** Напишите в [Issues](https://github.com/Arman715/pulse-pc/issues) — приложите отчёт из «Система» → «Состояние программы» → «Скопировать отчёт».
+Или напишите боту в Telegram **[@pulsepc_official_bot](https://t.me/pulsepc_official_bot)**: он передаст сообщение и файлы разработчику, а ещё отвечает на частые вопросы и даёт ссылку на последнюю версию.
 Исправления присылайте через pull request: опишите, что меняется и как вы это проверили. Писать можно по-русски или по-английски.
 
 **Лицензия — [GPL-3.0](LICENSE).** Код можно использовать, изменять и распространять, в том числе свои версии,
