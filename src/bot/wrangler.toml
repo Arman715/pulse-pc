@@ -1,0 +1,18 @@
+# Для тех, кто публикует через командную строку (npx wrangler deploy). Через сайт Cloudflare этот файл не нужен.
+# Токен сюда не пишется: npx wrangler secret put BOT_TOKEN
+name = "pulsepc-bot"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+# Не стирать переменные, заданные на сайте Cloudflare (например, ADMIN_ID).
+keep_vars = true
+
+[vars]
+CHANNEL = "@pulsepc_official"
+# ADMIN_ID = "ваш id из /id"
+
+[[kv_namespaces]]
+binding = "BOT_KV"
+id = "<id хранилища из npx wrangler kv namespace create pulsepc-bot>"
+
+[triggers]
+crons = ["*/30 * * * *"]
