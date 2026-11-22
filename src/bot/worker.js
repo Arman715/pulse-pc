@@ -5,7 +5,9 @@
 //   • частые вопросы — ответы кнопками;
 //   • «Сообщить об ошибке» — сообщения и файлы пересылаются разработчику, его ответ возвращается человеку;
 //   • автопост в канал, когда на GitHub выходит новая версия (проверка по расписанию);
-//   • посты канала по расписанию (список POSTS ниже, собирается из promo/telegram/КАНАЛ.md).
+//   • посты канала по расписанию (список POSTS ниже, собирается из promo/telegram/КАНАЛ.md);
+//   • проверка скачанного файла по SHA-256, уведомления о новых версиях в личку (по просьбе),
+//     выжимка из присланного файла отчёта, /stats для разработчика, оценка версии в канале.
 //
 // Настройки Worker'а (Settings → Variables and Secrets):
 //   BOT_TOKEN — секрет: токен от @BotFather. В коде и в репозитории его нет.
@@ -43,7 +45,9 @@ const T = {
       "Здесь можно:\n" +
       "⬇ скачать последнюю версию\n" +
       "❓ найти ответ на частый вопрос\n" +
-      "✉ написать разработчику об ошибке",
+      "✉ написать разработчику об ошибке\n" +
+      "🔒 проверить, что скачанный файл — настоящий\n" +
+      "🔔 узнавать о новых версиях здесь, в личке",
     bDownload: "⬇ Скачать",
     bFaq: "❓ Частые вопросы",
     bReport: "✉ Сообщить об ошибке",
@@ -146,6 +150,7 @@ const T = {
           "• скачивайте только с GitHub — кнопка «Скачать» здесь ведёт туда;\n" +
           "• контрольная сумма SHA-256 есть в «Скачать» и в файле <code>.sha256</code> рядом с установщиком. Проверка в PowerShell: " +
           "<code>Get-FileHash .\\PulsePC-Setup-….exe</code>;\n" +
+          "• или пришлите сюда строку <b>Hash</b> из этой команды — бот скажет, официальный ли это файл;\n" +
           "• установщик проверен на VirusTotal, весь код программы открыт на GitHub.\n\n" +
           "Отключать защитник или SmartScreen не нужно — и программа сама их никогда не трогает.",
       },
@@ -181,11 +186,37 @@ const T = {
       ["download", "Скачать последнюю версию"],
       ["help", "Частые вопросы"],
       ["report", "Сообщить об ошибке"],
+      ["check", "Проверить скачанный файл"],
+      ["notify", "Сообщать о новых версиях"],
       ["cancel", "Отменить сообщение"],
     ],
     description:
-      "Бот программы «Пульс ПК» для игрового ПК на Windows: скачать последнюю версию, ответы на частые вопросы и сообщение об ошибке разработчику.",
-    shortDescription: "Пульс ПК: скачать, частые вопросы, сообщить об ошибке.",
+      "Бот программы «Пульс ПК» для игрового ПК на Windows: скачать последнюю версию, проверить файл, ответы на частые вопросы и сообщение об ошибке разработчику.",
+    shortDescription: "Пульс ПК: скачать, проверить файл, вопросы, сообщить об ошибке.",
+    bCheck: "🔒 Проверить файл",
+    bNotifyOn: "🔔 Сообщать о версиях",
+    bNotifyOff: "🔕 Не сообщать",
+    checkHelp: (file) =>
+      "<b>Проверить скачанный файл</b>\n\n" +
+      "Так вы убедитесь, что это настоящий Пульс ПК, а не подделка с чужого сайта.\n\n" +
+      "1. Откройте PowerShell в папке с файлом (в Проводнике: Shift + правый щелчок по пустому месту → «Открыть окно PowerShell здесь»).\n" +
+      `2. Выполните: <code>Get-FileHash .\\${esc(file)}</code>\n` +
+      "3. Скопируйте длинную строку из колонки <b>Hash</b> и пришлите сюда.",
+    hashOk: (f, v, latest) =>
+      `✅ <b>Это официальный файл Пульс ПК.</b>\n${esc(f)} — версия ${esc(v)}.` +
+      (latest && latest !== v ? `\n\nЕсть версия новее — ${esc(latest)}: кнопка «Скачать» ниже.` : "\n\nЭто последняя версия."),
+    hashBad:
+      "❌ <b>Такого файла среди выпусков Пульс ПК нет.</b>\n\n" +
+      "Не запускайте его. Возможно, он скачан не с GitHub или повреждён. Скачайте программу заново — кнопка «Скачать» ниже.",
+    hashUnknown: (v) =>
+      `⚠️ <b>Файл не совпадает с последней версией (${esc(v)}).</b>\n\n` +
+      "Старые версии сейчас проверить не получилось — GitHub не ответил. Надёжнее всего скачать программу заново по кнопке ниже " +
+      "или прислать сумму ещё раз через полчаса.",
+    notifyOn: "🔔 Готово: когда выйдет новая версия, я напишу сюда. Отключить — та же кнопка в меню или /notify.",
+    notifyOff: "🔕 Хорошо, больше не буду писать о новых версиях.",
+    newVersion: (v) =>
+      `🆕 <b>Вышел Пульс ПК ${esc(v)}.</b>\n\nОбновиться: «Система» → «Новые версии» → «Обновить» — или скачайте по кнопке ниже.`,
+    bWhatsNew: "Что нового",
   },
 
   en: {
@@ -195,7 +226,9 @@ const T = {
       "Here you can:\n" +
       "⬇ download the latest version\n" +
       "❓ find answers to common questions\n" +
-      "✉ report a problem to the developer",
+      "✉ report a problem to the developer\n" +
+      "🔒 check that a downloaded file is genuine\n" +
+      "🔔 get new-version messages right here",
     bDownload: "⬇ Download",
     bFaq: "❓ Common questions",
     bReport: "✉ Report a problem",
@@ -295,6 +328,7 @@ const T = {
           "• download only from GitHub — the Download button here leads there;\n" +
           "• the SHA-256 checksum is in Download and in the <code>.sha256</code> file next to the installer. In PowerShell: " +
           "<code>Get-FileHash .\\PulsePC-Setup-….exe</code>;\n" +
+          "• or send the <b>Hash</b> line from that command here — the bot will tell you whether it's the official file;\n" +
           "• the installer was scanned on VirusTotal, and all of the app's code is open on GitHub.\n\n" +
           "There's no need to turn off Defender or SmartScreen — and the app never touches them.",
       },
@@ -330,11 +364,37 @@ const T = {
       ["download", "Download the latest version"],
       ["help", "Common questions"],
       ["report", "Report a problem"],
+      ["check", "Check a downloaded file"],
+      ["notify", "Notify me of new versions"],
       ["cancel", "Cancel the message"],
     ],
     description:
-      "Bot of the Pulse PC app for gaming PCs on Windows: download the latest version, answers to common questions and problem reports to the developer.",
-    shortDescription: "Pulse PC: download, common questions, report a problem.",
+      "Bot of the Pulse PC app for gaming PCs on Windows: download the latest version, check a file, answers to common questions and problem reports to the developer.",
+    shortDescription: "Pulse PC: download, check a file, questions, report a problem.",
+    bCheck: "🔒 Check a file",
+    bNotifyOn: "🔔 Notify of versions",
+    bNotifyOff: "🔕 Stop notifying",
+    checkHelp: (file) =>
+      "<b>Check a downloaded file</b>\n\n" +
+      "This makes sure it's the real Pulse PC and not a fake from another site.\n\n" +
+      "1. Open PowerShell in the folder with the file (in File Explorer: Shift + right-click an empty spot → “Open PowerShell window here”).\n" +
+      `2. Run: <code>Get-FileHash .\\${esc(file)}</code>\n` +
+      "3. Copy the long line from the <b>Hash</b> column and send it here.",
+    hashOk: (f, v, latest) =>
+      `✅ <b>This is an official Pulse PC file.</b>\n${esc(f)} — version ${esc(v)}.` +
+      (latest && latest !== v ? `\n\nA newer version is out — ${esc(latest)}: tap Download below.` : "\n\nThis is the latest version."),
+    hashBad:
+      "❌ <b>No Pulse PC release has this file.</b>\n\n" +
+      "Don't run it. It may not come from GitHub, or it's damaged. Download the app again — Download button below.",
+    hashUnknown: (v) =>
+      `⚠️ <b>The file doesn't match the latest version (${esc(v)}).</b>\n\n` +
+      "Older versions couldn't be checked right now — GitHub didn't answer. The safest option is to download the app again with the button below " +
+      "or send the hash again in half an hour.",
+    notifyOn: "🔔 Done: when a new version comes out, I'll write here. To turn it off — the same menu button or /notify.",
+    notifyOff: "🔕 OK, no more new-version messages.",
+    newVersion: (v) =>
+      `🆕 <b>Pulse PC ${esc(v)} is out.</b>\n\nTo update: System → Updates (app) → Update — or download with the button below.`,
+    bWhatsNew: "What's new",
   },
 };
 
@@ -372,7 +432,7 @@ export default {
       }
       let update;
       try { update = await request.json(); } catch { return new Response("bad request", { status: 400 }); }
-      try { await handleUpdate(env, update); } catch (e) { console.log("update failed", e && e.stack || e); }
+      try { await handleUpdate(env, update, ctx); } catch (e) { console.log("update failed", e && e.stack || e); }
       return new Response("ok"); // всегда 200 — иначе Telegram будет повторять одно и то же
     }
 
@@ -382,7 +442,10 @@ export default {
   async scheduled(event, env, ctx) {
     if (!env.BOT_TOKEN) return;
     try { await checkRelease(env); } catch (e) { console.log("release check failed", e && e.stack || e); }
-    try { await publishPosts(env, (event && event.scheduledTime) || Date.now()); } catch (e) { console.log("posts failed", e && e.stack || e); }
+    const now = (event && event.scheduledTime) || Date.now();
+    try { await publishPosts(env, now); } catch (e) { console.log("posts failed", e && e.stack || e); }
+    try { await notifyBatch(env); } catch (e) { console.log("notify failed", e && e.stack || e); }
+    try { await pollCheck(env, now); } catch (e) { console.log("poll failed", e && e.stack || e); }
   },
 };
 
@@ -432,7 +495,7 @@ async function setup(env, origin) {
 
 // ─────────────────────────────── сообщения ───────────────────────────────
 
-async function handleUpdate(env, u) {
+async function handleUpdate(env, u, ctx) {
   if (u.callback_query) return handleCallback(env, u.callback_query);
   const m = u.message;
   if (!m || !m.chat || m.chat.type !== "private" || !m.from || m.from.is_bot) return;
@@ -448,56 +511,69 @@ async function handleUpdate(env, u) {
   // Ответ разработчика: reply на пересланное сообщение уходит человеку.
   if (isAdmin && m.reply_to_message && !cmd) return adminReply(env, m);
 
-  if (cmd === "start" && arg === "report") return startReport(env, chat, t);
-  if (cmd === "start" || cmd === "menu") { await setMode(env, chat, null); return sendWelcome(env, chat, m.from.id, t); }
-  if (cmd === "download") return sendDownload(env, chat, t, m.from.id);
-  if (cmd === "help" || cmd === "faq") return send(env, chat, t.faqTitle, faqMenu(t));
-  if (cmd === "report") return startReport(env, chat, t);
+  if (cmd === "start") await seenUser(env, chat);
+  if (cmd === "start" && arg === "report") { await bump(env, "rep"); return startReport(env, chat, t); }
+  if (cmd === "start" || cmd === "menu") { await bump(env, "start"); await setMode(env, chat, null); return sendWelcome(env, chat, m.from.id, t); }
+  if (cmd === "download") { await bump(env, "dl"); return sendDownload(env, chat, t, m.from.id); }
+  if (cmd === "help" || cmd === "faq") { await bump(env, "faq"); return send(env, chat, t.faqTitle, faqMenu(t)); }
+  if (cmd === "report") { await bump(env, "rep"); return startReport(env, chat, t); }
+  if (cmd === "check") return sendCheckHelp(env, chat, t);
+  if (cmd === "notify") return toggleNotify(env, chat, m.from.id, t);
   if (cmd === "cancel") { await setMode(env, chat, null); return send(env, chat, t.reportCancel, menu(t)); }
   if (cmd === "id") return send(env, chat, t.id(m.from.id));
+  if (cmd === "stats" && isAdmin) return sendStats(env, chat);
 
-  if (!cmd && (await getMode(env, chat)) === "report") return forwardReport(env, m, t);
+  const mode = cmd ? null : await getMode(env, chat);
+  if (mode === "report") return forwardReport(env, m, t, ctx);
+  // Прислали контрольную сумму (строку Hash из Get-FileHash) — сверяем с выпусками.
+  const hash = !cmd && /(?:^|[^0-9a-f])([0-9a-f]{64})(?![0-9a-f])/i.exec(text);
+  if (hash) return checkHash(env, chat, hash[1].toLowerCase(), t);
   return send(env, chat, t.unknown, menu(t));
 }
 
 async function handleCallback(env, q) {
   const t = T[langOf(q.from)];
   const msg = q.message;
+  const data = q.data || "";
   await tg(env, "answerCallbackQuery", { callback_query_id: q.id });
   if (!msg || !msg.chat || msg.chat.type !== "private") return;
   const chat = msg.chat.id;
-  const data = q.data || "";
 
   if (data === "menu") {
-    const sub = await isSubscribed(env, q.from.id);
-    return edit(env, msg, t.welcome + (sub ? "" : t.subLine), menu(t, sub));
+    const [sub, nt] = await Promise.all([isSubscribed(env, q.from.id), notifyState(env, chat)]);
+    return edit(env, msg, t.welcome + (sub ? "" : t.subLine), menu(t, sub, nt));
   }
-  if (data === "faq") return edit(env, msg, t.faqTitle, faqMenu(t));
+  if (data === "faq") { await bump(env, "faq"); return edit(env, msg, t.faqTitle, faqMenu(t)); }
   if (data.startsWith("q:")) {
     const item = t.faq.find((f) => f.k === data.slice(2));
     if (item) return edit(env, msg, item.a, { inline_keyboard: [[{ text: t.bBack, callback_data: "faq" }], [{ text: t.bReport, callback_data: "rep" }]] });
     return;
   }
-  if (data === "dl") return sendDownload(env, chat, t, q.from.id);
-  if (data === "rep") return startReport(env, chat, t);
+  if (data === "dl") { await bump(env, "dl"); return sendDownload(env, chat, t, q.from.id); }
+  if (data === "rep") { await bump(env, "rep"); return startReport(env, chat, t); }
+  if (data === "chk") return sendCheckHelp(env, chat, t);
+  if (data === "notify") return toggleNotify(env, chat, q.from.id, t);
   if (data === "cancel") { await setMode(env, chat, null); return edit(env, msg, t.reportCancel, menu(t)); }
 }
 
 // Неподписанным первой идёт кнопка «Подписаться на канал»; ничего не блокируется.
-function menu(t, subscribed = true) {
+// notify: true/false — подписан ли человек на уведомления о версиях (null — не знаем, кнопку не показываем).
+function menu(t, subscribed = true, notify = null) {
   return {
     inline_keyboard: [
       ...(subscribed ? [] : [[{ text: t.bSubscribe, url: LINKS.channel }]]),
       [{ text: t.bDownload, callback_data: "dl" }, { text: t.bFaq, callback_data: "faq" }],
       [{ text: t.bReport, callback_data: "rep" }],
+      notify === null ? [{ text: t.bCheck, callback_data: "chk" }]
+        : [{ text: t.bCheck, callback_data: "chk" }, { text: notify ? t.bNotifyOff : t.bNotifyOn, callback_data: "notify" }],
       subscribed ? [{ text: t.bChannel, url: LINKS.channel }, { text: t.bGithub, url: LINKS.github }] : [{ text: t.bGithub, url: LINKS.github }],
     ],
   };
 }
 
 async function sendWelcome(env, chat, userId, t) {
-  const sub = await isSubscribed(env, userId);
-  return send(env, chat, t.welcome + (sub ? "" : t.subLine), menu(t, sub));
+  const [sub, nt] = await Promise.all([isSubscribed(env, userId), notifyState(env, chat)]);
+  return send(env, chat, t.welcome + (sub ? "" : t.subLine), menu(t, sub, nt));
 }
 
 // Подписан ли человек на канал. Если Telegram не ответил — считаем, что подписан: лучше не напомнить, чем надоесть.
@@ -536,11 +612,11 @@ async function sendDownload(env, chat, t, userId) {
 
 async function startReport(env, chat, t) {
   if (!env.ADMIN_ID || !env.BOT_KV) return send(env, chat, t.reportOff, menu(t));
-  await setMode(env, chat, "report");
+  if (!(await setMode(env, chat, "report"))) return send(env, chat, t.reportOff, menu(t));
   return send(env, chat, t.reportAsk, { inline_keyboard: [[{ text: t.bCancel, callback_data: "cancel" }]] });
 }
 
-async function forwardReport(env, m, t) {
+async function forwardReport(env, m, t, ctx) {
   const chat = m.chat.id;
   if (!env.ADMIN_ID || !env.BOT_KV) return send(env, chat, t.reportOff, menu(t));
 
@@ -569,7 +645,14 @@ async function forwardReport(env, m, t) {
     return send(env, chat, t.reportCantCopy);
   }
   await kvPut(env, `r:${copy.result.message_id}`, JSON.stringify({ chat, lang: langOf(f) }), REPLY_LINK_SEC);
+  // Файл отчёта программы — разработчику короткая выжимка ответом на этот файл. Делается уже после ответа Telegram
+  // (waitUntil): даже если разбор упадёт, Telegram не станет повторять сообщение.
+  if (m.document && REPORT_NAME.test(m.document.file_name || "")) {
+    const job = summarizeReport(env, m.document, copy.result.message_id).catch((e) => console.log("report summary failed", e && e.message));
+    if (ctx && ctx.waitUntil) ctx.waitUntil(job); else await job;
+  }
   if (group) return; // остальные снимки альбома: без повторных заголовков, счётчика и «Отправлено»
+  await bump(env, "msg");
   await kvPut(env, countKey, String(count + 1), 60 * 60 * 48);
   const res = await send(env, chat, t.reportSent);
   await subscribeNudge(env, chat, f.id, t);
@@ -606,6 +689,372 @@ async function kvPut(env, key, value, ttl) {
 async function kvDel(env, key) {
   if (!env.BOT_KV) return false;
   try { await env.BOT_KV.delete(key); return true; } catch (e) { console.log("kv delete", key, e && e.message); return false; }
+}
+
+// ─────────────────────────────── проверка файла, уведомления, отчёты, статистика, оценки ───────────────────────────────
+
+const NOTIFY_BATCH = 25;             // сообщений о новой версии за один запуск расписания (лимит запросов Worker'а)
+const STATS_CAP = 100;               // событий в сутки, после которых счётчики не пишутся (бережём лимит записей KV: 1000/сутки)
+const HASHES_CACHE_SEC = 6 * 3600;
+const DAY_MS = 24 * 3600 * 1000;
+
+// ── статистика: один ключ на день; новые люди — ключ u:<чат> (тоже в пределах суточного лимита) ──
+
+const dayKey = (ms) => "st:" + new Date(ms).toISOString().slice(0, 10);
+const dayTotal = (s) => Object.values(s || {}).reduce((a, b) => a + b, 0);
+
+async function bump(env, field) {
+  if (!env.BOT_KV) return;
+  const key = dayKey(Date.now());
+  const s = (await kvGet(env, key, "json")) || {};
+  if (dayTotal(s) >= STATS_CAP) return;
+  s[field] = (s[field] || 0) + 1;
+  await kvPut(env, key, JSON.stringify(s), 60 * 60 * 24 * 40);
+}
+
+async function seenUser(env, chat) {
+  if (!env.BOT_KV || (await kvGet(env, `u:${chat}`))) return;
+  if (dayTotal(await kvGet(env, dayKey(Date.now()), "json")) >= STATS_CAP) return;
+  await kvPut(env, `u:${chat}`, "1");
+  await bump(env, "new");
+}
+
+async function countKeys(env, prefix, maxPages = 20) {
+  let n = 0, cursor;
+  try {
+    for (let i = 0; i < maxPages; i++) {
+      const r = await env.BOT_KV.list({ prefix, cursor });
+      n += r.keys.length;
+      if (r.list_complete) return { n, more: false };
+      cursor = r.cursor;
+    }
+    return { n, more: true };
+  } catch (e) {
+    console.log("kv list", prefix, e && e.message);
+    return { n, more: true, failed: true };
+  }
+}
+
+async function sendStats(env, chat) {
+  if (!env.BOT_KV) return send(env, chat, "Хранилище не подключено.");
+  const now = Date.now();
+  const days = [];
+  for (let i = 0; i < 7; i++) days.push((await kvGet(env, dayKey(now - i * DAY_MS), "json")) || {});
+  const sum = (list, f) => list.reduce((a, d) => a + (d[f] || 0), 0);
+  const row = (name, f) => `${name}: ${sum(days.slice(0, 1), f)} сегодня · ${sum(days, f)} за 7 дней`;
+  const [users, notif, members] = await Promise.all([
+    countKeys(env, "u:"), countKeys(env, "nt:"),
+    tg(env, "getChatMemberCount", { chat_id: (env.CHANNEL || DEFAULT_CHANNEL).trim() }),
+  ]);
+  const num = (c) => (c.failed ? "—" : c.n + (c.more ? "+" : ""));
+  const lines = [
+    "<b>Статистика бота</b>",
+    "",
+    `Людей запускали бота: ${num(users)}`,
+    `Подписчиков канала: ${members.ok ? members.result : "—"}`,
+    `Просили сообщать о версиях: ${num(notif)}`,
+    "",
+    row("Новые люди", "new"),
+    row("Запуски", "start"),
+    row("«Скачать»", "dl"),
+    row("Частые вопросы", "faq"),
+    row("Открыли «Сообщить об ошибке»", "rep"),
+    row("Отправили сообщений", "msg"),
+    row("Проверки файла", "chk"),
+  ];
+  if (days.some((d) => dayTotal(d) >= STATS_CAP)) {
+    lines.push("", `<i>В какой-то из дней событий было больше ${STATS_CAP} — дальше счёт не вёлся, чтобы не тратить лимит хранилища. Числа — нижняя граница.</i>`);
+  }
+  return send(env, chat, lines.join("\n"));
+}
+
+// ── уведомления о новых версиях в личку (только по просьбе человека) ──
+
+async function notifyState(env, chat) {
+  if (!env.BOT_KV) return null;
+  return !!(await kvGet(env, `nt:${chat}`));
+}
+
+async function toggleNotify(env, chat, userId, t) {
+  if (!env.BOT_KV) return send(env, chat, t.downloadFail);
+  const lang = t === T.en ? "en" : "ru";
+  const sub = await isSubscribed(env, userId);
+  if (await kvGet(env, `nt:${chat}`)) {
+    await kvDel(env, `nt:${chat}`);
+    return send(env, chat, t.notifyOff, menu(t, sub, false));
+  }
+  // Язык — в метаданных ключа: при рассылке он приходит вместе со списком, без отдельных чтений.
+  let saved = false;
+  try { await env.BOT_KV.put(`nt:${chat}`, lang, { metadata: { l: lang } }); saved = true; } catch (e) { console.log("kv put nt", e && e.message); }
+  if (!saved) return send(env, chat, t.downloadFail);
+  return send(env, chat, t.notifyOn, menu(t, sub, true));
+}
+
+// Рассылка идёт частями по NOTIFY_BATCH за запуск расписания. Кто остановил бота — убирается из списка;
+// кому не удалось отправить по другой причине (перегрузка, лимит) — повторяется в следующий раз.
+async function notifyBatch(env) {
+  const kv = env.BOT_KV;
+  if (!kv) return;
+  const q = await kv.get("ntq", "json");
+  if (!q || !q.v) return;
+  const targets = [];
+  const retry = (q.retry || []).slice(0, NOTIFY_BATCH);
+  for (const r of retry) targets.push(r);
+  let next = { v: q.v, cursor: q.cursor || null, done: !!q.done, retry: (q.retry || []).slice(retry.length) };
+  if (!next.done && targets.length < NOTIFY_BATCH) {
+    const page = await kv.list({ prefix: "nt:", cursor: q.cursor || undefined, limit: NOTIFY_BATCH - targets.length });
+    for (const k of page.keys) targets.push({ c: k.name.slice(3), l: k.metadata && k.metadata.l });
+    next.cursor = page.cursor || null;
+    next.done = !!page.list_complete;
+  }
+  // Сначала сохраняем, докуда дошли: если запуск оборвётся, лучше кому-то не написать, чем написать дважды.
+  const finished = () => next.done && next.retry.length === 0;
+  if (finished()) await kv.delete("ntq");
+  else await kv.put("ntq", JSON.stringify(next));
+  const failed = [];
+  for (const x of targets) {
+    const lang = x.l || (await kvGet(env, `nt:${x.c}`));
+    if (!lang) continue; // человек успел отключить уведомления
+    const t = T[lang === "en" ? "en" : "ru"];
+    const r = await send(env, x.c, t.newVersion(q.v), {
+      inline_keyboard: [[{ text: t.bDownload, url: LINKS.latest }, { text: t.bWhatsNew, url: releaseUrl(q.v) }]],
+    });
+    if (r.ok) continue;
+    if (/blocked|deactivated|chat not found|kicked/i.test(r.description || "")) await kvDel(env, `nt:${x.c}`);
+    else if ((x.n || 0) < 3) failed.push({ c: x.c, l: lang, n: (x.n || 0) + 1 });
+  }
+  if (failed.length) await kvPut(env, "ntq", JSON.stringify({ ...next, retry: [...next.retry, ...failed] }));
+}
+
+// ── проверка скачанного файла по SHA-256 ──
+
+async function sendCheckHelp(env, chat, t) {
+  let file = "PulsePC-Setup-….exe";
+  try { file = (await latestRelease(env, false)).url; } catch {}
+  return send(env, chat, t.checkHelp(file), { inline_keyboard: [[{ text: t.bMenu, callback_data: "menu" }]] });
+}
+
+// Все официальные файлы выпусков (установщики и переносные версии) — по контрольным суммам, которые считает сам GitHub.
+async function knownHashes(env) {
+  const cached = await kvGet(env, "hashes", "json");
+  if (cached && cached.map) return { ...cached, full: true };
+  if (!(await kvGet(env, "hashfail"))) {
+    try {
+      const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=30`, {
+        headers: { ...UA, accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok) {
+        const list = await res.json();
+        const map = {};
+        let latest = null;
+        for (const rel of list) {
+          if (rel.draft) continue;
+          const v = String(rel.tag_name || "").replace(/^v/, "");
+          if (!latest && !rel.prerelease) latest = v;
+          for (const a of rel.assets || []) {
+            const m = /^sha256:([0-9a-f]{64})$/.exec(a.digest || "");
+            if (m && /\.(exe|zip)$/i.test(a.name)) map[m[1]] = { f: a.name, v };
+          }
+        }
+        if (Object.keys(map).length) {
+          const out = { map, latest };
+          await kvPut(env, "hashes", JSON.stringify(out), HASHES_CACHE_SEC);
+          return { ...out, full: true };
+        }
+      }
+    } catch (e) { console.log("hashes failed", e && e.message); }
+    // GitHub не ответил (часто — лимит запросов): 10 минут не спрашиваем его снова.
+    await kvPut(env, "hashfail", "1", 600);
+  }
+  return { map: {}, latest: null, full: false };
+}
+
+async function checkHash(env, chat, hash, t) {
+  await bump(env, "chk");
+  let k = { map: {}, latest: null, full: false };
+  try { k = await knownHashes(env); } catch (e) { console.log("check failed", e && e.message); }
+  // Последний выпуск сверяем всегда отдельно: список в памяти мог появиться до выхода новой версии.
+  let rel = null;
+  try { rel = await latestRelease(env, false); } catch {}
+  const latest = [k.latest, rel && rel.version].filter(Boolean).sort(cmpVersion).pop() || null;
+  const hit = k.map[hash] || (rel && rel.sha256 === hash ? { f: rel.url, v: rel.version } : null);
+  let text;
+  if (hit) text = t.hashOk(hit.f, hit.v, latest);
+  else if (k.full) text = t.hashBad;
+  else if (rel) text = t.hashUnknown(rel.version);
+  else return send(env, chat, t.downloadFail);
+  return send(env, chat, text, {
+    inline_keyboard: [[{ text: t.bDownload, url: LINKS.latest }], [{ text: t.bMenu, callback_data: "menu" }]],
+  });
+}
+
+// ── выжимка из файла отчёта PulsePC-report-….zip ──
+
+const REPORT_NAME = /^PulsePC-(report|review)-[\w.-]*\.zip$/i;
+
+async function summarizeReport(env, doc, replyTo) {
+  if (!env.ADMIN_ID || !doc.file_id || !REPORT_NAME.test(doc.file_name || "") || (doc.file_size || 0) > 20 * 1024 * 1024) return;
+  const f = await tg(env, "getFile", { file_id: doc.file_id });
+  if (!f.ok || !f.result || !f.result.file_path) return;
+  const res = await fetch(`https://api.telegram.org/file/bot${env.BOT_TOKEN}/${f.result.file_path}`, { signal: AbortSignal.timeout(10000) });
+  if (!res.ok) return;
+  const zip = await unzipText(new Uint8Array(await res.arrayBuffer()), ["description.txt", "report.txt"]);
+  if (!zip || (!zip.files["description.txt"] && !zip.files["report.txt"])) return;
+  const text = reportSummary(zip.files["description.txt"] || "", zip.files["report.txt"] || "", zip.names);
+  return tg(env, "sendMessage", {
+    chat_id: env.ADMIN_ID, text, parse_mode: "HTML", link_preview_options: { is_disabled: true },
+    reply_parameters: { message_id: replyTo, allow_sending_without_reply: true },
+  });
+}
+
+function reportSummary(desc, rep, names) {
+  const line = (re, s) => { const m = re.exec(s); return m ? m[1].trim() : ""; };
+  const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
+  // Каждое поле обрезается ДО экранирования — разметка не может сломаться посередине.
+  const f = (s, n) => esc(cut(s, n));
+  const version = line(/^(?:Версия|Version):\s*(.+)$/m, rep) || line(/^Pulse PC (\S+) ·/m, desc);
+  const windows = line(/^(Windows .+)$/m, rep) || line(/^Pulse PC \S+ · (Windows \d+)/m, desc);
+  const admin = line(/^(?:Права администратора|Administrator rights):\s*(.+)$/m, rep);
+  const what = line(/^(?:Что случилось|What happened):\s*(.+)$/m, desc);
+  const contact = line(/^(?:Ответить на|Reply to):\s*(.+)$/m, desc);
+  // Текст человека — всё, кроме служебных строк.
+  const body = desc.split(/\r?\n/)
+    .filter((l) => l.trim() && !/^(Что случилось|What happened|Ответить на|Reply to|Pulse PC \S+ ·|Вложение|Attachment)/.test(l.trim()))
+    .join(" ").trim();
+  const partsBlock = /^(?:Части программы|App components):\s*$([\s\S]*?)(?:\r?\n\s*\r?\n|$(?![\s\S]))/m.exec(rep);
+  const parts = partsBlock ? partsBlock[1].split(/\r?\n/).map((l) => l.trim()).filter((l) => l.startsWith("—")) : [];
+  const bad = parts.filter((l) => !/(Ошибок не было|No errors|ждёт игры|waiting for a game|ни одна часть|no component)/i.test(l));
+  const logHead = /^(?:Журнал, последние строки|Log, last lines) \((\d+)\):\s*$/m.exec(rep);
+  const logLines = logHead ? rep.slice(logHead.index + logHead[0].length).split(/\r?\n/).filter((l) => l.trim()) : [];
+  const errLines = logLines.filter((l) => /(ERR|ошибк|error|exception|исключени|сбой|fail)/i.test(l));
+  const shots = names.filter((n) => /^screenshot-\d+\.png$/i.test(n)).length;
+
+  const head = [version && `Пульс ПК ${f(version, 30)}`, windows && f(windows, 80), admin && `права администратора: ${f(admin, 20)}`].filter(Boolean);
+  const sections = [
+    { keep: true, text: "📋 <b>Выжимка из отчёта</b>" },
+    { keep: true, text: head.join(" · ") },
+    { keep: true, text: what && `Что случилось: ${f(what, 100)}` },
+    { keep: false, text: body && `«${f(body, 400)}»` },
+    { keep: true, text: contact && `Ответить на: ${f(contact, 100)}` },
+    { keep: true, text: parts.length ? (bad.length ? `<b>Части с проблемами:</b>\n${bad.slice(0, 5).map((l) => f(l, 200)).join("\n")}` : "Все части программы работают без ошибок.") : "" },
+    { keep: false, text: logHead ? `Журнал: ${f(logHead[1], 6)} строк, с ошибками — ${errLines.length}` +
+      (errLines.length ? ":\n" + errLines.slice(-3).map((l) => `<code>${f(l.trim(), 180)}</code>`).join("\n") : ".") : "" },
+    { keep: true, text: `Снимков экрана: ${shots}.` },
+  ].filter((s) => s.text);
+  // Не влезает в сообщение — убираем целые необязательные части, а не режем разметку.
+  let out = sections.map((s) => s.text).join("\n\n");
+  for (const drop of sections.filter((s) => !s.keep).reverse()) {
+    if (out.length <= 4000) break;
+    sections.splice(sections.indexOf(drop), 1);
+    out = sections.map((s) => s.text).join("\n\n");
+  }
+  return out.length <= 4000 ? out : "📋 <b>Выжимка из отчёта</b>\n\n" + head.join(" · ");
+}
+
+// Минимальное чтение zip: только нужные текстовые файлы (deflate или без сжатия), с жёсткими пределами
+// на число записей и на распакованный размер — чужой архив не может съесть память или время.
+const ZIP_MAX_ENTRIES = 200;
+const ZIP_MAX_TEXT = 512 * 1024;
+
+async function inflateLimited(data, max) {
+  const reader = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > max) { await reader.cancel(); return null; }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let p = 0;
+  for (const c of chunks) { out.set(c, p); p += c.length; }
+  return out;
+}
+
+async function unzipText(buf, wanted) {
+  if (buf.length < 22) return null;
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) return null;
+  const count = Math.min(dv.getUint16(eocd + 10, true), ZIP_MAX_ENTRIES);
+  let p = dv.getUint32(eocd + 16, true);
+  const names = [], files = {};
+  const dec = new TextDecoder("utf-8");
+  for (let i = 0; i < count && p + 46 <= buf.length; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true);
+    const csize = dv.getUint32(p + 20, true);
+    const nlen = dv.getUint16(p + 28, true), elen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+    const local = dv.getUint32(p + 42, true);
+    const name = dec.decode(buf.subarray(p + 46, Math.min(p + 46 + nlen, buf.length)));
+    names.push(name);
+    p += 46 + nlen + elen + clen;
+    if (!wanted.includes(name) || files[name] !== undefined || csize > ZIP_MAX_TEXT || local + 30 > buf.length) continue;
+    if (dv.getUint32(local, true) !== 0x04034b50) continue;
+    const start = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
+    if (start + csize > buf.length) continue;
+    const data = buf.subarray(start, start + csize);
+    let bytes = null;
+    if (method === 0) bytes = data;
+    else if (method === 8) { try { bytes = await inflateLimited(data, ZIP_MAX_TEXT); } catch { bytes = null; } }
+    if (!bytes) continue;
+    files[name] = dec.decode(bytes).replace(/^﻿/, "");
+  }
+  return { names, files };
+}
+
+// ── оценка версии: обычный опрос Telegram в канале через неделю после выхода, итог разработчику через 3 дня ──
+// Голоса считает сам Telegram — хранилище бота на них не тратится.
+
+const POLL_OPTIONS = ["5 ⭐ отлично", "4 ⭐ хорошо", "3 ⭐ нормально", "2 ⭐ плохо", "1 ⭐ совсем плохо"];
+
+async function pollCheck(env, now) {
+  const kv = env.BOT_KV;
+  if (!kv) return;
+  let r;
+  try { r = await latestRelease(env, false); } catch { return; }
+  if (!r || !r.date) return;
+  const released = Date.parse(r.date + "T12:00:00Z");
+  if (!(now >= released + 7 * DAY_MS)) return;
+  const key = `poll:${r.version}`;
+  const st = await kv.get(key);
+  const channel = (env.CHANNEL || DEFAULT_CHANNEL).trim();
+  if (!st) {
+    if (now > released + 30 * DAY_MS) return; // бот подключили намного позже выхода — не спрашиваем о старой версии
+    await kv.put(key, "sending", { expirationTtl: 60 * 60 * 24 * 400 });
+    const res = await tg(env, "sendPoll", {
+      chat_id: channel,
+      question: `Как вам Пульс ПК ${r.version}?`,
+      options: POLL_OPTIONS.map((text) => ({ text })),
+      is_anonymous: true,
+      reply_markup: { inline_keyboard: [[{ text: "🤖 Что-то не работает — написать", url: BOT_LINK }]] },
+    });
+    if (res.ok) await kvPut(env, key, `done:${res.result.message_id}:${now}`, 60 * 60 * 24 * 400);
+    else await kvDel(env, key);
+    return;
+  }
+  const m = /^done:(\d+):(\d+)$/.exec(st);
+  if (!m || now < Number(m[2]) + 3 * DAY_MS || !env.ADMIN_ID) return;
+  if (await kv.get(`pollsum:${r.version}`)) return;
+  const stop = await tg(env, "stopPoll", { chat_id: channel, message_id: Number(m[1]) });
+  if (!stop.ok || !stop.result) {
+    // Опрос уже закрыт или удалён — больше не пытаемся.
+    if (/closed|not found|can't be stopped/i.test(stop.description || "")) await kvPut(env, `pollsum:${r.version}`, "gone", 60 * 60 * 24 * 400);
+    return;
+  }
+  await kvPut(env, `pollsum:${r.version}`, "1", 60 * 60 * 24 * 400);
+  const counts = (stop.result.options || []).map((o) => o.voter_count || 0); // порядок: 5, 4, 3, 2, 1
+  const total = counts.reduce((a, b) => a + b, 0);
+  const avg = total ? counts.reduce((a, c, i) => a + c * (5 - i), 0) / total : 0;
+  const text = total
+    ? `${esc(r.version)}: ${avg.toFixed(1).replace(".", ",")} из 5 (голосов: ${total}) — ` + counts.map((c, i) => `${5 - i}★ ${c}`).join(" · ")
+    : `${esc(r.version)}: никто не проголосовал.`;
+  await send(env, env.ADMIN_ID, "📊 <b>Итог оценки версии за 3 дня</b> (опрос закрыт)\n" + text);
 }
 
 // ─────────────────────────────── посты по расписанию ───────────────────────────────
@@ -721,6 +1170,13 @@ async function checkRelease(env) {
   const posted = await kv.get("posted");
   if (!posted) { await kv.put("posted", r.version); return; }
   if (cmpVersion(r.version, posted) <= 0) return;
+
+  // Тем, кто просил сообщать о новых версиях, — рассылка в личку (по частям, см. notifyBatch). Один раз на версию.
+  await kvDel(env, "hashes"); // список официальных файлов — заново, уже с новой версией
+  if (!(await kv.get(`ntv:${r.version}`))) {
+    await kv.put(`ntv:${r.version}`, "1", { expirationTtl: 60 * 60 * 24 * 90 });
+    await kv.put("ntq", JSON.stringify({ v: r.version, cursor: null, done: false, retry: [] }));
+  }
 
   // Отметка «публикую» ставится ДО отправки: если потом не запишется «posted», повторного поста всё равно не будет.
   const mark = `posting:${r.version}`;
@@ -848,4 +1304,4 @@ function dateRu(d) { const [y, m, day] = d.split("-").map(Number); return `${day
 function dateEn(d) { const [y, m, day] = d.split("-").map(Number); return `${MONTHS_EN[m - 1]} ${day}, ${y}`; }
 
 // Для проверок (test.mjs); на работу Worker'а не влияет.
-export const _test = { T, POSTS, MEDIA, parseReleaseBody, parseNotes, releasePost, cmpVersion, webhookSecret, esc, langOf };
+export const _test = { T, POSTS, MEDIA, reportSummary, unzipText, POLL_OPTIONS, parseReleaseBody, parseNotes, releasePost, cmpVersion, webhookSecret, esc, langOf };

@@ -11,6 +11,13 @@ class KV {
   async get(k, type) { const v = this.m.get(k); if (v == null) return null; return type === "json" ? JSON.parse(v) : v; }
   async put(k, v, opts) { this.m.set(k, v); this.ttl = { ...(this.ttl || {}), [k]: opts && opts.expirationTtl }; }
   async delete(k) { this.m.delete(k); }
+  async list({ prefix = "", cursor, limit = 1000 } = {}) {
+    const all = [...this.m.keys()].filter((k) => k.startsWith(prefix)).sort();
+    const start = cursor ? Number(cursor) : 0;
+    const keys = all.slice(start, start + limit).map((name) => ({ name }));
+    const end = start + keys.length;
+    return { keys, list_complete: end >= all.length, cursor: end >= all.length ? undefined : String(end) };
+  }
 }
 const realFetch = globalThis.fetch;
 let calls = [];
@@ -18,14 +25,26 @@ let tgFail = {};          // метод → описание ошибки
 let msgId = 1000;
 let githubOverride = null; // (url) => Response | null
 let memberStatus = "member"; // что Telegram ответит на getChatMember
+let blocked = new Set();   // чаты, где человек остановил бота
+let tgFiles = {};          // file_path → содержимое файла (для getFile)
+let pollResult = null;     // что вернёт stopPoll
 globalThis.fetch = async (url, init) => {
   url = String(url);
+  if (url.startsWith("https://api.telegram.org/file/")) {
+    const path = url.split("/").slice(5).join("/");
+    return tgFiles[path] ? new Response(tgFiles[path]) : new Response("no", { status: 404 });
+  }
   if (url.startsWith("https://api.telegram.org/")) {
     const method = url.split("/").pop();
     const body = JSON.parse(init.body);
     calls.push({ method, body });
     if (tgFail[method]) return Response.json({ ok: false, description: tgFail[method] });
+    if (method === "sendMessage" && blocked.has(String(body.chat_id))) return Response.json({ ok: false, description: "Forbidden: bot was blocked by the user" });
     if (method === "getChatMember") return Response.json({ ok: true, result: { status: memberStatus, user: { id: body.user_id } } });
+    if (method === "getChatMemberCount") return Response.json({ ok: true, result: 42 });
+    if (method === "sendPoll") { calls[calls.length - 1].id = ++msgId; return Response.json({ ok: true, result: { message_id: msgId } }); }
+    if (method === "stopPoll") return Response.json({ ok: true, result: pollResult });
+    if (method === "getFile") return Response.json({ ok: true, result: { file_id: body.file_id, file_path: "documents/" + body.file_id + ".zip" } });
     if (method === "sendMessage" || method === "copyMessage") { calls[calls.length - 1].id = ++msgId; return Response.json({ ok: true, result: { message_id: msgId } }); }
     return Response.json({ ok: true, result: true });
   }
@@ -88,7 +107,7 @@ console.log("Меню, скачать, частые вопросы");
   const e = env();
   calls = [];
   await post(e, msg("/start"));
-  ok(last().method === "sendMessage" && last().body.reply_markup.inline_keyboard.length === 3, "/start — приветствие с меню");
+  ok(last().method === "sendMessage" && last().body.reply_markup.inline_keyboard.length === 4, "/start — приветствие с меню");
   calls = [];
   await post(e, cb("dl"));
   const dl = sent("sendMessage")[0];
@@ -379,6 +398,276 @@ console.log("Посты канала по расписанию");
   r = await worker.fetch(new Request("https://bot.example.workers.dev/media/README.md"), env(), {});
   ok(r.status === 404, "файлы не из списка не раздаются");
   githubOverride = null;
+}
+
+// ── 6. проверка файла по SHA-256 ──
+console.log("Проверка скачанного файла");
+{
+  const e = env();
+  calls = [];
+  await post(e, cb("chk"));
+  ok(last().body.text.includes("Get-FileHash .\\PulsePC-Setup-") && last().body.text.includes("Hash"), "«Проверить файл» объясняет, как получить сумму");
+  const setup150 = "1933a3b8bbfa4cb3788fdfbc756eab515b4a77d8ea13cf932c262e659169b1bc";
+  calls = [];
+  await post(e, msg(`SHA256          ${setup150.toUpperCase()}       C:\\Users\\x\\Downloads\\PulsePC-Setup-1.5.0.exe`));
+  ok(last().body.text.includes("официальный") && last().body.text.includes("PulsePC-Setup-1.5.0.exe") && last().body.text.includes("последняя версия"), "сумма 1.5.0 из строки PowerShell — официальный файл, последняя версия");
+  const hashes = await e.BOT_KV.get("hashes", "json");
+  const old = hashes && Object.entries(hashes.map).find(([, x]) => x.f === "PulsePC-Setup-1.4.3.exe");
+  ok(!!old, "суммы всех выпусков получены с GitHub (есть 1.4.3)");
+  calls = [];
+  await post(e, msg(old[0]));
+  ok(last().body.text.includes("1.4.3") && last().body.text.includes("новее — 1.5.0"), "старая версия — официальная, но есть новее");
+  const portable = Object.entries(hashes.map).find(([, x]) => /Portable-1\.5\.0\.zip$/.test(x.f));
+  calls = [];
+  await post(e, msg(portable[0]));
+  ok(last().body.text.includes("Portable-1.5.0.zip"), "переносная версия тоже узнаётся");
+  calls = [];
+  await post(e, msg("a".repeat(64)));
+  ok(last().body.text.includes("нет") && last().body.text.includes("Не запускайте") && !last().body.text.includes("GitHub сейчас не ответил"), "чужая сумма — «не запускайте»");
+  ok(Object.keys(hashes.map).every((h) => !/\.(sha256|sig|json)$/.test(hashes.map[h].f)), "в список попадают только .exe и .zip");
+  // GitHub API не отвечает — сверка с последним установщиком и честная пометка
+  const e2 = env();
+  githubOverride = (url) => url.includes("api.github.com/repos/Arman715/pulse-pc/releases?") ? new Response("rate limited", { status: 403 }) : null;
+  calls = [];
+  await post(e2, msg("b".repeat(64)));
+  ok(last().body.text.includes("не совпадает с последней версией") && !last().body.text.includes("Не запускайте"), "GitHub не ответил — не «подделка», а «не совпадает с последней, старые не проверить»");
+  let apiCalls = 0;
+  githubOverride = (url) => { if (url.includes("api.github.com/repos/Arman715/pulse-pc/releases?")) { apiCalls++; return new Response("rate limited", { status: 403 }); } return null; };
+  calls = [];
+  await post(e2, msg(setup150));
+  ok(last().body.text.includes("официальный"), "последний установщик узнаётся и без GitHub API");
+  ok(apiCalls === 0, "после отказа GitHub 10 минут его не дёргаем");
+  githubOverride = null;
+  // вышла новая версия, а список сумм ещё старый — новая версия не должна считаться подделкой
+  const e3 = env();
+  const fresh = "c".repeat(64);
+  await e3.BOT_KV.put("hashes", JSON.stringify({ map: { [setup150]: { f: "PulsePC-Setup-1.5.0.exe", v: "1.5.0" } }, latest: "1.5.0" }));
+  await e3.BOT_KV.put("rel", JSON.stringify({ version: "1.6.0", url: "PulsePC-Setup-1.6.0.exe", sha256: fresh, date: "2026-12-10", notes: [] }));
+  calls = [];
+  await post(e3, msg(fresh));
+  ok(last().body.text.includes("официальный") && last().body.text.includes("1.6.0") && last().body.text.includes("последняя версия"), "свежий выпуск узнаётся, даже если список сумм старый");
+  calls = [];
+  await post(e3, msg(setup150));
+  ok(last().body.text.includes("новее — 1.6.0"), "и про 1.5.0 сказано, что есть новее");
+  // в режиме сообщения об ошибке сумма пересылается разработчику, а не проверяется
+  await post(e, msg("/report", user("ru", 70)));
+  calls = [];
+  await post(e, msg(setup150, user("ru", 70)));
+  ok(sent("copyMessage").length === 1, "в режиме «Сообщить об ошибке» сумма уходит разработчику");
+}
+
+// ── 7. уведомления о новых версиях в личку ──
+console.log("Уведомления о новых версиях");
+{
+  const e = env({ CHANNEL: "@pulsepc_official" });
+  calls = [];
+  await post(e, msg("/start", user("ru", 300)));
+  ok(sent("sendMessage")[0].body.reply_markup.inline_keyboard.flat().some((b) => b.callback_data === "notify" && b.text.includes("Сообщать")), "в меню — «Сообщать о версиях»");
+  calls = [];
+  await post(e, cb("notify", user("ru", 300)));
+  ok((await e.BOT_KV.get("nt:300")) === "ru" && last().body.text.includes("Готово"), "включить — одна кнопка");
+  calls = [];
+  await post(e, msg("/start", user("ru", 300)));
+  ok(sent("sendMessage")[0].body.reply_markup.inline_keyboard.flat().some((b) => b.callback_data === "notify" && b.text.includes("Не сообщать")), "после включения кнопка меняется на «Не сообщать»");
+  await post(e, msg("/notify", user("ru", 300)));
+  ok(!(await e.BOT_KV.get("nt:300")), "/notify выключает");
+  // 30 человек просили сообщать, один из них остановил бота
+  for (let i = 0; i < 30; i++) await e.BOT_KV.put(`nt:${5000 + i}`, i === 3 ? "en" : "ru");
+  blocked = new Set(["5007"]);
+  await e.BOT_KV.put("posted", "1.5.0");
+  const relNow = { version: "1.5.0", url: "PulsePC-Setup-1.5.0.exe", sha256: "1".repeat(64), date: "2026-11-22", notes: ["Новое: оверлей поверх игры — FPS"] };
+  githubOverride = (url) => url.endsWith("/update.json") ? Response.json({ ...relNow, url: "PulsePC-Setup-9.9.9.exe", version: "9.9.9" })
+    : url.includes("/releases/tags/v9.9.9") ? new Response("nf", { status: 404 }) : null;
+  calls = [];
+  await worker.scheduled({ scheduledTime: Date.parse("2026-11-23T10:00:00Z") }, e, {});
+  const dm1 = sent("sendMessage").filter((c) => /^\d+$/.test(String(c.body.chat_id)) && Number(c.body.chat_id) >= 5000);
+  ok(dm1.length === 25 && dm1[0].body.text.includes("9.9.9"), "первый запуск — 25 сообщений о версии 9.9.9");
+  ok(sent("sendMessage").some((c) => c.body.chat_id === "@pulsepc_official"), "и пост в канал");
+  ok(dm1.find((c) => c.body.chat_id === "5003").body.text.includes("is out"), "по-английски тем, кто включал по-английски");
+  ok(!(await e.BOT_KV.get("nt:5007")), "кто остановил бота — убран из списка");
+  calls = [];
+  await worker.scheduled({ scheduledTime: Date.parse("2026-11-23T10:30:00Z") }, e, {});
+  const dm2 = sent("sendMessage").filter((c) => Number(c.body.chat_id) >= 5000);
+  ok(dm2.length === 4 && !(await e.BOT_KV.get("ntq")), "второй запуск — остальные (без остановившего), рассылка закончена");
+  calls = [];
+  await worker.scheduled({ scheduledTime: Date.parse("2026-11-23T11:00:00Z") }, e, {});
+  ok(sent("sendMessage").filter((c) => Number(c.body.chat_id) >= 5000).length === 0, "повторно не рассылает");
+  githubOverride = null; blocked = new Set();
+}
+
+// ── 8. выжимка из файла отчёта ──
+console.log("Выжимка из файла отчёта");
+{
+  const zlib = await import("node:zlib");
+  const enc = new TextEncoder();
+  function makeZip(files) {
+    const parts = [], central = [];
+    let off = 0;
+    for (const f of files) {
+      const raw = f.data, name = enc.encode(f.name);
+      const comp = f.deflate ? new Uint8Array(zlib.deflateRawSync(raw)) : raw;
+      const crc = zlib.crc32(raw) >>> 0;
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, f.deflate ? 8 : 0, true);
+      lh.setUint32(14, crc, true); lh.setUint32(18, comp.length, true); lh.setUint32(22, raw.length, true); lh.setUint16(26, name.length, true);
+      parts.push(new Uint8Array(lh.buffer), name, comp);
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, f.deflate ? 8 : 0, true);
+      ch.setUint32(16, crc, true); ch.setUint32(20, comp.length, true); ch.setUint32(24, raw.length, true); ch.setUint16(28, name.length, true); ch.setUint32(42, off, true);
+      central.push(new Uint8Array(ch.buffer), name);
+      off += 30 + name.length + comp.length;
+    }
+    const cdSize = central.reduce((a, b) => a + b.length, 0);
+    const eo = new DataView(new ArrayBuffer(22));
+    eo.setUint32(0, 0x06054b50, true); eo.setUint16(8, files.length, true); eo.setUint16(10, files.length, true); eo.setUint32(12, cdSize, true); eo.setUint32(16, off, true);
+    const all = [...parts, ...central, new Uint8Array(eo.buffer)];
+    const out = new Uint8Array(all.reduce((a, b) => a + b.length, 0));
+    let p = 0; for (const a of all) { out.set(a, p); p += a.length; }
+    return out;
+  }
+  const desc = "\uFEFFЧто случилось: Ошибка или сбой\n\nОверлей пропадает в игре через минуту <важно>\n\nОтветить на: @tester\nPulse PC 1.5.0 · Windows 26100 · ru\n";
+  const rep = "\uFEFFПульс ПК — отчёт о состоянии программы\nВерсия: 1.5.0\nWindows 11, сборка 26100.1 (24H2)\nПрава администратора: есть\nПапка данных: %USERPROFILE%\\AppData\\Local\\PulsePC\nСоставлен: 23.11.2026 10:00:00\n\nЧасти программы:\n— Видеокарта: работает. Последний раз отметилась в 10:00:00. Ошибок не было.\n— Оверлей: сбой. Ошибка 3 раза, последняя в 09:59.\n— Кадры (PresentMon): ждёт игры. Работает только во время игры.\n\nЖурнал, последние строки (3):\n10:00:01 INFO старт\n10:00:02 ERROR оверлей: окно не создано\n10:00:03 INFO запись\n";
+  const zip = makeZip([
+    { name: "description.txt", data: enc.encode(desc), deflate: true },
+    { name: "report.txt", data: enc.encode(rep), deflate: false },
+    { name: "screenshot-1.png", data: new Uint8Array(500), deflate: false },
+    { name: "screenshot-2.png", data: new Uint8Array(500), deflate: true },
+  ]);
+  const un = await _test.unzipText(zip, ["description.txt", "report.txt"]);
+  ok(un.files["report.txt"].startsWith("Пульс ПК") && un.files["description.txt"].includes("Оверлей пропадает") && un.names.length === 4, "zip читается: deflate и без сжатия, BOM убран");
+  tgFiles = { "documents/FILE1.zip": zip };
+  const e = env();
+  await post(e, msg("/report", user("ru", 80)));
+  calls = [];
+  await post(e, { update_id: uid++, message: { message_id: 81, chat: { id: 80, type: "private" }, from: user("ru", 80), document: { file_id: "FILE1", file_name: "PulsePC-report-20261123-100000.zip", file_size: zip.length } } });
+  const copy = sent("copyMessage")[0];
+  const sum = sent("sendMessage").find((c) => c.body.chat_id === String(ADMIN) && c.body.text.includes("Выжимка"));
+  ok(!!sum && sum.body.reply_parameters.message_id === copy.id, "разработчику — выжимка ответом на сам файл");
+  const s = sum ? sum.body.text : "";
+  ok(s.includes("Пульс ПК 1.5.0") && s.includes("Windows 11, сборка 26100.1") && s.includes("права администратора: есть"), "версия, Windows, права");
+  ok(s.includes("Ошибка или сбой") && s.includes("Оверлей пропадает") && s.includes("&lt;важно&gt;") && s.includes("@tester"), "что случилось, текст человека (с экранированием), контакт");
+  ok(s.includes("Части с проблемами") && s.includes("Оверлей: сбой") && !s.includes("Видеокарта: работает") && !s.includes("PresentMon"), "только части с проблемами");
+  ok(s.includes("3 строк, с ошибками — 1") && s.includes("окно не создано") && s.includes("Снимков экрана: 2"), "ошибки журнала и число снимков");
+  ok(sent("sendMessage").some((c) => c.body.chat_id === 80 && c.body.text.includes("Отправлено")), "человеку — «Отправлено» как обычно");
+  const en = _test.reportSummary("What happened: Bug\n\nCrash\n\nPulse PC 1.5.0 · Windows 22631 · en\n",
+    "Pulse PC — app status report\nVersion: 1.5.0\nWindows 10, build 19045\nAdministrator rights: none\n\nApp components:\n— Disks: working. No errors.\n\nLog, last lines (0):\n", ["description.txt", "report.txt"]);
+  ok(en.includes("Пульс ПК 1.5.0") && en.includes("права администратора: none") && en.includes("Все части программы работают"), "английский отчёт тоже разбирается");
+  calls = [];
+  await post(e, { update_id: uid++, message: { message_id: 82, chat: { id: 80, type: "private" }, from: user("ru", 80), document: { file_id: "BROKEN", file_name: "other.zip", file_size: 10 } } });
+  ok(sent("copyMessage").length === 1 && sent("sendMessage").some((c) => c.body.chat_id === 80) && !sent("getFile").length, "zip с чужим именем — просто пересылается, не разбирается");
+  // архив-бомба: распаковка обрывается на пределе, сообщение всё равно пересылается
+  const bomb = makeZip([{ name: "report.txt", data: new Uint8Array(5 * 1024 * 1024).fill(65), deflate: true }]);
+  const ub = await _test.unzipText(bomb, ["report.txt"]);
+  ok(ub && ub.files["report.txt"] === undefined && bomb.length < 100 * 1024, "архив-бомба (5 МБ из " + Math.round(bomb.length / 1024) + " КБ) не распаковывается");
+  ok((await _test.unzipText(new Uint8Array([1, 2, 3]), ["report.txt"])) === null && (await _test.unzipText(new Uint8Array(100), ["report.txt"])) === null, "мусор вместо zip — без сбоя");
+  // длинный текст не ломает разметку
+  const longSum = _test.reportSummary("Что случилось: " + "&".repeat(500) + "\n\n" + "<b>".repeat(3000) + "\n", rep.replace("Журнал, последние строки (3):", "Журнал, последние строки (3):\n" + "ERROR <x> & y\n".repeat(50)), ["report.txt"]);
+  ok(longSum.length <= 4000 && validHtml(longSum), `очень длинный отчёт: ${longSum.length} знаков, разметка цела`);
+  tgFiles = {};
+}
+
+// ── 9. /stats ──
+console.log("Статистика для разработчика");
+{
+  const e = env();
+  for (let i = 0; i < 3; i++) await post(e, msg("/start", user("ru", 400 + i)));
+  await post(e, cb("dl", user("ru", 400)));
+  await post(e, msg("a".repeat(64), user("ru", 401)));
+  await post(e, cb("notify", user("ru", 402)));
+  const admin = { id: ADMIN, is_bot: false, first_name: "Dev", language_code: "ru" };
+  calls = [];
+  await post(e, msg("/stats", admin));
+  const st = last().body.text;
+  ok(st.includes("Людей запускали бота: 3") && st.includes("Подписчиков канала: 42") && st.includes("Просили сообщать о версиях: 1"), "/stats: люди, канал, уведомления");
+  ok(st.includes("Запуски: 3 сегодня") && st.includes("«Скачать»: 1 сегодня") && st.includes("Проверки файла: 1 сегодня"), "/stats: события за сегодня");
+  calls = [];
+  await post(e, msg("/stats", user("ru", 400)));
+  ok(!last().body.text.includes("Статистика"), "/stats видит только разработчик");
+  // лимит записей: после STATS_CAP событий в день счёт останавливается
+  const key = "st:" + new Date().toISOString().slice(0, 10);
+  await e.BOT_KV.put(key, JSON.stringify({ start: 300 }));
+  await post(e, msg("/start", user("ru", 400)));
+  ok(JSON.parse(await e.BOT_KV.get(key)).start === 300, "после 300 событий за день счётчик не пишет");
+}
+
+// ── 10. оценка версии в канале ──
+console.log("Оценка версии");
+{
+  const e = env({ CHANNEL: "@pulsepc_official" });
+  await e.BOT_KV.put("rel", JSON.stringify({ version: "1.5.0", url: "PulsePC-Setup-1.5.0.exe", sha256: "1".repeat(64), date: "2026-11-22", notes: [] }));
+  const at = (s) => Date.parse(s);
+  calls = [];
+  await worker.scheduled({ scheduledTime: at("2026-11-28T16:00:00Z") }, e, {});
+  ok(!sent("sendMessage").some((c) => c.body.text && c.body.text.includes("Как вам")), "раньше чем через неделю — не спрашивает");
+  calls = [];
+  await worker.scheduled({ scheduledTime: at("2026-11-29T16:00:00Z") }, e, {});
+  const poll = sent("sendPoll").find((c) => c.body.chat_id === "@pulsepc_official");
+  ok(!!poll && poll.body.question === "Как вам Пульс ПК 1.5.0?" && poll.body.options.length === 5 && poll.body.is_anonymous === true, "через неделю — опрос Telegram «Как вам 1.5.0?» с 5 вариантами");
+  ok(poll && poll.body.options.every((o) => o.text.length <= 100) && poll.body.reply_markup.inline_keyboard[0][0].url === "https://t.me/pulsepc_official_bot", "варианты в пределах Telegram, под опросом — кнопка бота");
+  calls = [];
+  await worker.scheduled({ scheduledTime: at("2026-11-29T16:30:00Z") }, e, {});
+  ok(!sent("sendPoll").length, "второй раз не спрашивает");
+  calls = [];
+  await worker.scheduled({ scheduledTime: at("2026-12-01T16:00:00Z") }, e, {});
+  ok(!sent("stopPoll").length && !sent("sendMessage").some((c) => c.body.chat_id === String(ADMIN) && c.body.text.includes("Итог")), "итог — не раньше чем через 3 дня");
+  pollResult = { options: [{ voter_count: 2 }, { voter_count: 1 }, { voter_count: 0 }, { voter_count: 0 }, { voter_count: 0 }], total_voter_count: 3 };
+  calls = [];
+  await worker.scheduled({ scheduledTime: at("2026-12-02T16:30:00Z") }, e, {});
+  const sumMsg = sent("sendMessage").find((c) => c.body.chat_id === String(ADMIN) && c.body.text.includes("Итог"));
+  ok(sent("stopPoll")[0] && sent("stopPoll")[0].body.message_id === poll.id, "через 3 дня опрос закрывается");
+  ok(!!sumMsg && sumMsg.body.text.includes("4,7 из 5 (голосов: 3)") && sumMsg.body.text.includes("5★ 2"), "итог разработчику: средняя и голоса по вариантам");
+  calls = [];
+  await worker.scheduled({ scheduledTime: at("2026-12-03T16:30:00Z") }, e, {});
+  ok(!sent("sendMessage").some((c) => c.body.chat_id === String(ADMIN) && c.body.text.includes("Итог")), "итог приходит один раз");
+  const e2 = env({ CHANNEL: "@pulsepc_official" });
+  await e2.BOT_KV.put("rel", JSON.stringify({ version: "1.5.0", url: "x.exe", sha256: "1".repeat(64), date: "2026-11-22", notes: [] }));
+  calls = [];
+  await worker.scheduled({ scheduledTime: at("2027-01-10T16:00:00Z") }, e2, {});
+  ok(!sent("sendMessage").some((c) => c.body.text && c.body.text.includes("Как вам")), "о версии старше месяца не спрашивает");
+}
+
+// ── 11. мелочи после проверки ──
+console.log("Повторы и сбои");
+{
+  // временный сбой при рассылке — этот человек получит сообщение в следующий запуск
+  const e = env({ CHANNEL: "@pulsepc_official" });
+  for (let i = 0; i < 3; i++) await e.BOT_KV.put(`nt:${7000 + i}`, "ru");
+  await e.BOT_KV.put("ntq", JSON.stringify({ v: "9.9.9", cursor: null, done: false, retry: [] }));
+  await e.BOT_KV.put("posted", "9.9.9");
+  await e.BOT_KV.put("rel", JSON.stringify({ version: "9.9.9", url: "PulsePC-Setup-9.9.9.exe", sha256: "1".repeat(64), date: "2026-11-22", notes: [] }));
+  githubOverride = (url) => url.endsWith("/update.json") ? Response.json({ version: "9.9.9", url: "PulsePC-Setup-9.9.9.exe", sha256: "1".repeat(64), date: "2026-11-22", notes: [] }) : null;
+  const realBlocked = blocked;
+  blocked = new Set();
+  const origFetch = globalThis.fetch;
+  let failOnce = true;
+  globalThis.fetch = async (url, init) => {
+    if (String(url).endsWith("/sendMessage") && failOnce && JSON.parse(init.body).chat_id === "7001") { failOnce = false; return Response.json({ ok: false, description: "Too Many Requests: retry after 5" }); }
+    return origFetch(url, init);
+  };
+  calls = [];
+  await worker.scheduled({ scheduledTime: Date.parse("2026-11-23T10:00:00Z") }, e, {});
+  ok(sent("sendMessage").filter((c) => String(c.body.chat_id).startsWith("700")).length === 2, "первый запуск: двоим ушло, одному — временный сбой");
+  calls = [];
+  await worker.scheduled({ scheduledTime: Date.parse("2026-11-23T10:30:00Z") }, e, {});
+  ok(sent("sendMessage").filter((c) => c.body.chat_id === "7001").length === 1 && !(await e.BOT_KV.get("ntq")), "второй запуск: сбойному отправлено, рассылка закончена");
+  globalThis.fetch = origFetch; blocked = realBlocked; githubOverride = null;
+
+  // новая версия — список официальных сумм сбрасывается
+  const e2 = env({ CHANNEL: "@pulsepc_official" });
+  await e2.BOT_KV.put("posted", "1.5.0");
+  await e2.BOT_KV.put("hashes", JSON.stringify({ map: {}, latest: "1.5.0" }));
+  githubOverride = (url) => url.endsWith("/update.json") ? Response.json({ version: "9.9.9", url: "PulsePC-Setup-9.9.9.exe", sha256: "1".repeat(64), date: "2026-11-22", notes: [] })
+    : url.includes("/releases/tags/") ? new Response("nf", { status: 404 }) : null;
+  await worker.scheduled({ scheduledTime: Date.parse("2026-11-23T10:00:00Z") }, e2, {});
+  ok(!(await e2.BOT_KV.get("hashes")), "вышла новая версия — список сумм забыт");
+  githubOverride = null;
+
+  // хранилище не принимает запись — «Сообщить об ошибке» честно говорит, что принять не может
+  const broken = { get: async () => null, put: async () => { throw new Error("KV PUT failed: 429"); }, delete: async () => {}, list: async () => ({ keys: [], list_complete: true }) };
+  const e3 = env({ BOT_KV: broken });
+  calls = [];
+  await post(e3, cb("rep"));
+  ok(last().body.text.includes("не настроен"), "KV не пишет — бот не обещает принять сообщение");
 }
 
 console.log(failed ? `\nПРОВАЛЕНО: ${failed}` : "\nВсе проверки прошли.");
