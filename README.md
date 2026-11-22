@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Windows-10%20%C2%B7%2011-45423C?style=flat-square" alt="Windows 10 · 11">
   <img src="https://img.shields.io/badge/price-free-6F6A60?style=flat-square" alt="free">
   <a href="LICENSE"><img src="https://img.shields.io/badge/code-open%20%C2%B7%20GPL--3.0-1A1917?style=flat-square" alt="GPL-3.0"></a>
-  <a href="https://www.virustotal.com/gui/file/af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2"><img src="https://img.shields.io/badge/VirusTotal-0%2F69%20%C2%B7%201.4.3-3D6B3A?style=flat-square&logo=virustotal&logoColor=white" alt="VirusTotal: 0 of 69"></a>
+  <a href="https://www.virustotal.com/gui/file/1933a3b8bbfa4cb3788fdfbc756eab515b4a77d8ea13cf932c262e659169b1bc"><img src="https://img.shields.io/badge/VirusTotal-0%20detections%20%C2%B7%201.5.0-3D6B3A?style=flat-square&logo=virustotal&logoColor=white" alt="VirusTotal: 0 detections"></a>
 </p>
 
 <h3 align="center">
@@ -164,15 +164,15 @@ What to do next is in the **[user guide](docs/guide.en.md)**: the first launch, 
 
 ## Scanned by antivirus engines
 
-The 1.4.3 installer was scanned on VirusTotal: **none of the 69 antivirus engines found a threat** — [open the report](https://www.virustotal.com/gui/file/af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2).
+The 1.5.0 installer was scanned on VirusTotal: **no antivirus engine found a threat** — [open the report](https://www.virustotal.com/gui/file/1933a3b8bbfa4cb3788fdfbc756eab515b4a77d8ea13cf932c262e659169b1bc).
 
 You can check that you have exactly the same file in a second. In PowerShell, in the folder with the downloaded installer:
 
 ```powershell
-Get-FileHash .\PulsePC-Setup-1.4.3.exe
+Get-FileHash .\PulsePC-Setup-1.5.0.exe
 ```
 
-The hash must match the VirusTotal report and the `.sha256` file in the release: `af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2`.
+The hash must match the VirusTotal report and the `.sha256` file in the release: `1933a3b8bbfa4cb3788fdfbc756eab515b4a77d8ea13cf932c262e659169b1bc`.
 
 What else speaks for the app:
 

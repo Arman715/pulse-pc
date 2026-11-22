@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Windows-10%20%C2%B7%2011-45423C?style=flat-square" alt="Windows 10 · 11">
   <img src="https://img.shields.io/badge/цена-бесплатно-6F6A60?style=flat-square" alt="бесплатно">
   <a href="LICENSE"><img src="https://img.shields.io/badge/код-открыт%20%C2%B7%20GPL--3.0-1A1917?style=flat-square" alt="GPL-3.0"></a>
-  <a href="https://www.virustotal.com/gui/file/af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2"><img src="https://img.shields.io/badge/VirusTotal-0%2F69%20%C2%B7%201.4.3-3D6B3A?style=flat-square&logo=virustotal&logoColor=white" alt="VirusTotal: 0 из 69"></a>
+  <a href="https://www.virustotal.com/gui/file/1933a3b8bbfa4cb3788fdfbc756eab515b4a77d8ea13cf932c262e659169b1bc"><img src="https://img.shields.io/badge/VirusTotal-0%20%D1%81%D1%80%D0%B0%D0%B1%D0%B0%D1%82%D1%8B%D0%B2%D0%B0%D0%BD%D0%B8%D0%B9%20%C2%B7%201.5.0-3D6B3A?style=flat-square&logo=virustotal&logoColor=white" alt="VirusTotal: 0 срабатываний"></a>
 </p>
 
 <h3 align="center">
@@ -164,15 +164,15 @@
 
 ## Проверено антивирусами
 
-Установщик версии 1.4.3 проверен на VirusTotal: **ни один из 69 антивирусов не нашёл угроз** — [открыть отчёт](https://www.virustotal.com/gui/file/af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2).
+Установщик версии 1.5.0 проверен на VirusTotal: **ни один антивирус не нашёл угроз** — [открыть отчёт](https://www.virustotal.com/gui/file/1933a3b8bbfa4cb3788fdfbc756eab515b4a77d8ea13cf932c262e659169b1bc).
 
 Убедиться, что у вас тот же самый файл, можно за секунду. В PowerShell, в папке со скачанным установщиком:
 
 ```powershell
-Get-FileHash .\PulsePC-Setup-1.4.3.exe
+Get-FileHash .\PulsePC-Setup-1.5.0.exe
 ```
 
-Сумма должна совпасть с отчётом VirusTotal и с файлом `.sha256` в выпуске: `af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2`.
+Сумма должна совпасть с отчётом VirusTotal и с файлом `.sha256` в выпуске: `1933a3b8bbfa4cb3788fdfbc756eab515b4a77d8ea13cf932c262e659169b1bc`.
 
 Что ещё говорит в пользу программы:
 
