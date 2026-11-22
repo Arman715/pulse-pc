@@ -24,6 +24,10 @@
   <a href="https://t.me/pulsepc_official">Telegram</a>
   &nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="https://www.instagram.com/pulsepc_official/">Instagram</a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="https://www.youtube.com/@pulsepc-w7d">YouTube</a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="https://www.tiktok.com/@pulse.pc6">TikTok</a>
 </h3>
 
 <p align="center">
@@ -242,7 +246,7 @@ cd pulse-pc\src
 
 ---
 
-Новости, разборы «почему тормозит игра» и ответы на вопросы — в Telegram **[t.me/pulsepc_official](https://t.me/pulsepc_official)** и в Instagram **[@pulsepc_official](https://www.instagram.com/pulsepc_official/)**.
+Новости, разборы «почему тормозит игра» и ответы на вопросы — в Telegram **[t.me/pulsepc_official](https://t.me/pulsepc_official)**, в Instagram **[@pulsepc_official](https://www.instagram.com/pulsepc_official/)** и в TikTok **[@pulse.pc6](https://www.tiktok.com/@pulse.pc6)**. Полный видеообзор программы — на YouTube: **[@pulsepc-w7d](https://www.youtube.com/@pulsepc-w7d)**.
 
 <sub>© 2026 Arman715. Код распространяется по лицензии <a href="LICENSE">GPL-3.0</a>.
 Встроен <a href="https://github.com/GameTechDev/PresentMon">PresentMon</a> от Intel (лицензия MIT, текст — в <a href="src/third-party/PresentMon/LICENSE.txt">src/third-party/PresentMon</a>). Требуется Windows 10 или 11, 64 бита.</sub>

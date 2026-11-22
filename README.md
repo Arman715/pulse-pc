@@ -24,6 +24,10 @@
   <a href="https://t.me/pulsepc_official">Telegram</a>
   &nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="https://www.instagram.com/pulsepc_official/">Instagram</a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="https://www.youtube.com/@pulsepc-w7d">YouTube</a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="https://www.tiktok.com/@pulse.pc6">TikTok</a>
 </h3>
 
 <p align="center">
@@ -248,7 +252,7 @@ as long as they are also released under GPL-3.0 with open source code and credit
 
 ---
 
-News, "why does my game stutter" breakdowns and answers to questions — on Telegram **[t.me/pulsepc_official](https://t.me/pulsepc_official)** (in Russian) and on Instagram **[@pulsepc_official](https://www.instagram.com/pulsepc_official/)**.
+News, "why does my game stutter" breakdowns and answers to questions — on Telegram **[t.me/pulsepc_official](https://t.me/pulsepc_official)** (in Russian), on Instagram **[@pulsepc_official](https://www.instagram.com/pulsepc_official/)** and on TikTok **[@pulse.pc6](https://www.tiktok.com/@pulse.pc6)**. A full video review of the app is on YouTube: **[@pulsepc-w7d](https://www.youtube.com/@pulsepc-w7d)**.
 
 <sub>© 2026 Arman715. The code is distributed under the <a href="LICENSE">GPL-3.0</a> license.
 Includes Intel's <a href="https://github.com/GameTechDev/PresentMon">PresentMon</a> (MIT license, text in <a href="src/third-party/PresentMon/LICENSE.txt">src/third-party/PresentMon</a>). Requires 64-bit Windows 10 or 11.</sub>
