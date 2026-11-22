@@ -4,7 +4,8 @@
 //   • «Скачать» — последняя версия, ссылка на установщик и контрольная сумма (из update.json выпуска на GitHub);
 //   • частые вопросы — ответы кнопками;
 //   • «Сообщить об ошибке» — сообщения и файлы пересылаются разработчику, его ответ возвращается человеку;
-//   • автопост в канал, когда на GitHub выходит новая версия (проверка по расписанию).
+//   • автопост в канал, когда на GitHub выходит новая версия (проверка по расписанию);
+//   • посты канала по расписанию (список POSTS ниже, собирается из promo/telegram/КАНАЛ.md).
 //
 // Настройки Worker'а (Settings → Variables and Secrets):
 //   BOT_TOKEN — секрет: токен от @BotFather. В коде и в репозитории его нет.
@@ -333,6 +334,21 @@ const T = {
 const RU_LANGS = ["ru", "uk", "be", "kk", "uz", "ky", "tg", "hy", "az", "ka"];
 const langOf = (user) => (user && user.language_code && !RU_LANGS.includes(user.language_code.slice(0, 2)) ? "en" : "ru");
 
+// ─── ПОСТЫ КАНАЛА: генерируются из promo/telegram/КАНАЛ.md (gen_posts.py), руками не править ───
+// Время — UTC (16:00 UTC = 19:00 по Москве). Уже вышедший пост повторно не публикуется (ключ post:<id> в KV).
+const POSTS = [
+  {"id": "p1", "at": "2026-11-23T00:00:00Z", "kind": "photo", "title": "Знакомство (закрепить)", "media": "zakrep.png", "text": "<b>Пульс ПК</b> — бесплатная программа для игрового ПК на Windows 10 и 11.\n\nПока вы играете, она записывает FPS, худший 1 % кадров, загрузку видеокарты и процессора, память и пинг. А после игры объясняет простыми словами: что ограничивало FPS, откуда каждый рывок и что с этим сделать.\n\nЧто ещё умеет:\n• оверлей поверх игры и заряд беспроводных мышей, наушников и геймпадов\n• диагностика: синие экраны, ошибки дисков, сеть и пинг\n• чертёж вашего компьютера и совет, что докупить — по вашим играм\n• у каждой настройки есть «Вернуть как было», «Безопасность Windows» программа не трогает\n\nБез рекламы, открытый код.\n\n⬇ Скачать: https://github.com/Arman715/pulse-pc/releases/latest\n▶ Обзор: https://www.youtube.com/@pulsepc-w7d\n📷 Instagram: https://www.instagram.com/pulsepc_official/\n🎵 TikTok: https://www.tiktok.com/@pulse.pc6\n🤖 Бот: @pulsepc_official_bot — скачать, частые вопросы, сообщить об ошибке"},
+  {"id": "p2", "at": "2026-11-23T00:00:00Z", "kind": "photo", "title": "Что нового в 1.5", "media": "novoe-1.5.png", "text": "<b>Вышел Пульс ПК 1.5</b> — самое большое обновление.\n\n• <b>Оверлей в игре</b> — FPS, худший 1 %, видеокарта, процессор, пинг и заряд устройств. Отдельное окно: в игру ничего не встраивается. Ctrl+Shift+O — спрятать и показать.\n• <b>Заряд беспроводных устройств</b> — Logitech, HyperX, SteelSeries, Corsair, Razer, геймпады Xbox и PlayStation. Программа читает заряд сама, без фирменных программ.\n• <b>Отчёт после каждой игры</b> — время кадра, оценка плавности, причина каждого рывка и сравнение с прошлыми сессиями.\n• <b>«Подробнее и что делать»</b> у каждой ошибки из журналов Windows: какой диск, какая программа, план по шагам и кнопка «Открыть в «Просмотре событий»».\n• <b>Осторожный режим</b> для игр со строгим античитом.\n• Новые разделы «Сеть», «Ноутбук», «Почему тормозит прямо сейчас», «Здоровье ПК» и переносная версия.\n\nУже стоит программа? «Система» → «Новые версии» → «Обновить». Настройки и история сохранятся.\n\n⬇ https://github.com/Arman715/pulse-pc/releases/latest"},
+  {"id": "p3", "at": "2026-11-23T00:00:00Z", "kind": "video", "title": "Обзор 1.5 в 1 минуту (видео)", "media": "obzor-1.5.mp4", "text": "Пульс ПК 1.5 за минуту: оверлей, заряд устройств и отчёт после игры.\n\nПолный обзор на 8 минут — на YouTube: https://www.youtube.com/@pulsepc-w7d"},
+  {"id": "p4", "at": "2026-11-25T16:00:00Z", "kind": "photo", "title": "Почему игра тормозит", "media": "tormozit.png", "text": "FPS вроде нормальный, а картинка дёргается? Средний FPS прячет рывки.\n\nПульс ПК пишет и средний FPS, и <b>худший 1 % кадров</b> — сколько было в самые тяжёлые моменты. Если он в 2–3 раза ниже среднего, вы это чувствуете.\n\nПосле игры программа сама скажет, что мешало: «ограничивает видеокарта — 88 % времени», «в 21:14 не хватило памяти», «в момент рывка диск был занят». И что с этим сделать — с самого бесплатного шага.\n\n⬇ https://github.com/Arman715/pulse-pc/releases/latest"},
+  {"id": "p5", "at": "2026-11-27T16:00:00Z", "kind": "photo", "title": "Оверлей", "media": "overlay.png", "text": "<b>Оверлей поверх игры</b> в Пульс ПК 1.5.\n\nСами выбираете, что показывать: FPS, худший 1 %, загрузку и температуру видеокарты, загрузку процессора, видеопамять, пинг, время и заряд мыши или наушников.\n\nКрасным — только тревога: FPS упал заметно ниже обычного, видеокарта нагрелась до 85 °C, пинг от 150 мс, заряд 15 % и ниже.\n\nРаботает в режимах «Без рамки» и «Полноэкранный в окне». Если игра в исключительном полноэкранном режиме — программа подскажет, что переключить.\n\nВключается: «Система» → «Оверлей». Ctrl+Shift+O — спрятать и показать."},
+  {"id": "p6", "at": "2026-11-30T16:00:00Z", "kind": "video", "title": "Наушники сели на шагах (видео)", "media": "zaryad.mp4", "text": "Самое обидное — когда наушники садятся посреди раунда.\n\nПульс ПК 1.5 сам читает заряд беспроводных мышей, наушников, клавиатур и геймпадов — Logitech, HyperX, SteelSeries, Corsair, Razer, Xbox, PlayStation и Bluetooth-устройства. Без фирменных программ, только запросами на чтение.\n\nЗаряд видно в разделе «Заряд устройств» и в оверлее, а перед игрой программа напомнит, если что-то пора зарядить.\n\n⬇ https://github.com/Arman715/pulse-pc/releases/latest"},
+  {"id": "p7", "at": "2026-12-02T16:00:00Z", "kind": "photo", "title": "Вернуть как было", "media": "vernut.png", "text": "Боитесь «оптимизаторов», после которых Windows ведёт себя странно? Мы тоже.\n\nВ Пульс ПК ничего не меняется без вашей кнопки, и у каждой настройки есть «Вернуть как было». Защитник, брандмауэр и остальную «Безопасность Windows» программа не трогает вообще — не читает и не меняет.\n\nИ честно говорит, когда настройка не поможет."},
+  {"id": "p8", "at": "2026-12-04T16:00:00Z", "kind": "text", "title": "Полный обзор на YouTube", "preview": true, "text": "<b>Полный обзор Пульс ПК — 8 минут</b>, все разделы по порядку: оверлей, отчёт после игры, диагностика, сеть, чертёж компьютера и совет по апгрейду.\n\n▶ https://www.youtube.com/@pulsepc-w7d"},
+  {"id": "p9", "at": "2026-12-07T16:00:00Z", "kind": "text", "title": "Проверено антивирусами", "text": "Откуда знать, что программа безопасна?\n\n1. <b>Открытый код</b> — весь код Пульс ПК лежит на GitHub, его может прочитать любой: https://github.com/Arman715/pulse-pc\n2. <b>VirusTotal</b> — установщик 1.5.0 проверен на VirusTotal, ни один антивирус не нашёл угроз: https://www.virustotal.com/gui/file/1933a3b8bbfa4cb3788fdfbc756eab515b4a77d8ea13cf932c262e659169b1bc\n3. <b>Подпись</b> — обновления подписаны ключом автора, программа не поставит файл с чужой подписью или изменённой контрольной суммой.\n\nСкачивайте только с GitHub — не с файлообменников и не из чужих каналов."},
+];
+// ─── /ПОСТЫ ───
+
 // ─────────────────────────────── вход ───────────────────────────────
 
 export default {
@@ -341,6 +357,7 @@ export default {
     if (!env.BOT_TOKEN) return new Response("BOT_TOKEN is not set", { status: 500 });
 
     if (request.method === "GET" && url.pathname === "/setup") return setup(env, url.origin);
+    if ((request.method === "GET" || request.method === "HEAD") && url.pathname.startsWith("/media/")) return media(url.pathname.slice(7));
 
     if (request.method === "POST" && url.pathname === "/tg") {
       if (request.headers.get("x-telegram-bot-api-secret-token") !== (await webhookSecret(env))) {
@@ -358,6 +375,7 @@ export default {
   async scheduled(event, env, ctx) {
     if (!env.BOT_TOKEN) return;
     try { await checkRelease(env); } catch (e) { console.log("release check failed", e && e.stack || e); }
+    try { await publishPosts(env, (event && event.scheduledTime) || Date.now()); } catch (e) { console.log("posts failed", e && e.stack || e); }
   },
 };
 
@@ -382,6 +400,8 @@ async function setup(env, origin) {
     max_connections: 1,
   });
   lines.push("setWebhook: " + (hook.ok ? "ok" : "ERROR " + hook.description));
+  // Свой адрес нужен расписанию постов: по нему Telegram забирает картинки и видео (/media/…).
+  await kvPut(env, "origin", origin);
   // Без кода языка — английский (его видят все, чей язык не указан ниже), для русскоязычных кодов — русский.
   const targets = [["en", undefined], ...RU_LANGS.map((c) => ["ru", c])];
   const errors = [];
@@ -548,6 +568,62 @@ async function kvPut(env, key, value, ttl) {
 async function kvDel(env, key) {
   if (!env.BOT_KV) return false;
   try { await env.BOT_KV.delete(key); return true; } catch (e) { console.log("kv delete", key, e && e.message); return false; }
+}
+
+// ─────────────────────────────── посты по расписанию ───────────────────────────────
+
+// Картинки и видео постов лежат в репозитории (src/bot/media). GitHub отдаёт mp4 как «просто файл», а Telegram
+// по ссылке принимает видео только с типом video/mp4 — поэтому бот раздаёт их сам, с правильным типом.
+// Раздаются только файлы из этого списка.
+const MEDIA = {
+  "zakrep.png": "image/png", "novoe-1.5.png": "image/png", "overlay.png": "image/png",
+  "tormozit.png": "image/png", "vernut.png": "image/png",
+  "obzor-1.5.mp4": "video/mp4", "zaryad.mp4": "video/mp4",
+};
+
+async function media(name) {
+  const type = Object.prototype.hasOwnProperty.call(MEDIA, name) ? MEDIA[name] : null;
+  if (!type) return new Response("not found", { status: 404 });
+  const res = await fetch(`https://raw.githubusercontent.com/${REPO}/main/src/bot/media/${name}`, { headers: UA });
+  if (!res.ok) return new Response("not found", { status: 404 });
+  const headers = { "content-type": type, "cache-control": "public, max-age=86400" };
+  const len = res.headers.get("content-length");
+  if (len) headers["content-length"] = len;
+  return new Response(res.body, { headers });
+}
+
+// Пост выходит, когда пришло его время. За один запуск — не больше трёх, строго по порядку:
+// если пост не вышел, следующие ждут. Отметка ставится ДО отправки, поэтому повторов не бывает.
+async function publishPosts(env, now) {
+  const kv = env.BOT_KV;
+  if (!kv) return;
+  const origin = await kv.get("origin");
+  if (!origin) return; // /setup ещё не открывали
+  const channel = (env.CHANNEL || DEFAULT_CHANNEL).trim();
+  let sent = 0;
+  for (const p of POSTS) {
+    if (Date.parse(p.at) > now) break;
+    if (await kv.get(`post:${p.id}`)) continue;
+    if (sent >= 3) break;
+    await kv.put(`post:${p.id}`, "sending");
+    const base = { chat_id: channel, parse_mode: "HTML" };
+    const url = `${origin}/media/${p.media}`;
+    const res = p.kind === "photo" ? await tg(env, "sendPhoto", { ...base, photo: url, caption: p.text })
+      : p.kind === "video" ? await tg(env, "sendVideo", { ...base, video: url, caption: p.text, supports_streaming: true, width: 1080, height: 1920 })
+      : await tg(env, "sendMessage", { ...base, text: p.text, link_preview_options: { is_disabled: !p.preview } });
+    if (res.ok) {
+      await kvPut(env, `post:${p.id}`, "done:" + (res.result && res.result.message_id));
+      sent++;
+      continue;
+    }
+    await kvDel(env, `post:${p.id}`);
+    const flag = `postfail:${p.id}`;
+    if (env.ADMIN_ID && !(await kvGet(env, flag))) {
+      await kvPut(env, flag, "1", 60 * 60 * 24);
+      await send(env, env.ADMIN_ID, `Не получилось опубликовать пост «${esc(p.title)}» в ${esc(channel)}: ${esc(res.description || "ошибка Telegram")}. Бот попробует снова через 30 минут.`);
+    }
+    break;
+  }
 }
 
 // ─────────────────────────────── выпуски ───────────────────────────────
@@ -717,4 +793,4 @@ function dateRu(d) { const [y, m, day] = d.split("-").map(Number); return `${day
 function dateEn(d) { const [y, m, day] = d.split("-").map(Number); return `${MONTHS_EN[m - 1]} ${day}, ${y}`; }
 
 // Для проверок (test.mjs); на работу Worker'а не влияет.
-export const _test = { T, parseReleaseBody, parseNotes, releasePost, cmpVersion, webhookSecret, esc, langOf };
+export const _test = { T, POSTS, MEDIA, parseReleaseBody, parseNotes, releasePost, cmpVersion, webhookSecret, esc, langOf };

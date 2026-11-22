@@ -261,5 +261,67 @@ console.log("Автопост о новой версии");
   ok(_test.cmpVersion("1.10.0", "1.9.9") > 0 && _test.cmpVersion("1.5.0", "1.5.0") === 0 && _test.cmpVersion("1.4.3", "1.5.0") < 0, "сравнение версий");
 }
 
+// ── 5. посты по расписанию ──
+console.log("Посты канала по расписанию");
+{
+  const { POSTS, MEDIA } = _test;
+  const fs = await import("node:fs");
+  const strip = (t) => t.replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  ok(POSTS.length === 9, "9 постов в расписании");
+  ok(POSTS.every((p, i) => i === 0 || Date.parse(p.at) >= Date.parse(POSTS[i - 1].at)), "посты идут по времени");
+  ok(POSTS.every((p) => !p.media || (MEDIA[p.media] && fs.existsSync(new URL("./media/" + p.media, import.meta.url)))), "у каждого поста есть свой файл в media/");
+  ok(POSTS.every((p) => validHtml(p.text)), "разметка всех постов корректна");
+  ok(POSTS.every((p) => (p.kind === "text" ? strip(p.text).length <= 4096 : strip(p.text).length <= 1024)), "подписи ≤ 1024, тексты ≤ 4096 знаков");
+  ok(POSTS.filter((p) => p.media).every((p) => fs.statSync(new URL("./media/" + p.media, import.meta.url)).size <= (p.kind === "photo" ? 5e6 : 20e6)), "файлы в пределах Telegram по ссылке (фото ≤5 МБ, видео ≤20 МБ)");
+
+  const e = env({ CHANNEL: "@pulsepc_official" });
+  const day1 = Date.parse("2026-11-23T01:00:00Z");
+  const toChannel = () => calls.filter((c) => c.body.chat_id === "@pulsepc_official" && /^send(Photo|Video|Message)$/.test(c.method));
+  calls = [];
+  await worker.scheduled({ scheduledTime: day1 }, e, {});
+  ok(toChannel().length === 0, "без /setup (нет адреса) посты не выходят");
+  await e.BOT_KV.put("origin", "https://bot.example.workers.dev");
+  calls = [];
+  await worker.scheduled({ scheduledTime: day1 }, e, {});
+  const out = toChannel();
+  ok(out.map((c) => c.method).join() === "sendPhoto,sendPhoto,sendVideo", "день 1: знакомство, «что нового», видео — по порядку");
+  ok(out[0].body.photo === "https://bot.example.workers.dev/media/zakrep.png" && out[2].body.video.endsWith("/media/obzor-1.5.mp4"), "картинки и видео — по ссылке бота");
+  ok(out[0].body.caption.includes("@pulsepc_official_bot") && out[0].body.parse_mode === "HTML", "в знакомстве есть ссылка на бота");
+  calls = [];
+  await worker.scheduled({ scheduledTime: day1 + 30 * 60e3 }, e, {});
+  ok(toChannel().length === 0, "повторный запуск — без повторов");
+  calls = [];
+  await worker.scheduled({ scheduledTime: Date.parse("2026-11-25T16:00:00Z") }, e, {});
+  ok(toChannel().map((c) => c.method).join() === "sendPhoto", "25 ноября в 19:00 МСК — один пост «Почему тормозит»");
+  // сбой на посте 5: отметка снимается, разработчику — один раз, пост 6 ждёт
+  tgFail = { sendPhoto: "Bad Request: wrong type of the web page content" };
+  calls = [];
+  await worker.scheduled({ scheduledTime: Date.parse("2026-12-01T16:00:00Z") }, e, {});
+  ok(!(await e.BOT_KV.get("post:p5")) && !(await e.BOT_KV.get("post:p6")), "пост не вышел — не отмечен, следующий ждёт");
+  ok(sent("sendMessage").some((c) => c.body.chat_id === String(ADMIN) && c.body.text.includes("Оверлей")), "разработчику сказано, какой пост не вышел");
+  calls = [];
+  await worker.scheduled({ scheduledTime: Date.parse("2026-12-01T16:30:00Z") }, e, {});
+  ok(!sent("sendMessage").some((c) => c.body.chat_id === String(ADMIN)), "о том же сбое второй раз не пишет");
+  tgFail = {};
+  calls = [];
+  await worker.scheduled({ scheduledTime: Date.parse("2026-12-01T17:00:00Z") }, e, {});
+  ok(toChannel().map((c) => c.method).join() === "sendPhoto,sendVideo", "после сбоя: «Оверлей», затем видео про заряд");
+  calls = [];
+  await worker.scheduled({ scheduledTime: Date.parse("2026-12-31T00:00:00Z") }, e, {});
+  const rest = toChannel();
+  ok(rest.map((c) => c.method).join() === "sendPhoto,sendMessage,sendMessage", "остальные три поста выходят по порядку");
+  ok(rest[1].body.link_preview_options.is_disabled === false && rest[2].body.link_preview_options.is_disabled === true, "у поста про YouTube — превью ссылки, у остальных нет");
+
+  // раздача файлов
+  githubOverride = (url) => url.includes("/src/bot/media/zaryad.mp4") ? new Response("VIDEO", { headers: { "content-type": "application/octet-stream" } }) : null;
+  let r = await worker.fetch(new Request("https://bot.example.workers.dev/media/zaryad.mp4"), env(), {});
+  ok(r.status === 200 && r.headers.get("content-type") === "video/mp4" && (await r.text()) === "VIDEO", "видео отдаётся с типом video/mp4");
+  r = await worker.fetch(new Request("https://bot.example.workers.dev/media/..%2Fworker.js"), env(), {});
+  ok(r.status === 404, "чужие файлы не раздаются");
+  r = await worker.fetch(new Request("https://bot.example.workers.dev/media/README.md"), env(), {});
+  ok(r.status === 404, "файлы не из списка не раздаются");
+  githubOverride = null;
+}
+
 console.log(failed ? `\nПРОВАЛЕНО: ${failed}` : "\nВсе проверки прошли.");
 process.exit(failed ? 1 : 0);
