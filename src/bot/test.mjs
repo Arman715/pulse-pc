@@ -275,7 +275,7 @@ console.log("Посты канала по расписанию");
   ok(POSTS.filter((p) => p.media).every((p) => fs.statSync(new URL("./media/" + p.media, import.meta.url)).size <= (p.kind === "photo" ? 5e6 : 20e6)), "файлы в пределах Telegram по ссылке (фото ≤5 МБ, видео ≤20 МБ)");
 
   const e = env({ CHANNEL: "@pulsepc_official" });
-  const day1 = Date.parse("2026-11-23T01:00:00Z");
+  const day1 = Date.parse("2026-11-22T22:30:00Z");
   const toChannel = () => calls.filter((c) => c.body.chat_id === "@pulsepc_official" && /^send(Photo|Video|Message)$/.test(c.method));
   calls = [];
   await worker.scheduled({ scheduledTime: day1 }, e, {});

@@ -7,9 +7,9 @@ def html(t):
     t = t.rstrip('\n').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', t)
 plan = {
- 1: ('photo', 'zakrep.png',  '2026-11-23T00:00:00Z'),
- 2: ('photo', 'novoe-1.5.png','2026-11-23T00:00:00Z'),
- 3: ('video', 'obzor-1.5.mp4','2026-11-23T00:00:00Z'),
+ 1: ('photo', 'zakrep.png',  '2026-11-22T21:00:00Z'),
+ 2: ('photo', 'novoe-1.5.png','2026-11-22T21:00:00Z'),
+ 3: ('video', 'obzor-1.5.mp4','2026-11-22T21:00:00Z'),
  4: ('photo', 'tormozit.png', '2026-11-25T16:00:00Z'),
  5: ('photo', 'overlay.png',  '2026-11-27T16:00:00Z'),
  6: ('video', 'zaryad.mp4',   '2026-11-30T16:00:00Z'),
