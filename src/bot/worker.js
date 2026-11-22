@@ -25,6 +25,7 @@ const RELEASE_CACHE_SEC = 600;
 
 // ─────────────────────────────── тексты ───────────────────────────────
 
+const BOT_LINK = "https://t.me/pulsepc_official_bot";
 const LINKS = {
   channel: "https://t.me/pulsepc_official",
   github: `https://github.com/${REPO}`,
@@ -594,6 +595,14 @@ async function media(name) {
 
 // Пост выходит, когда пришло его время. За один запуск — не больше трёх, строго по порядку:
 // если пост не вышел, следующие ждут. Отметка ставится ДО отправки, поэтому повторов не бывает.
+// Кнопки под каждым постом канала: скачать и чат с ботом.
+const POST_BUTTONS = {
+  inline_keyboard: [[
+    { text: "⬇ Скачать", url: `https://github.com/${REPO}/releases/latest` },
+    { text: "🤖 Вопросы и ошибки", url: BOT_LINK },
+  ]],
+};
+
 async function publishPosts(env, now) {
   const kv = env.BOT_KV;
   if (!kv) return;
@@ -603,16 +612,25 @@ async function publishPosts(env, now) {
   let sent = 0;
   for (const p of POSTS) {
     if (Date.parse(p.at) > now) break;
-    if (await kv.get(`post:${p.id}`)) continue;
+    const state = await kv.get(`post:${p.id}`);
+    if (state) {
+      // Пост вышел раньше без кнопок (до их появления) — добавляем кнопки к нему.
+      const m = /^done:(\d+)$/.exec(state);
+      if (m) {
+        const r = await tg(env, "editMessageReplyMarkup", { chat_id: channel, message_id: Number(m[1]), reply_markup: POST_BUTTONS });
+        if (r.ok || /not modified/i.test(r.description || "")) await kvPut(env, `post:${p.id}`, state + ":btn");
+      }
+      continue;
+    }
     if (sent >= 3) break;
     await kv.put(`post:${p.id}`, "sending");
-    const base = { chat_id: channel, parse_mode: "HTML" };
+    const base = { chat_id: channel, parse_mode: "HTML", reply_markup: POST_BUTTONS };
     const url = `${origin}/media/${p.media}`;
     const res = p.kind === "photo" ? await tg(env, "sendPhoto", { ...base, photo: url, caption: p.text })
       : p.kind === "video" ? await tg(env, "sendVideo", { ...base, video: url, caption: p.text, supports_streaming: true, width: 1080, height: 1920 })
       : await tg(env, "sendMessage", { ...base, text: p.text, link_preview_options: { is_disabled: !p.preview } });
     if (res.ok) {
-      await kvPut(env, `post:${p.id}`, "done:" + (res.result && res.result.message_id));
+      await kvPut(env, `post:${p.id}`, "done:" + (res.result && res.result.message_id) + ":btn");
       sent++;
       continue;
     }
@@ -678,7 +696,7 @@ async function checkRelease(env) {
     text: await releasePost(r),
     parse_mode: "HTML",
     link_preview_options: { is_disabled: true },
-    reply_markup: { inline_keyboard: [[{ text: "⬇ Скачать и все изменения", url: releaseUrl(r.version) }]] },
+    reply_markup: { inline_keyboard: [[{ text: "⬇ Скачать и все изменения", url: releaseUrl(r.version) }], [{ text: "🤖 Вопросы и ошибки", url: BOT_LINK }]] },
   });
   if (res.ok) { await kvPut(env, "posted", r.version); return; }
 

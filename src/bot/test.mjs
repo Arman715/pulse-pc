@@ -312,6 +312,20 @@ console.log("Посты канала по расписанию");
   ok(rest.map((c) => c.method).join() === "sendPhoto,sendMessage,sendMessage", "остальные три поста выходят по порядку");
   ok(rest[1].body.link_preview_options.is_disabled === false && rest[2].body.link_preview_options.is_disabled === true, "у поста про YouTube — превью ссылки, у остальных нет");
 
+  ok(out.every((c) => c.body.reply_markup.inline_keyboard[0].map((b) => b.url).join() === "https://github.com/Arman715/pulse-pc/releases/latest,https://t.me/pulsepc_official_bot"), "под каждым постом — кнопки «Скачать» и «Вопросы и ошибки»");
+
+  // посты, вышедшие до появления кнопок, получают кнопки
+  const eR = env({ CHANNEL: "@pulsepc_official" });
+  await eR.BOT_KV.put("origin", "https://bot.example.workers.dev");
+  await eR.BOT_KV.put("post:p1", "done:55"); await eR.BOT_KV.put("post:p2", "done:56"); await eR.BOT_KV.put("post:p3", "done:57");
+  calls = [];
+  await worker.scheduled({ scheduledTime: day1 }, eR, {});
+  ok(sent("editMessageReplyMarkup").map((c) => c.body.message_id).join() === "55,56,57" && toChannel().length === 0, "старым постам добавлены кнопки, новые посты не повторяются");
+  ok((await eR.BOT_KV.get("post:p1")) === "done:55:btn", "отмечено, что кнопки уже есть");
+  calls = [];
+  await worker.scheduled({ scheduledTime: day1 + 30 * 60e3 }, eR, {});
+  ok(sent("editMessageReplyMarkup").length === 0, "второй раз кнопки не добавляются");
+
   // раздача файлов
   githubOverride = (url) => url.includes("/src/bot/media/zaryad.mp4") ? new Response("VIDEO", { headers: { "content-type": "application/octet-stream" } }) : null;
   let r = await worker.fetch(new Request("https://bot.example.workers.dev/media/zaryad.mp4"), env(), {});
