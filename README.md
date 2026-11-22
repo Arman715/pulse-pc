@@ -21,6 +21,8 @@
   &nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="docs/guide.en.md">User guide</a>
   &nbsp;&nbsp;·&nbsp;&nbsp;
+  <a href="https://t.me/pulsepc_official">Telegram</a>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
   <a href="https://www.instagram.com/pulsepc_official/">Instagram</a>
 </h3>
 
@@ -246,7 +248,7 @@ as long as they are also released under GPL-3.0 with open source code and credit
 
 ---
 
-News, "why does my game stutter" breakdowns and answers to questions — on Instagram **[@pulsepc_official](https://www.instagram.com/pulsepc_official/)**.
+News, "why does my game stutter" breakdowns and answers to questions — on Telegram **[t.me/pulsepc_official](https://t.me/pulsepc_official)** (in Russian) and on Instagram **[@pulsepc_official](https://www.instagram.com/pulsepc_official/)**.
 
 <sub>© 2026 Arman715. The code is distributed under the <a href="LICENSE">GPL-3.0</a> license.
 Includes Intel's <a href="https://github.com/GameTechDev/PresentMon">PresentMon</a> (MIT license, text in <a href="src/third-party/PresentMon/LICENSE.txt">src/third-party/PresentMon</a>). Requires 64-bit Windows 10 or 11.</sub>
