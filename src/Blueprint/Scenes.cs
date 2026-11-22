@@ -22,6 +22,7 @@ internal static partial class Scenes
             Scene.Storage => Storage(),
             Scene.Router => Router(),
             Scene.Gamepad => Gamepad(),
+            Scene.Laptop => Laptop(),
             _ => new Model(),
         };
         cache[s] = m;

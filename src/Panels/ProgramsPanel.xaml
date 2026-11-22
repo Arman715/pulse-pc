@@ -1,0 +1,128 @@
+﻿<UserControl x:Class="PulsePC.Panels.ProgramsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PulsePC">
+    <UserControl.Resources>
+        <!-- Поле поиска: рамка тушью, подсказка внутри (Tag), пока поле пустое. -->
+        <Style x:Key="Search" TargetType="TextBox">
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
+            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource Ink1}"/>
+            <Setter Property="SelectionBrush" Value="{DynamicResource Accent}"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="frame" Background="{DynamicResource Raised}" BorderBrush="{DynamicResource Ink3}" BorderThickness="1" SnapsToDevicePixels="True">
+                            <Grid>
+                                <TextBlock x:Name="hint" Text="{TemplateBinding Tag}" Foreground="{DynamicResource Ink4}" Margin="12,0,0,0"
+                                           VerticalAlignment="Center" IsHitTestVisible="False" Visibility="Collapsed"/>
+                                <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Text" Value="">
+                                <Setter TargetName="hint" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="frame" Property="BorderBrush" Value="{DynamicResource Ink1}"/>
+                                <Setter TargetName="frame" Property="Background" Value="{DynamicResource Base}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+        <TextBlock x:Name="State" Style="{StaticResource Verdict}" Text="Читаю список программ…" TextWrapping="Wrap"/>
+        <TextBlock x:Name="Intro" Style="{StaticResource Body}" Margin="0,8,0,0" TextWrapping="Wrap"
+                   Text="То же, что в «Параметрах → Приложения»: программы из «Установки и удаления программ» Windows. «Удалить» запускает деинсталлятор самой программы — только после вашего подтверждения."/>
+
+        <!-- Что показывать -->
+        <WrapPanel Margin="-12,18,0,0">
+            <RadioButton x:Name="ViewPrograms" Style="{StaticResource Range}" GroupName="ProgramsView" IsChecked="True" Content="Программы" Checked="View_Checked"/>
+            <RadioButton x:Name="ViewStore" Style="{StaticResource Range}" GroupName="ProgramsView" Content="Microsoft Store" Checked="View_Checked"/>
+            <RadioButton x:Name="ViewGames" Style="{StaticResource Range}" GroupName="ProgramsView" Content="Игры" Checked="View_Checked"/>
+        </WrapPanel>
+
+        <!-- Поиск и порядок -->
+        <WrapPanel Margin="0,14,0,0">
+            <TextBox x:Name="SearchBox" Style="{StaticResource Search}" Width="300" Margin="0,0,20,8" Tag="Найти по названию или издателю"
+                     TextChanged="Search_TextChanged"/>
+            <StackPanel x:Name="SortBar" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,8">
+                <TextBlock Style="{StaticResource Caption}" Text="Порядок:" VerticalAlignment="Center" Margin="0,0,6,4"/>
+                <RadioButton x:Name="SortName" Style="{StaticResource Range}" GroupName="ProgramsSort" IsChecked="True" Content="по названию" Checked="Sort_Checked"/>
+                <RadioButton x:Name="SortSize" Style="{StaticResource Range}" GroupName="ProgramsSort" Content="по размеру" Checked="Sort_Checked"/>
+                <RadioButton x:Name="SortDate" Style="{StaticResource Range}" GroupName="ProgramsSort" Content="по дате установки" Checked="Sort_Checked"/>
+            </StackPanel>
+        </WrapPanel>
+
+        <TextBlock x:Name="AdminNote" Style="{StaticResource Caption}" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+                   Text="Программы, установленные для всех пользователей, удалять можно только с правами администратора. Свои программы пользователя — можно и без них."/>
+        <TextBlock x:Name="StoreNote" Style="{StaticResource Caption}" Margin="0,4,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+                   Text="Приложения Microsoft Store здесь только для просмотра: удаляют их в «Параметрах → Приложения» — кнопка внизу."/>
+
+        <!-- Игры: как программа их ищет -->
+        <StackPanel x:Name="GamesBlock" Visibility="Collapsed" Margin="0,4,0,0">
+            <TextBlock Style="{StaticResource Body}" TextWrapping="Wrap"
+                       Text="Все игры, которые видит программа: из магазинов (Steam, Epic, GOG, Ubisoft, EA app, Battle.net, Xbox, Riot, Rockstar, VK Play, Lesta, Wargaming, Astrum, itch.io), найденные на дисках по файлам движка, добавленные вручную и найденные по поведению. Запуск любой из них программа узнаёт и записывает сессию."/>
+            <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Margin="0,8,0,0">
+                <Grid Margin="0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource RowTitle}" Text="Узнавать игры по поведению"/>
+                        <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                   Text="Программа больше минуты рисует кадры на весь экран и заметно нагружает видеокарту — значит, это игра: она записывается с пометкой «найдена по поведению». Браузеры, плееры, Discord, OBS, лаунчеры и среды разработки не в счёт. Если программа ошиблась — нажмите «это не игра» в строке."/>
+                    </StackPanel>
+                    <CheckBox x:Name="BehaviorToggle" Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Top" Margin="24,3,2,0" Click="BehaviorToggle_Click"/>
+                </Grid>
+            </Border>
+            <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource RowTitle}" Text="Искать игры на дисках"/>
+                        <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                   Text="Раз в неделю, в фоне и не во время игры: папки «Games», «Игры», корни дисков и программы с признаками игры рядом с .exe. На диске ничего не меняется."/>
+                        <TextBlock x:Name="ScanState" Style="{StaticResource Caption}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                        <Button x:Name="BtnScan" Style="{StaticResource Link}" HorizontalAlignment="Left" Margin="0,6,0,0" Content="Искать сейчас" Click="Scan_Click"/>
+                    </StackPanel>
+                    <CheckBox x:Name="DiskToggle" Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Top" Margin="24,3,2,0" Click="DiskToggle_Click"/>
+                </Grid>
+            </Border>
+            <!-- Осторожный режим: общее пояснение; переключатель — у каждой игры в списке (CautiousMode в Services\AntiCheat.cs) -->
+            <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+                <StackPanel Margin="0,12">
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Осторожный режим в играх с античитом"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0" TextWrapping="Wrap"
+                               Text="В играх со строгим античитом (Vanguard, HoYoverse, Tencent ACE, Ricochet, EA Javelin, NetEase и другие) программа сама включает осторожный режим: не записывает FPS, время кадров и сервер игры, не запускает проверку задержек драйверов и не опрашивает процесс игры. Загрузка и температура видеокарты, процессор, память, диск и пинг до интернета записываются как обычно. В играх с EasyAntiCheat и BattlEye — полная запись. Переключатель — у каждой игры ниже."/>
+                    <TextBlock Style="{StaticResource Caption}" Margin="0,6,0,0" TextWrapping="Wrap"
+                               Text="Запись кадров — обычная трассировка Windows (так же работают CapFrameX и NVIDIA FrameView), в игру ничего не встраивается; риск очень мал. Осторожный режим — перестраховка: в играх со строгим античитом программа не включает глубокую трассировку Windows."/>
+                </StackPanel>
+            </Border>
+            <TextBlock x:Name="ToggleNote" Style="{StaticResource Caption}" Margin="0,6,0,0" Visibility="Collapsed"
+                       Text="Менять можно только с правами администратора."/>
+        </StackPanel>
+
+        <Rectangle Style="{StaticResource Hairline}" Margin="0,12,0,0"/>
+        <StackPanel x:Name="Rows"/>
+        <TextBlock x:Name="Empty" Style="{StaticResource Body}" Margin="0,12,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
+
+        <WrapPanel Margin="0,16,0,0">
+            <Button x:Name="BtnSettings" Content="Открыть «Параметры → Приложения»" Margin="0,0,14,8" Click="OpenSettings_Click"/>
+            <Button x:Name="BtnRefresh" Style="{StaticResource Link}" Content="Обновить список" Margin="0,0,0,8" VerticalAlignment="Center" Click="Refresh_Click"/>
+        </WrapPanel>
+        <TextBlock x:Name="Result" Style="{StaticResource Caption}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+    </StackPanel>
+</UserControl>

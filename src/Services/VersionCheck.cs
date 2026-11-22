@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Http;
@@ -60,7 +60,7 @@ public sealed class DriverStatus
 /// <summary>
 /// «Новые версии»: драйвер видеокарты (NVIDIA — по официальному сервису NVIDIA), BIOS (только сведения и ссылка:
 /// сайты производителей плат программам не отвечают), обновление самой программы из настраиваемого источника.
-/// Драйвер и BIOS программа не скачивает и не ставит. Себя обновляет только по кнопке, с проверкой SHA-256.
+/// Драйвер и BIOS программа не скачивает и не ставит. Себя обновляет по кнопке или (если включено) сама вне игры — с проверкой SHA-256 и подписи.
 /// Запросы в интернет — раз в сутки (если не выключено) и кнопкой; в них нет ничего о пользователе:
 /// код видеокарты и версия Windows для NVIDIA, адрес источника — для обновления программы.
 /// </summary>
@@ -115,9 +115,13 @@ public static class VersionCheck
     {
         if (host != null || h == null) return;
         host = h;
+        started = DateTime.Now;
         Task.Run(CleanupOld);
         // Первая проверка — через минуту после запуска (не мешать старту), дальше раз в 3 часа смотрим, не прошли ли сутки.
         timer = new Timer(_ => Tick(), null, TimeSpan.FromSeconds(60), TimeSpan.FromHours(3));
+        // Обновлено ли с прошлого запуска (уведомление «Обновлено до …») и обновление без нажатия (раз в минуту — дешёвые проверки).
+        Task.Run(() => { Thread.Sleep(6000); try { AfterUpdate(h.Settings); } catch (Exception ex) { Log.Error("после обновления", ex); } });
+        autoTimer = new Timer(_ => AutoTick(), null, TimeSpan.FromSeconds(75), TimeSpan.FromMinutes(1));
     }
 
     private static void Tick()
@@ -151,7 +155,12 @@ public static class VersionCheck
             s.Set("update.notified", app.Release.Version);
             changed = true;
             // Название раздела вписано в текст: SectionTitle — ключ раздела, он не переводится.
-            host.Notify(L.T("Вышла новая версия «Пульс ПК»"), L.F("Версия {0}. Обновить можно в разделе «Новые версии» вкладки «Система».", app.Release.Version),
+            var auto = AutoState();
+            string how = Portable.Enabled ? L.T("Переносная версия обновляется вручную: ссылка на новую версию — в разделе «Новые версии» вкладки «Система».")
+                : AutoInstall(s) && auto.Ok ? L.T("Она установится сама, когда вы не будете играть. Можно и сразу — кнопкой в разделе «Новые версии» вкладки «Система».")
+                : !AutoAsked(s) && auto.Ok ? L.T("Обновить можно в разделе «Новые версии» вкладки «Система». Там же можно разрешить ставить обновления без нажатия.")
+                : L.T("Обновить можно в разделе «Новые версии» вкладки «Система».");
+            host.Notify(L.T("Вышла новая версия «Пульс ПК»"), L.F("Версия {0}.", app.Release.Version) + " " + how,
                 false, () => host.Open("sys:" + SectionTitle));
         }
         var gpu = SafeMainGpu();
@@ -728,8 +737,10 @@ public static class VersionCheck
     /// пользователя — туда установщик не скачиваем (в самопроверке с PULSEPC_DATA — можно).
     /// </summary>
     public static bool UpdateFolderProtected =>
-        Environment.GetEnvironmentVariable("PULSEPC_DATA") is { Length: > 0 }
-        || !SecureStore.FellBack && UpdateFolder.StartsWith(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "PulsePC") + "\\", StringComparison.OrdinalIgnoreCase);
+        // Папка проверки (PULSEPC_DATA) засчитывается только программе без прав: у программы с правами установщик из неё
+        // запускался бы от администратора, а писать в папку проверки может кто угодно.
+        !Portable.Enabled && (Environment.GetEnvironmentVariable("PULSEPC_DATA") is { Length: > 0 } && !Shell.IsAdmin()
+        || !SecureStore.FellBack && UpdateFolder.StartsWith(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "PulsePC") + "\\", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Подпапка UpdateFolder, куда однофайловый установщик распаковывает свои библиотеки (вместо %TEMP%\.net).</summary>
     private const string RunFolderName = "run";
@@ -871,7 +882,7 @@ public static class VersionCheck
     /// защищённая папка обновлений, распаковка его библиотек — туда же (DOTNET_BUNDLE_EXTRACT_BASE_DIR), а не в %TEMP%.
     /// dryRun (или переменная PULSEPC_UPDATE_DRYRUN=1) — ничего не запускать, только сказать, что было бы запущено.
     /// </summary>
-    public static LaunchResult Launch(string file, AppRelease r, bool dryRun = false)
+    public static LaunchResult Launch(string file, AppRelease r, bool dryRun = false, IReadOnlyList<string> extraArgs = null)
     {
         dryRun |= Environment.GetEnvironmentVariable("PULSEPC_UPDATE_DRYRUN") == "1";
         var res = new LaunchResult();
@@ -904,7 +915,12 @@ public static class VersionCheck
                 res.Message = problem + " Файл удалён, ничего не запущено.";
                 return res;
             }
-            if (dryRun) { res.Message = $"Проверка: был бы запущен «{file}». Установщик не запускался, программа не закрывалась."; return res; }
+            if (dryRun)
+            {
+                res.Message = $"Проверка: был бы запущен «{file}». Установщик не запускался, программа не закрывалась.";
+                LastDryRunArgs = string.Join(" ", new[] { "--setup", "--ready-event", "<имя>" }.Concat(extraArgs ?? Array.Empty<string>()));
+                return res;
+            }
 
             string dir = Path.GetDirectoryName(file);
             if (!UpdateFolderProtected)
@@ -939,6 +955,7 @@ public static class VersionCheck
             psi.ArgumentList.Add("--setup");
             psi.ArgumentList.Add("--ready-event");
             psi.ArgumentList.Add(readyName);
+            foreach (string a in extraArgs ?? Array.Empty<string>()) psi.ArgumentList.Add(a);
             psi.Environment["DOTNET_BUNDLE_EXTRACT_BASE_DIR"] = extract;
             res.Installer = Process.Start(psi);
             if (res.Installer == null) { res.Message = "Установщик не запустился."; return res; }
@@ -988,6 +1005,298 @@ public static class VersionCheck
         catch { }
     }
 
+    // ================================================================== обновление без нажатия
+    // Настройка «Устанавливать обновления сами» (update.autoInstall): по умолчанию выключена, один раз спрашивается в разделе
+    // при найденной новой версии. Проверки те же, что у кнопки «Обновить»: выпуск запрашивается заново у официального
+    // репозитория (QueryOfficial), скачанный файл сверяется по SHA-256 и подписи (Download), перед запуском — ещё раз (Launch).
+    // Скачивание — в фоне и не во время игры. Установка — в первые минуты после запуска программы или когда человек не за
+    // компьютером (10 минут без мыши и клавиатуры), только если не идёт игра. Установщик работает без окна (--quiet) и сам
+    // запускает программу снова (--relaunch); при следующем запуске — уведомление «Обновлено до …» или о сбое.
+
+    public const string KAutoInstall = "update.autoInstall", KAutoPending = "update.auto.pending", KAutoFrom = "update.auto.from",
+        KAutoAt = "update.auto.at", KAutoFailed = "update.auto.failed", KAutoError = "update.auto.error", KLastRun = "update.lastRun",
+        KUpdatedTo = "update.updatedTo", KUpdatedFrom = "update.updatedFrom", KUpdatedAt = "update.updatedAt";
+    /// <summary>Сколько минут после запуска программы считается «запуском» (можно ставить, человек ещё не занят игрой).</summary>
+    public const int StartupMinutes = 5;
+    /// <summary>Сколько минут без мыши и клавиатуры — «человек не за компьютером».</summary>
+    public const int IdleMinutes = 10;
+    /// <summary>Сколько ждать между предупреждением «скоро обновлюсь» и установкой.</summary>
+    public const int NoticeSeconds = 60;
+
+    private static Timer autoTimer;
+    private static DateTime started = DateTime.Now, lastAttempt = DateTime.MinValue;
+    private static DateTime? armed;
+    private static int autoBusy;
+    private static (AppRelease Release, string Path)? ready;
+    /// <summary>Самопроверка: что получил бы установщик в режиме проверки (PULSEPC_UPDATE_DRYRUN).</summary>
+    internal static string LastDryRunArgs = "";
+
+    public static bool AutoInstall(AppSettings s) => s?.Get(KAutoInstall) == "1";
+    /// <summary>Человек уже ответил на вопрос «Устанавливать обновления сами?».</summary>
+    public static bool AutoAsked(AppSettings s) => s?.Get(KAutoInstall) is "1" or "0";
+
+    public static void SetAutoInstall(AppSettings s, bool on)
+    {
+        s.Set(KAutoInstall, on ? "1" : "0");
+        if (on) s.Set(KAutoFailed, null);       // включили снова — можно пробовать и версию, которая не встала
+        armed = null;
+        Save(s);
+    }
+
+    /// <summary>Можно ли на этом компьютере ставить обновления самой (и если нет — почему, на языке интерфейса).</summary>
+    public static (bool Ok, string Why) AutoState(bool? admin = null)
+    {
+        if (Portable.Enabled) return (false, L.T("Это переносная версия: она обновляется вручную, архивом со страницы выпусков."));
+        if (!(admin ?? Shell.IsAdmin())) return (false, L.T("Ставить обновления может только программа, запущенная с правами администратора."));
+        if (!UpdateFolderProtected) return (false, L.T("Защищённая папка %ProgramData%\\PulsePC недоступна — скачивать установщик в папку пользователя небезопасно."));
+        if (!RunningInstalled()) return (false, L.T("Программа запущена не из папки установки — обновлять её саму нечем. Обновления без нажатия работают у установленной программы."));
+        return (true, "");
+    }
+
+    /// <summary>Запущена установленная копия (из папки, записанной установщиком), а не копия для разработки или проверки.</summary>
+    private static bool RunningInstalled()
+    {
+        // Режим проверки: установщик всё равно не запускается (Launch только описывает запуск) — показ раздела как у установленной программы.
+        if (Environment.GetEnvironmentVariable("PULSEPC_UPDATE_DRYRUN") == "1") return true;
+        try
+        {
+            string dir = Installer.InstalledDir(SetupTarget.Real(Installer.DefaultDir));
+            if (string.IsNullOrEmpty(dir)) return false;
+            return string.Equals(Path.GetFullPath(dir).TrimEnd('\\'), Path.GetFullPath(AppContext.BaseDirectory).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Идёт ли игра: запись сессии или найденный процесс игры.</summary>
+    private static bool GameNow()
+    {
+        if (GameHooks.InGame) return true;
+        try { return GameDetector.Find() != null; } catch { return true; }
+    }
+
+    /// <summary>Сколько минут не трогали мышь и клавиатуру.</summary>
+    public static double IdleFor()
+    {
+        try
+        {
+            var info = new LASTINPUTINFO { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<LASTINPUTINFO>() };
+            if (!GetLastInputInfo(ref info)) return 0;
+            uint ms = unchecked((uint)Environment.TickCount - info.dwTime);
+            return ms / 60000.0;
+        }
+        catch { return 0; }
+    }
+
+    /// <summary>
+    /// Когда ставить. Чистая функция (самопроверка): включено, есть версия новее и не та, что уже не встала; не идёт игра;
+    /// и идут первые минуты после запуска программы либо человек давно не трогал мышь и клавиатуру.
+    /// </summary>
+    public static bool InstallMoment(bool enabled, int diff, bool failedBefore, bool inGame, double minutesSinceStart, double idleMinutes) =>
+        enabled && diff > 0 && !failedBefore && !inGame && (minutesSinceStart < StartupMinutes || idleMinutes >= IdleMinutes);
+
+    private static void AutoTick()
+    {
+        var s = host?.Settings;
+        if (s == null || Interlocked.Exchange(ref autoBusy, 1) == 1) return;
+        try { AutoStep(s, GameNow, DateTime.Now, IdleFor(), UpdateFolder, dryRun: false); }
+        catch (Exception ex) { Log.Error("обновление без нажатия", ex); }
+        finally { Interlocked.Exchange(ref autoBusy, 0); }
+    }
+
+    /// <summary>
+    /// Один шаг обновления без нажатия (раз в минуту). Возвращает, что сделано, — для самопроверки, которая гоняет те же шаги
+    /// на локальном сервере 127.0.0.1 (dryRun: установщик не запускается, права и папка установки не проверяются).
+    /// </summary>
+    internal static string AutoStep(AppSettings s, Func<bool> gameNow, DateTime now, double idle, string folder, bool dryRun)
+    {
+        if (!AutoInstall(s) || Checking) { armed = null; return "выключено"; }
+        if (!dryRun && !AutoState().Ok) return "здесь нельзя";
+        var app = AppStatus(s);
+        if (app.Release == null || app.Diff <= 0) { ready = null; armed = null; return "новой версии нет"; }
+        if (s.Get(KAutoFailed) == app.Release.Version) return "эта версия уже не встала";      // дальше только кнопкой
+        if (gameNow()) { armed = null; return "игра"; }
+
+        // 1. Скачать заранее, в фоне (не во время игры). Сведения о выпуске — заново у официального репозитория.
+        if (ready is not { } r || CompareVersions(r.Release.Version, app.Release.Version) < 0 || !File.Exists(r.Path))
+        {
+            if ((now - lastAttempt).TotalMinutes < 60) return "ждёт следующей попытки";
+            lastAttempt = now;
+            var official = QueryOfficial(out string error);
+            if (official == null) { Remember(s, L.T("Официальный выпуск на GitHub не ответил") + ": " + L.T(error)); return "выпуск не ответил"; }
+            if (CompareVersions(official.Version, Installer.Version) <= 0) return "в выпуске нет новее";
+            string path = AlreadyDownloadedIn(folder, official);
+            if (path == null)
+            {
+                var d = Download(official, folder);
+                if (!d.Ok)
+                {
+                    Remember(s, L.T(d.Message));
+                    // Выпуск не прошёл проверку (сумма, подпись, не программа, нет суммы или подписи): сама эта версия больше
+                    // не качается — иначе до 400 МБ каждый час без конца. Сбой связи — следующая попытка через час.
+                    if (!d.Message.StartsWith("Установщик не скачался", StringComparison.Ordinal) && !d.Message.StartsWith("Скачивание отменено", StringComparison.Ordinal))
+                    {
+                        s.Set(KAutoFailed, official.Version);
+                        Save(s);
+                    }
+                    return "не скачано: " + d.Message;
+                }
+                path = d.Path;
+            }
+            ready = (official, path);
+            Remember(s, null);
+            return "скачано";        // ставить — на следующем шаге, когда снова проверим, что игры нет
+        }
+
+        // 2. Когда ставить: первые минуты после запуска программы или человек не за компьютером.
+        if (!InstallMoment(true, CompareVersions(r.Release.Version, Installer.Version), false, false, (now - started).TotalMinutes, idle)) { armed = null; return "не время"; }
+        if (armed == null)
+        {
+            armed = now;
+            // За компьютером (первые минуты после запуска) — предупредить заранее; если человек отошёл, предупреждать некого.
+            if (idle < 1) host?.Notify(L.T("«Пульс ПК» сейчас обновится"),
+                L.F("Через минуту программа установит версию {0} и перезапустится сама. Если вы собираетесь играть — запустите игру, и обновление подождёт.", r.Release.Version),
+                false, () => host.Open("sys:" + SectionTitle));
+            return "предупреждение";
+        }
+        if ((now - armed.Value).TotalSeconds < NoticeSeconds) return "ждёт после предупреждения";
+        if (gameNow()) { armed = null; return "игра"; }
+        return InstallNow(s, r.Release, r.Path, dryRun);
+    }
+
+    private static void Remember(AppSettings s, string error)
+    {
+        if (s.Get(KAutoError) == (error ?? "")) return;
+        s.Set(KAutoError, error);
+        Save(s);
+    }
+
+    /// <summary>Установщик этой версии уже скачан в защищённую папку и совпадает по SHA-256 — второй раз не качаем (подпись проверит Launch).</summary>
+    private static string AlreadyDownloaded(AppRelease r) => AlreadyDownloadedIn(UpdateFolder, r);
+
+    private static string AlreadyDownloadedIn(string folder, AppRelease r)
+    {
+        try
+        {
+            string file = Path.Combine(folder, $"PulsePC-Setup-{CleanVersion(r.Version)}.exe");
+            if (!IsSha(r.Sha256) || !File.Exists(file) || IsReparse(file) || IsReparse(folder)) return null;
+            using var f = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return Convert.ToHexString(SHA256.HashData(f)).ToLowerInvariant() == r.Sha256 ? file : null;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Журнал установщика без окна (в защищённой папке): «OK» или «ERROR …».</summary>
+    public static string AutoLogPath => Path.Combine(UpdateFolder, "auto-install.log");
+
+    /// <summary>Ключи установщика для обновления без нажатия: без окна, журнал, перезапуск; ярлык и автозапуск — как сейчас.</summary>
+    public static List<string> AutoArgs(string log, bool windowVisible, bool desktopShortcut, bool autostart)
+    {
+        var a = new List<string> { "--quiet", "--log", log, windowVisible ? "--relaunch" : "--relaunch-minimized" };
+        if (!desktopShortcut) a.Add("--no-desktop");
+        if (autostart) a.Add("--autostart");
+        return a;
+    }
+
+    private static string InstallNow(AppSettings s, AppRelease r, string file, bool dryRun = false)
+    {
+        bool visible = false;
+        try { visible = System.Windows.Application.Current?.Dispatcher.Invoke(() => System.Windows.Application.Current.MainWindow?.IsVisible == true) == true; } catch { }
+        bool desktop = File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Installer.ShortcutName));
+        bool autostart = false;
+        try { autostart = Installer.AutostartExists(SetupTarget.Real(Installer.InstalledDir(SetupTarget.Real(Installer.DefaultDir)) ?? Installer.DefaultDir)); } catch { }
+        string log = Path.Combine(Path.GetDirectoryName(file) ?? UpdateFolder, "auto-install.log");
+        TryDelete(log);
+
+        s.Set(KAutoPending, r.Version);
+        s.Set(KAutoFrom, Installer.Version);
+        s.Set(KAutoAt, Stamp(DateTime.Now));
+        Save(s);
+        if (!dryRun) Log.Info($"обновление без нажатия: ставлю {r.Version}");
+        using var run = Launch(file, r, dryRun, AutoArgs(log, visible, desktop, autostart));
+        if (!run.Started)
+        {
+            s.Set(KAutoPending, null);
+            if (!run.Message.StartsWith("Проверка:", StringComparison.Ordinal)) s.Set(KAutoFailed, r.Version);
+            s.Set(KAutoError, run.Message);
+            Save(s);
+            if (!dryRun) Log.Info("обновление без нажатия не запустилось: " + run.Message);
+            ready = null; armed = null;
+            return run.Message;
+        }
+        var wait = WaitForInstaller(run, 60000);
+        if (wait.Ready) { RequestExit(); return "установщик запущен"; }
+        s.Set(KAutoPending, null);
+        s.Set(KAutoFailed, r.Version);
+        s.Set(KAutoError, wait.Message);
+        Save(s);
+        ready = null; armed = null;
+        return wait.Message;
+    }
+
+    /// <summary>
+    /// Первый запуск после обновления: уведомление «Обновлено до …» (что нового — из описания выпуска); если обновление без
+    /// нажатия не встало — уведомление о сбое и запрет повторять эту версию сами (только кнопкой).
+    /// </summary>
+    public static void AfterUpdate(AppSettings s)
+    {
+        if (s == null) return;
+        string current = Installer.Version, last = s.Get(KLastRun), pending = s.Get(KAutoPending);
+        bool changed = false;
+        if (pending != "")
+        {
+            if (CompareVersions(current, pending) < 0)
+            {
+                string why = "";
+                try { if (File.Exists(AutoLogPath)) why = File.ReadAllText(AutoLogPath).Trim(); } catch { }
+                why = why.StartsWith("ERROR ", StringComparison.Ordinal) ? why[6..].Split('\n')[0].Trim() : why == "" ? L.T("установщик не оставил отчёта") : why.Split('\n')[0];
+                s.Set(KAutoFailed, pending);
+                s.Set(KAutoError, why);
+                host?.Notify(L.T("Обновление не установилось"),
+                    L.F("Версия {0} не встала сама: {1}. Программа работает в прежней версии; обновить можно кнопкой в разделе «Новые версии».", pending, why),
+                    true, () => host.Open("sys:" + SectionTitle));
+            }
+            s.Set(KAutoPending, null);
+            changed = true;
+        }
+        if (last != current)
+        {
+            // Прежние версии (до 1.5) номер не запоминали: если программа уже проверяла версии — это обновление, а не первая установка.
+            if (last != "" ? CompareVersions(current, last) > 0 : s.Get("versions.checked") != "")
+            {
+                s.Set(KUpdatedTo, current);
+                s.Set(KUpdatedFrom, last);
+                s.Set(KUpdatedAt, Stamp(DateTime.Now));
+                var notes = WhatsNew(s);
+                string text = notes.Count > 0 ? string.Join(" ", notes.Take(2).Select(n => n.TrimEnd('.') + ".")) + (notes.Count > 2 ? " " + L.T("Остальное — в разделе «Новые версии».") : "")
+                    : L.T("Что нового — в разделе «Новые версии».");
+                host?.Notify(L.F("Обновлено до {0} — что нового", current), text, false, () => host.Open("sys:" + SectionTitle));
+            }
+            s.Set(KLastRun, current);
+            changed = true;
+        }
+        if (changed) Save(s);
+    }
+
+    /// <summary>Что нового в установленной версии (если о ней есть описание из последней проверки).</summary>
+    public static List<string> WhatsNew(AppSettings s) =>
+        CompareVersions(s.Get("update.version"), Installer.Version) == 0
+            ? s.Get("update.notes").Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).Where(x => x != "").ToList()
+            : new List<string>();
+
+    /// <summary>Недавно обновлено (14 дней): раздел показывает «Что нового в …».</summary>
+    public static (bool Recent, string From, DateTime? At) RecentUpdate(AppSettings s)
+    {
+        if (s.Get(KUpdatedTo) != Installer.Version) return (false, "", null);
+        var at = ReadTime(s.Get(KUpdatedAt));
+        return (at is DateTime t && (DateTime.Now - t).TotalDays <= 14, s.Get(KUpdatedFrom), at);
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+
     // ================================================================== BIOS
 
     private static readonly string[] Placeholders =
@@ -1020,7 +1329,8 @@ public static class VersionCheck
                 b.SystemMaker = Clean(k.GetValue("SystemManufacturer"));
                 b.SystemModel = Clean(k.GetValue("SystemProductName"));
                 if (DateTime.TryParseExact(Clean(k.GetValue("BIOSReleaseDate")), new[] { "MM/dd/yyyy", "M/d/yyyy" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)) b.Date = d;
-                b.Laptop = k.GetValue("EnclosureType") is int enc && enc is 8 or 9 or 10 or 14 or 30 or 31 or 32;
+                // Признак ноутбука — общий для всей программы (тип корпуса, мобильная платформа или батарея; ИБП не в счёт).
+                b.Laptop = LaptopCheck.Applies;
             }
             using var c = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
             cpu = c?.GetValue("ProcessorNameString") as string ?? "";
@@ -1301,6 +1611,43 @@ public static class VersionCheck
             }
             finally { try { Directory.Delete(sand, true); } catch { } }
 
+            sb.AppendLine("Обновление без нажатия (логика, ничего не ставится):");
+            var quiet = SetupRequest.Parse(new[] { "--setup", "--quiet", "--log", @"C:\x\a.log", "--relaunch-minimized", "--no-desktop" }, @"C:\x\PulsePC.exe");
+            Expect(quiet is { Quiet: true, Relaunch: true, RelaunchMinimized: true, NoDesktop: true, Autostart: false } && quiet.Log == @"C:\x\a.log", "установщик понимает --quiet --relaunch-minimized --no-desktop");
+            Expect(SetupRequest.Parse(new[] { "--setup", "--relaunch" }, @"C:\x\PulsePC.exe") is { Relaunch: false }, "перезапуск — только для установки без окна");
+            Expect(SetupRequest.Parse(new[] { "--uninstall", "--quiet", "--relaunch" }, @"C:\x\PulsePC.exe") is { Relaunch: false }, "после удаления программа не запускается снова");
+            var args = AutoArgs(@"C:\p\auto-install.log", windowVisible: false, desktopShortcut: false, autostart: true);
+            Expect(args.SequenceEqual(new[] { "--quiet", "--log", @"C:\p\auto-install.log", "--relaunch-minimized", "--no-desktop", "--autostart" }),
+                "ключи: без окна, журнал, перезапуск свёрнутой, ярлык и автозапуск — как были: " + string.Join(" ", args));
+            Expect(AutoArgs("l", true, true, false).SequenceEqual(new[] { "--quiet", "--log", "l", "--relaunch" }), "окно было открыто — перезапуск с окном, ярлык не трогается");
+            Expect(InstallMoment(true, 1, false, false, 2, 0), "первые минуты после запуска, игры нет — ставить");
+            Expect(InstallMoment(true, 1, false, false, 300, IdleMinutes + 1), "человек 11 минут не трогал мышь — ставить");
+            Expect(!InstallMoment(true, 1, false, false, 300, 2), "человек за компьютером, программа давно запущена — не ставить");
+            Expect(!InstallMoment(true, 1, false, true, 1, 60), "идёт игра — не ставить никогда");
+            Expect(!InstallMoment(false, 1, false, false, 1, 60) && !InstallMoment(true, 0, false, false, 1, 60) && !InstallMoment(true, 1, true, false, 1, 60),
+                "выключено, нет новой версии или эта версия уже не встала — не ставить");
+            var st = new AppSettings();
+            Expect(!AutoInstall(st) && !AutoAsked(st), "по умолчанию выключено и не спрошено");
+            st.Set(KAutoInstall, "0");
+            Expect(!AutoInstall(st) && AutoAsked(st), "ответ «нет» запоминается — второй раз не спрашиваем");
+            st.Set(KLastRun, "1.4.3");
+            st.Set(KAutoPending, "99.0");
+            st.Set("update.version", Installer.Version);
+            st.Set("update.notes", "Первое\nВторое");
+            AfterUpdate(st);
+            Expect(st.Get(KLastRun) == Installer.Version && st.Get(KUpdatedTo) == Installer.Version && st.Get(KUpdatedFrom) == "1.4.3" && RecentUpdate(st).Recent,
+                "после обновления: «Обновлено до " + Installer.Version + "» (было 1.4.3)");
+            Expect(st.Get(KAutoFailed) == "99.0" && st.Get(KAutoPending) == "", "версия, которая не встала сама, больше сама не ставится (только кнопкой)");
+            Expect(WhatsNew(st).SequenceEqual(new[] { "Первое", "Второе" }), "что нового — из описания выпуска");
+            var fresh = new AppSettings();
+            AfterUpdate(fresh);
+            Expect(fresh.Get(KUpdatedTo) == "" && fresh.Get(KLastRun) == Installer.Version, "первая установка — без уведомления «Обновлено»");
+            var old = new AppSettings();
+            old.Set("versions.checked", "2026-11-20 10:00:00");
+            AfterUpdate(old);
+            Expect(old.Get(KUpdatedTo) == Installer.Version, "обновление с версии до 1.5 (номер не запоминался) тоже замечается");
+            sb.AppendLine("  можно ли здесь ставить самой: " + (AutoState() is var a && a.Ok ? "да" : "нет — " + a.Why));
+
             sb.AppendLine("BIOS — адрес страницы по шаблону:");
             var msi = BoardPage("MSI", "PRO B760-P WIFI DDR4 (MS-7D98)", "1.0", "Intel");
             Expect(msi.Url == "https://www.msi.com/Motherboard/PRO-B760-P-WIFI-DDR4/support#bios", "MSI → " + msi.Url);
@@ -1481,6 +1828,10 @@ public static class VersionCheck
             var d = Download(gh, dl, (done, total) => seen = done);
             expect(d.Ok && File.Exists(d.Path) && Path.GetFileName(d.Path) == $"PulsePC-Setup-{next}.exe" && seen == payload.Length && d.Message.Contains("подпись"), "скачан и проверен: " + d.Message);
             expect(d.Path != null && !File.Exists(d.Path + ".part"), "недокачанного файла не осталось");
+            expect(AlreadyDownloadedIn(Path.GetDirectoryName(d.Path), gh) == d.Path, "уже скачанный и совпавший по SHA-256 файл второй раз не качается");
+            using (var autoRun = Launch(d.Path, gh, dryRun: true, extraArgs: AutoArgs(Path.Combine(root, "auto-install.log"), true, true, false)))
+                expect(!autoRun.Started && LastDryRunArgs.Contains("--quiet") && LastDryRunArgs.Contains("--relaunch"),
+                    "без нажатия — тот же запуск с теми же проверками, установщику уходит: " + LastDryRunArgs);
             using (var run = Launch(d.Path, gh, dryRun: true))
             {
                 expect(!run.Started && run.Message.StartsWith("Проверка: был бы запущен"), "запуск (проверка): " + run.Message);
@@ -1494,6 +1845,42 @@ public static class VersionCheck
                 catch (IOException) { locked = true; }
             }
             expect(locked, "проверенный файл открыт без права записи для других — подменить его до запуска нельзя");
+
+            // 2а. Обновление без нажатия — те же шаги, что раз в минуту в программе: скачать, предупредить, через минуту запустить.
+            var auto = new AppSettings();
+            auto.Set("update.feed", "test/pulse");
+            auto.Set("update.source", "test/pulse");
+            auto.Set("update.version", next);
+            auto.Set(KAutoInstall, "1");
+            string autoDir = Path.Combine(root, "update-auto");
+            var t0 = DateTime.Now;
+            ready = null; armed = null; lastAttempt = DateTime.MinValue;
+            var steps = new List<string>
+            {
+                AutoStep(auto, () => true, t0, 0, autoDir, true),                                 // идёт игра
+                AutoStep(auto, () => false, t0, 0, autoDir, true),                                // скачать
+                AutoStep(auto, () => false, t0.AddSeconds(30), 0, autoDir, true),                 // предупредить
+                AutoStep(auto, () => false, t0.AddSeconds(50), 0, autoDir, true),                 // ждать минуту
+                AutoStep(auto, () => true, t0.AddSeconds(95), 0, autoDir, true),                  // за минуту запустили игру
+                AutoStep(auto, () => false, t0.AddSeconds(100), 0, autoDir, true),                // снова предупредить
+                AutoStep(auto, () => false, t0.AddSeconds(170), 0, autoDir, true),                // запустить (проверка)
+            };
+            expect(steps[0] == "игра" && steps[1] == "скачано" && steps[2] == "предупреждение" && steps[3] == "ждёт после предупреждения"
+                   && steps[4] == "игра" && steps[5] == "предупреждение" && steps[6].StartsWith("Проверка: был бы запущен"),
+                "без нажатия: игра — ждёт; скачал; предупредил; игра началась — отложил; через минуту — запуск: " + string.Join(" → ", steps.Select(x => x.Length > 30 ? x[..30] + "…" : x)));
+            expect(LastDryRunArgs.Contains("--quiet") && LastDryRunArgs.Contains("--relaunch") && auto.Get(KAutoPending) == "" && auto.Get(KAutoFailed) == "",
+                "установщику — без окна и с перезапуском; в проверке ничего не запущено, версия не помечена как неудачная");
+            ready = null; armed = null; lastAttempt = DateTime.MinValue;
+            int exeBefore;
+            lock (served) exeBefore = served.Count(x => x.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+            var later = AutoStep(auto, () => false, t0.AddHours(2), 0, autoDir, true);
+            int exeAfter;
+            lock (served) exeAfter = served.Count(x => x.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+            expect(later == "скачано" && Directory.GetFiles(autoDir, "*.exe").Length == 1 && exeAfter == exeBefore,
+                "повторный запуск: уже скачанный файл не качается заново (" + later + ")");
+            auto.Set(KAutoInstall, "0");
+            expect(AutoStep(auto, () => false, t0, 0, autoDir, true) == "выключено", "выключено — ничего не делает");
+            ready = null; armed = null; lastAttempt = DateTime.MinValue;
 
             // 3. Файл изменили после скачивания — запуск отказывается и удаляет его.
             File.WriteAllBytes(d.Path, payload.Take(1000).ToArray());
@@ -1509,6 +1896,20 @@ public static class VersionCheck
             var oldsig = QueryOfficial(out _);
             var dOld = Download(oldsig, Path.Combine(root, "update-oldsig"));
             expect(!dOld.Ok && !File.Exists(Path.Combine(root, "update-oldsig", $"PulsePC-Setup-{next}.exe")) && dOld.Message.Contains("Подпись"), "подпись от другой версии отклонена, файл удалён: " + dOld.Message);
+            // 4а. Без нажатия: выпуск не прошёл проверку подписи — эта версия сама больше не качается (не 400 МБ каждый час).
+            var autoBad = new AppSettings();
+            autoBad.Set("update.feed", "test/pulse");
+            autoBad.Set("update.source", "test/pulse");
+            autoBad.Set("update.version", next);
+            autoBad.Set(KAutoInstall, "1");
+            ready = null; armed = null; lastAttempt = DateTime.MinValue;
+            string badDir = Path.Combine(root, "update-auto-bad");
+            var bad1 = AutoStep(autoBad, () => false, DateTime.Now, 0, badDir, true);
+            lastAttempt = DateTime.MinValue;
+            var bad2 = AutoStep(autoBad, () => false, DateTime.Now.AddHours(2), 0, badDir, true);
+            expect(bad1.StartsWith("не скачано") && autoBad.Get(KAutoFailed) == next && bad2 == "эта версия уже не встала",
+                "без нажатия: выпуск с чужой подписью не скачивается снова через час (" + (bad1.Length > 40 ? bad1[..40] + "…" : bad1) + " → " + bad2 + ")");
+            ready = null; armed = null; lastAttempt = DateTime.MinValue;
             using (var forged = Launch(d.Path, new AppRelease { Version = next, Sha256 = sha, Signature = Sign("98.0.0", sha) }, dryRun: true))
                 expect(!forged.Started, "запуск с чужой подписью отклонён");
             OfficialRepo = "badsha/pulse";

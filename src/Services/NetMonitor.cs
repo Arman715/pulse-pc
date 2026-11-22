@@ -169,7 +169,7 @@ public sealed class NetMonitor : IDisposable
     /// Сокет ничего не отправляет: система лишь выбирает маршрут. Так виртуальные сети (Radmin VPN и подобные),
     /// у которых тоже есть свой шлюз, не принимаются за домашний роутер.
     /// </summary>
-    private static IPAddress LocalAddressToInternet()
+    internal static IPAddress LocalAddressToInternet()
     {
         try
         {
@@ -209,6 +209,32 @@ public sealed class NetMonitor : IDisposable
             AdapterText = L.T("нет подключения к сети");
         }
         catch { }
+    }
+
+    /// <summary>
+    /// Подключение, через которое Windows ходит в интернет, и его шлюз (роутер). Тот же выбор, что у замера пинга:
+    /// по адресу, который система выбрала для выхода к 1.1.1.1. null — подключения нет.
+    /// </summary>
+    internal static NetworkInterface InternetAdapter(out IPAddress gateway)
+    {
+        gateway = null;
+        try
+        {
+            var local = LocalAddressToInternet();
+            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+                var props = nic.GetIPProperties();
+                if (local != null && !props.UnicastAddresses.Any(u => u.Address.Equals(local))) continue;
+                var gw = props.GatewayAddresses.Select(g => g.Address)
+                    .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork && !a.Equals(IPAddress.Any));
+                if (gw == null) continue;
+                gateway = gw;
+                return nic;
+            }
+        }
+        catch { }
+        return null;
     }
 
     public void Dispose() => disposed = true;

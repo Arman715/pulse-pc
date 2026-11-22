@@ -203,16 +203,36 @@ public sealed class HardwareInfo
 
     // ------------------------------------------------------------------ короткие имена для экрана
     /// <summary>«12th Gen Intel(R) Core(TM) i5-12400F» → «Core i5-12400F»; «AMD Ryzen 7 7800X3D 8-Core Processor» → «Ryzen 7 7800X3D».</summary>
-    public static string ShortCpu(string name)
+    /// <remarks>
+    /// Единственная функция короткого имени процессора в программе (раньше их было четыре, и одна резала «12-Core» до «12-»).
+    /// withVendor — с производителем впереди: «Intel Core i5-12400F», «AMD Ryzen 9 5900X».
+    /// Модель не теряется никогда: если после чистки ничего не осталось, возвращается исходная строка без мусора.
+    /// </remarks>
+    public static string ShortCpu(string name, bool withVendor = false)
     {
         if (string.IsNullOrWhiteSpace(name)) return "";
-        string s = Regex.Replace(name, @"\((R|TM|tm|r)\)|®|™", "");
+        string s = Regex.Replace(name, @"\((R|TM|tm|r)\)|®|™", " ");
         // «Snapdragon(R) X Elite - X1E78100 - Qualcomm(R) Oryon(TM) CPU» → «Snapdragon X Elite X1E78100».
         var sd = Regex.Match(s, @"(Snapdragon\s+[^-]+?)\s*-\s*(\w+)", RegexOptions.IgnoreCase);
-        if (sd.Success) return Regex.Replace(sd.Groups[1].Value + " " + sd.Groups[2].Value, @"\s+", " ").Trim();
-        s = Regex.Replace(s, @"\b\d+(th|nd|rd|st) Gen\b|\bIntel\b|\bAMD\b|\bProcessor\b|\bCPU\b|@.*$|\b\d+-Core\b|(with|w/)\s*Radeon.*$", "", RegexOptions.IgnoreCase);
-        return Regex.Replace(s, @"\s+", " ").Trim();
+        if (sd.Success)
+        {
+            string snap = Regex.Replace(sd.Groups[1].Value + " " + sd.Groups[2].Value, @"\s+", " ").Trim();
+            return withVendor ? "Qualcomm " + snap : snap;
+        }
+        string vendor = Regex.IsMatch(s, @"\bIntel\b", RegexOptions.IgnoreCase) ? "Intel"
+                      : Regex.IsMatch(s, @"\bAMD\b", RegexOptions.IgnoreCase) ? "AMD" : "";
+        s = Regex.Replace(s, @"\s*@.*$", "");                                                     // «@ 3.20GHz»
+        s = Regex.Replace(s, @"\s+(with|w/)\s+(AMD\s+)?Radeon\b.*$", "", RegexOptions.IgnoreCase); // встроенная графика AMD
+        s = Regex.Replace(s, @"\b\d+(th|nd|rd|st)\s+Gen(eration)?\b", "", RegexOptions.IgnoreCase);
+        s = Regex.Replace(s, @"\b\d+-Cores?\b", "", RegexOptions.IgnoreCase);                    // «12-Core», «64-Cores»
+        s = Regex.Replace(s, @"\b(Processor|CPU|Intel|AMD|Genuine)\b", "", RegexOptions.IgnoreCase);
+        s = Regex.Replace(s, @"\s+", " ").Trim(' ', '-', ',');
+        if (s == "") s = Regex.Replace(Regex.Replace(name, @"\((R|TM|tm|r)\)|®|™", " "), @"\s+", " ").Trim();
+        return withVendor && vendor != "" && !s.StartsWith(vendor, StringComparison.OrdinalIgnoreCase) ? vendor + " " + s : s;
     }
+
+    /// <summary>Подпись процессора на чертеже: «Core i5-12400F» → «i5-12400F» (коротко), но «Core Ultra 7 155H» и «Core 5 120U» — целиком.</summary>
+    public static string BlueprintCpu(string name) => Regex.Replace(ShortCpu(name), @"^Core\s+(?=i\d)", "");
 
     /// <summary>«NVIDIA GeForce RTX 4060 Ti» → «RTX 4060 Ti»; «AMD Radeon RX 7800 XT» → «RX 7800 XT».</summary>
     public static string ShortGpu(string name)

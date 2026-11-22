@@ -1,0 +1,21 @@
+{
+  "Ноутбук": "Laptop",
+  "Мощность блока питания": "Power supply wattage",
+  "Написана на наклейке блока питания или в описании компьютера. По ней «Диагностика» проверит, хватает ли запаса для видеокарты и процессора. Пусто — программа только оценит нагрузку.": "It's on the power supply's label or in your PC's specs. Diagnostics uses it to check whether there's enough headroom for the graphics card and processor. Leave empty and the app will only estimate the load.",
+  "Мощность блока питания не понята: впишите число от 200 до 2000 или оставьте поле пустым.": "Power supply wattage not recognized: enter a number from 200 to 2000 or leave the field empty.",
+  "Это аппаратная ошибка: если меняли настройки BIOS или разгоняли ноутбук — верните настройки по умолчанию, обновите BIOS, проверьте, не перегревается ли ноутбук (подставка, чистка в сервисе), и подключайте родную зарядку.": "This is a hardware error: if you changed BIOS settings or overclocked the laptop, restore the defaults, update the BIOS, check whether the laptop overheats (a cooling stand, a service cleaning), and use the original charger.",
+  "Игра подгружала данные с диска (карту, текстуры).": "The game was loading data from the drive (map, textures).",
+  "Игра подгружала данные с диска (карту, текстуры). Памяти при этом хватало: свободно было {0:0.0} ГБ.": "The game was loading data from the drive (map, textures). There was enough memory: {0:0.0} GB free.",
+  "Игра подгружала данные с диска (карту, текстуры). Памяти при этом хватало: свободно было не меньше {0:0.0} ГБ.": "The game was loading data from the drive (map, textures). There was enough memory: at least {0:0.0} GB free.",
+  "Видеокарта дошла до предела температуры, который задаёт ноутбук ({0:0} °C), и снизила частоту. Это не перегрев: в тихом и сбалансированном режиме ноутбук держит видеокарту холоднее ценой частоты.": "The graphics card reached the temperature limit set by the laptop ({0:0} °C) and lowered its clock. This isn't overheating: in quiet and balanced modes the laptop keeps the graphics card cooler at the cost of clock speed.",
+  "Видеокарта дошла до своего предела температуры ({0:0} °C) и снизила частоту. Это не перегрев: похоже, предел температуры занижен — например, в MSI Afterburner или фирменной программе видеокарты.": "The graphics card reached its temperature limit ({0:0} °C) and lowered its clock. This isn't overheating: the temperature limit seems to be set low — for example, in MSI Afterburner or the card maker's app.",
+  "Видеокарта резко снизила частоту по сигналу питания: ноутбуку не хватило мощности (игра от батареи или не родной адаптер).": "The graphics card sharply lowered its clock on a power signal: the laptop didn't get enough power (playing on battery or with a non-original adapter).",
+  "Видеокарта резко снизила частоту по сигналу от блока питания или платы.": "The graphics card sharply lowered its clock on a signal from the power supply or motherboard.",
+  "предел температуры видеокарты": "graphics card temperature limit",
+  "питание видеокарты": "graphics card power",
+  "Предел температуры видеокарты": "Graphics card temperature limit",
+  "Питание видеокарты": "Graphics card power",
+  "{0:0} % времени под нагрузкой видеокарта держалась у предела температуры, который задаёт ноутбук (около {1:0} °C), и снижала частоту. Это не перегрев. Если нужен FPS — включите режим «Производительность» или «Турбо» (раздел «Ноутбук» на вкладке «Система»).": "For {0:0} % of the time under load the graphics card sat at the temperature limit set by the laptop (about {1:0} °C) and lowered its clock. This isn't overheating. If you need more FPS, switch on Performance or Turbo mode (the Laptop section on the System tab).",
+  "{0:0} % времени под нагрузкой видеокарта держалась у своего предела температуры (около {1:0} °C) и снижала частоту. Это не перегрев: проверьте, не занижен ли предел температуры в MSI Afterburner или похожей программе.": "For {0:0} % of the time under load the graphics card sat at its temperature limit (about {1:0} °C) and lowered its clock. This isn't overheating: check whether the temperature limit is set low in MSI Afterburner or a similar app.",
+  "{0:0} % времени под нагрузкой видеокарта сбрасывала частоту из-за нагрева.": "For {0:0} % of the time under load the graphics card lowered its clock because of heat."
+}

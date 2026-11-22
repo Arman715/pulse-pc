@@ -35,9 +35,11 @@ public partial class SetupWindow : Window
 
     private static int RunQuiet(SetupRequest r)
     {
+        SetupTarget target = null;
         try
         {
-            var warnings = r.Mode == SetupMode.Install ? Installer.Install(InstallTarget(r), !r.NoDesktop, r.Autostart, null) : null;
+            if (r.Mode == SetupMode.Install) target = InstallTarget(r);
+            var warnings = r.Mode == SetupMode.Install ? Installer.Install(target, !r.NoDesktop, r.Autostart, null) : null;
             if (r.Mode != SetupMode.Install) Installer.Uninstall(Installer.UninstallTarget(r), r.PurgeData, null);
             Log(r, warnings is { Count: > 0 } ? "OK\nWARN " + string.Join("\nWARN ", warnings) : "OK");
             return 0;
@@ -47,6 +49,26 @@ public partial class SetupWindow : Window
             Log(r, "ERROR " + ex);
             return 1;
         }
+        finally
+        {
+            // Обновление без нажатия: программа закрылась ради установки — запустить её снова (и при сбое: прежнюю версию,
+            // она прочитает журнал установки и скажет, что не вышло).
+            if (r.Relaunch && target != null) Relaunch(target, r.RelaunchMinimized);
+        }
+    }
+
+    private static void Relaunch(SetupTarget t, bool minimized)
+    {
+        try
+        {
+            if (!File.Exists(t.Exe)) return;
+            var psi = new ProcessStartInfo(t.Exe) { UseShellExecute = false, WorkingDirectory = t.Dir };
+            if (minimized) psi.ArgumentList.Add("--minimized");
+            // Папка распаковки установщика программе не нужна.
+            psi.Environment.Remove("DOTNET_BUNDLE_EXTRACT_BASE_DIR");
+            Process.Start(psi)?.Dispose();
+        }
+        catch (Exception ex) { Services.Log.Error("перезапуск после обновления", ex); }
     }
 
     private static void Log(SetupRequest r, string text)
@@ -108,7 +130,8 @@ public partial class SetupWindow : Window
             L.T("Очистка временных файлов по выбору."),
             L.T("Игровые настройки Windows — любую можно вернуть."));
         FolderLabel.Source = L.T("ПАПКА УСТАНОВКИ");
-        BtnMain.Content = upgrade ? L.T("Обновить") : L.T("Установить");
+        // Не L.T("Обновить"): этот общий ключ переводится как «Refresh» (обновить список), а здесь — установка новой версии.
+        BtnMain.Content = upgrade ? L.Pick("Обновить", "Update") : L.T("Установить");
         if (upgrade)
         {
             // Обновление: папку не меняем, автозапуск — как был.

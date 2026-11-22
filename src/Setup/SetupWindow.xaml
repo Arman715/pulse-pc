@@ -43,8 +43,8 @@
                     <TextBlock x:Name="CaptionText" Text="Пульс ПК — установка" Style="{StaticResource Brand}" VerticalAlignment="Center"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="Minimize_Click" ToolTip="Свернуть"/>
-                    <Button x:Name="BtnX" Style="{StaticResource CloseButton}" Content="&#xE8BB;" Click="Close_Click" ToolTip="Закрыть"/>
+                    <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="Minimize_Click" ToolTip="Свернуть" AutomationProperties.Name="Свернуть"/>
+                    <Button x:Name="BtnX" Style="{StaticResource CloseButton}" Content="&#xE8BB;" Click="Close_Click" ToolTip="Закрыть" AutomationProperties.Name="Закрыть"/>
                 </StackPanel>
                 <Rectangle Grid.ColumnSpan="3" Height="1" Fill="{StaticResource LineStrong}" VerticalAlignment="Bottom" Panel.ZIndex="-1"/>
             </Grid>

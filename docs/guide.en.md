@@ -93,7 +93,7 @@ Recording will start the next time it launches; any other file from the game's f
 
 > [!NOTE]
 > Sessions shorter than two minutes aren't saved — that's usually an accidental launch.
-> In VALORANT and League of Legends FPS isn't recorded: their anti-cheats run at kernel level, and the app won't risk your account.
+> Games with a strict anti-cheat (VALORANT, Call of Duty, Genshin Impact and others) get cautious mode: FPS and the game server aren't recorded — the app won't risk your account. In games with EasyAntiCheat and BattlEye recording is full by default; you can turn cautious mode on or off for any game.
 > Everything else — temperature, load, ping — is recorded there too.
 
 ## 5. How to read a report
@@ -211,7 +211,7 @@ are best restored with the **Restore previous** buttons before uninstalling.
 ## 12. If something is wrong
 
 - **The game isn't recorded.** Check that the app is running (the tray icon). Sessions shorter than two minutes aren't saved. If the game wasn't detected, add it manually on the **Sessions** tab.
-- **The report has no FPS.** Turn on **Record FPS in games** in the tray icon menu. In VALORANT and LoL FPS isn't recorded on purpose.
+- **The report has no FPS.** Turn on **Record FPS in games** in the tray icon menu. In games with a strict anti-cheat FPS isn't recorded on purpose (cautious mode); you can allow full recording in **Installed programs**.
 - **Buttons are grey and say "administrator rights only".** Launch the app from the shortcut created by the installer — it asks for the rights itself.
 - **You want everything back the way it was.** Every section where the app changed something has **Restore previous**.
 

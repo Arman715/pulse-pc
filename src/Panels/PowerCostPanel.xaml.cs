@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
@@ -56,15 +56,33 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         loading = true;
         TariffBox.Text = PowerCost.Show(PowerCost.Tariff(host.Settings));
         MonitorBox.Text = PowerCost.Show(PowerCost.Monitor(host.Settings));
+        PsuBox.Text = PsuSaved();
+        // Блок питания — только у настольного ПК: у ноутбука вместо него адаптер, и вывод о запасе не показывается.
+        PsuRow.Visibility = IsLaptop() ? Visibility.Collapsed : Visibility.Visible;
+        if (IsLaptop()) HowBase.Text = L.T("Плата, память, SSD, вентиляторы и встроенный экран ноутбука — около 15 Вт; ещё около 10 % теряется в адаптере питания. Это тоже оценка.");
         loading = false;
         UpdateSave();
+    }
+
+    private string PsuSaved() => int.TryParse(host.Settings.Get(HardwareChecks.PsuKey), out int w) && w > 0 ? w.ToString(CultureInfo.InvariantCulture) : "";
+
+    private static bool IsLaptop() => LaptopCheck.Applies;
+
+    /// <summary>Мощность блока питания: пусто — 0 (не указана), иначе целое от 200 до 2000 Вт.</summary>
+    internal static bool TryParsePsu(string text, out int watts)
+    {
+        watts = 0;
+        text = (text ?? "").Trim();
+        if (text.Length == 0) return true;
+        return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out watts) && watts >= 200 && watts <= 2000;
     }
 
     private void UpdateSave()
     {
         if (host == null) return;
         bool same = Norm(TariffBox.Text) == Norm(PowerCost.Show(PowerCost.Tariff(host.Settings)))
-                    && Norm(MonitorBox.Text) == Norm(PowerCost.Show(PowerCost.Monitor(host.Settings)));
+                    && Norm(MonitorBox.Text) == Norm(PowerCost.Show(PowerCost.Monitor(host.Settings)))
+                    && Norm(PsuBox.Text) == Norm(PsuSaved());
         BtnSave.IsEnabled = !same;
         static string Norm(string s) => (s ?? "").Trim().Replace('.', ',');
     }
@@ -93,9 +111,19 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
             MonitorBox.Focus();
             return;
         }
+        if (!TryParsePsu(PsuBox.Text, out int psu))
+        {
+            ShowResult(L.T("Мощность блока питания не понята: впишите число от 200 до 2000 или оставьте поле пустым."), true);
+            PsuBox.Focus();
+            return;
+        }
         host.Settings.Set(PowerCost.KTariff, double.IsNaN(tariff) ? null : tariff.ToString(CultureInfo.InvariantCulture));
         host.Settings.Set(PowerCost.KMonitor, monitor > 0 ? monitor.ToString(CultureInfo.InvariantCulture) : null);
+        host.Settings.Set(HardwareChecks.PsuKey, psu > 0 ? psu.ToString(CultureInfo.InvariantCulture) : null);
         host.Settings.Save();
+        // Наклейка блока питания на чертеже «Обзора» — указанная мощность (или без числа).
+        Blueprint.BlueprintLabels.Psu = Blueprint.BlueprintLabels.PsuLabel(psu > 0 ? psu.ToString(CultureInfo.InvariantCulture) : null);
+        Blueprint.BlueprintLabels.Apply();
         LoadSaved();
         ShowResult(double.IsNaN(tariff) ? L.T("Тариф убран: расход показывается только в киловатт-часах.")
                    : L.F("Сохранено: {0} ₽ за кВт·ч", PowerCost.Show(tariff)) + (monitor > 0 ? L.F(", монитор {0:0} Вт.", monitor) : L.T(", без монитора.")), false);
@@ -171,8 +199,10 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
                 new(L.T("Процессор"), L.F("{0} Вт по паспорту × загрузка {1:0} %", r.Tdp, g.CpuLoad)
                                       + (g.LoadMeasured ? "" : " " + L.T("(принято, нет записей)")) + (r.TdpKnown ? "" : L.T("; модель не узнана")),
                     g.CpuW, L.T("оценка"), PowerBar.Hatch),
-                new(L.T("Плата, память, диски, вентиляторы"), L.T("обычно 40–60 Вт"), g.BaseW, L.T("оценка"), PowerBar.HatchLight),
-                new(L.T("Потери в блоке питания"), L.T("около 10 % от всего остального"), g.LossW, L.T("оценка"), PowerBar.HatchLight),
+                // У ноутбука постоянная часть — около 15 Вт (PowerCost.LaptopBaseW), а потери — в адаптере питания.
+                IsLaptop() ? new PartRow(L.T("Плата, память, SSD, экран ноутбука"), L.T("около 15 Вт"), g.BaseW, L.T("оценка"), PowerBar.HatchLight)
+                           : new PartRow(L.T("Плата, память, диски, вентиляторы"), L.T("обычно 40–60 Вт"), g.BaseW, L.T("оценка"), PowerBar.HatchLight),
+                new(IsLaptop() ? L.T("Потери в адаптере питания") : L.T("Потери в блоке питания"), L.T("около 10 % от всего остального"), g.LossW, L.T("оценка"), PowerBar.HatchLight),
             };
             if (g.MonitorW > 0) list.Add(new(L.T("Монитор"), L.T("по вашим данным"), g.MonitorW, L.T("вписано вами"), PowerBar.HatchLight));
             Parts.ItemsSource = list;
@@ -253,10 +283,7 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
     /// <summary>«12th Gen Intel(R) Core(TM) i5-12400F» → «Intel Core i5-12400F».</summary>
     private static string ShortCpu(string name)
     {
-        string s = Regex.Replace(name ?? "", @"\((R|TM)\)|®|™", "", RegexOptions.IgnoreCase);
-        s = Regex.Replace(s, @"^\s*\d+(th|st|nd|rd) Gen\s+", "", RegexOptions.IgnoreCase);
-        s = Regex.Replace(s, @"\s+(CPU\s*)?@.*$|\s+\d+-Core Processor.*$|\s+with Radeon.*$|\s+Processor$", "", RegexOptions.IgnoreCase);
-        return Regex.Replace(s, @"\s{2,}", " ").Trim();
+        return HardwareInfo.ShortCpu(name, withVendor: true);
     }
 
     // ================================================================== сейчас

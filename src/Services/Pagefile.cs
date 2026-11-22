@@ -220,7 +220,9 @@ public static class Pagefile
             if (s.MaxPagesIn != null)
             {
                 g.Analysed++;
-                if (s.MaxPagesIn >= 1000) g.Paged++;       // тот же порог, что в замечаниях к сессии
+                // Тот же признак, что в замечаниях к сессии: подкачка — только при малом запасе памяти (иначе игра просто читала файлы).
+                // Подгрузка и нехватка памяти — в одни и те же моменты (SessionAnalysis.PagingHurt), а не максимум и минимум за всю игру.
+                if (SessionAnalysis.PagingHurt(s)) g.Paged++;
             }
             if (s.Dips != null) g.RamDips += s.Dips.Count(d => d != null && d.Cause == "ram");
         }

@@ -65,8 +65,15 @@ public partial class MainWindow
 
     private static Scene SceneOf(Comp c) => c switch
     {
-        Comp.Cpu => Scene.Cpu, Comp.Gpu => Scene.Gpu, Comp.Ram => Scene.Ram, Comp.Storage => Scene.Storage, _ => Scene.Pc,
+        Comp.Cpu => Scene.Cpu, Comp.Gpu => Scene.Gpu, Comp.Ram => Scene.Ram, Comp.Storage => Scene.Storage, _ => GeneralScene,
     };
+
+    /// <summary>
+    /// Общий вид: системный блок или ноутбук (LaptopCheck.Applies — общий признак, PULSEPC_TEST_LAPTOP=1 для проверки).
+    /// У ноутбука нет системного блока с блоком питания — рисуется сам ноутбук без панели с клавиатурой.
+    /// </summary>
+    private static Scene GeneralScene => IsLaptopPc ? Scene.Laptop : Scene.Pc;
+    private static bool IsLaptopPc { get { try { return LaptopCheck.Applies; } catch { return false; } } }
 
     private void InitOverview()
     {
@@ -112,12 +119,13 @@ public partial class MainWindow
         detail = false;
         hoverComp = null;
         Drawing.ClearCallouts();
-        Drawing.Scene = Scene.Pc;
+        Drawing.Scene = GeneralScene;
         Drawing.Interactive = true;
         Drawing.GhostOthers = false;
         Drawing.Highlight = Part.None;
         Crumbs(null);
-        OvHeader.Play(L.T("ЧЕРТЁЖ"), L.T("СИСТЕМНЫЙ БЛОК"), L.T("ОБЩИЙ ВИД, БОКОВАЯ КРЫШКА СНЯТА"));
+        if (IsLaptopPc) OvHeader.Play(L.T("ЧЕРТЁЖ"), L.T("НОУТБУК"), L.T("ОБЩИЙ ВИД, ПАНЕЛЬ С КЛАВИАТУРОЙ СНЯТА"));
+        else OvHeader.Play(L.T("ЧЕРТЁЖ"), L.T("СИСТЕМНЫЙ БЛОК"), L.T("ОБЩИЙ ВИД, БОКОВАЯ КРЫШКА СНЯТА"));
         AngleMarkEl.Visibility = Visibility.Collapsed;
         RulerEl.Visibility = Visibility.Collapsed;
         ShowStrip(true, animate);
@@ -172,6 +180,13 @@ public partial class MainWindow
     }
 
     private void BtnBack_Click(object sender, RoutedEventArgs e) => GoBack();
+
+    /// <summary>
+    /// Сетка «плюсов» в левом нижнем углу листа — украшение. В невысоком окне левые выноски чертежа («Г  Диски») опускаются
+    /// к ней — тогда сетка прячется, чтобы не ложиться на подписи (ей нужно примерно треть высоты поля под выносками).
+    /// </summary>
+    private void OvField_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        OvPlus.Visibility = e.NewSize.Height >= 3 * (OvPlus.DesiredSize.Height > 0 ? OvPlus.DesiredSize.Height + 34 : 196) ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>Назад к общему виду: деталь собирается и отдаляется, системный блок наплывает навстречу.</summary>
     private void GoBack()
@@ -393,7 +408,8 @@ public partial class MainWindow
         if (changed && animate) Motion.Reveal(PanelBody, 0, 6, Motion.Fast, Motion.Normal);
     }
 
-    private static string Num(double v, string format, string unit) => double.IsNaN(v) ? "—" : v.ToString(format) + (unit.Length > 0 ? " " + unit : "");
+    // Проценты по-английски пишутся слитно («93%»), остальные единицы и русский — через пробел.
+    private static string Num(double v, string format, string unit) => double.IsNaN(v) ? "—" : v.ToString(format) + (unit.Length == 0 ? "" : unit == "%" && L.En ? unit : " " + unit);
 
     /// <summary>Значения правой панели, выносок на чертеже и нижней полосы (раз в 1,5 с).</summary>
     private void UpdatePanelValues()
@@ -501,10 +517,11 @@ public partial class MainWindow
     private void ApplyBlueprintLabels()
     {
         string gpuName = GpuFullName();
-        Blueprint.BlueprintLabels.Cpu = HardwareInfo.ShortCpu(hw.CpuName != "" ? hw.CpuName : metrics.CpuName).Replace("Core ", "");
+        Blueprint.BlueprintLabels.Cpu = HardwareInfo.BlueprintCpu(hw.CpuName != "" ? hw.CpuName : metrics.CpuName);
         Blueprint.BlueprintLabels.Gpu = HardwareInfo.ShortGpu(gpuName).Replace("GeForce ", "");
         Blueprint.BlueprintLabels.GpuBrand = HardwareInfo.GpuBrand(gpuName);
         Blueprint.BlueprintLabels.Board = (hw.Board ?? "").Split('(')[0].Trim();
+        Blueprint.BlueprintLabels.Psu = Blueprint.BlueprintLabels.PsuLabel(settings.Get(HardwareChecks.PsuKey));
         Blueprint.BlueprintLabels.RamType = hw.RamType != "" ? hw.RamType : "DDR";
         static string Spec(RamModule r) => $"{(r.Mhz > 0 ? r.Mhz : r.RatedMhz)} MHz  {r.SizeGb:0} GB";
         var m = hw.Ram.FirstOrDefault();

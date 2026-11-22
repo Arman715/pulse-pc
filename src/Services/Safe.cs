@@ -172,7 +172,10 @@ public static class SecureStore
 
     private static string Make()
     {
-        if (Environment.GetEnvironmentVariable("PULSEPC_DATA") is { Length: > 0 } test)
+        // Переносная версия с правами администратора: папка Data лежит там, куда пишет обычный пользователь (рабочий стол,
+        // «Загрузки», флешка), — PresentMon и копии для отката оттуда исполнялись бы от администратора. Поэтому защищённая
+        // часть и у неё — %ProgramData%\PulsePC; история и настройки остаются в Data.
+        if (Environment.GetEnvironmentVariable("PULSEPC_DATA") is { Length: > 0 } test && !(Portable.Enabled && IsAdmin()))
         {
             string t = Path.Combine(test, "secure");
             Directory.CreateDirectory(t);

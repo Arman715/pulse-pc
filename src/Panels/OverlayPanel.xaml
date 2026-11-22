@@ -1,0 +1,302 @@
+﻿<UserControl x:Class="PulsePC.Panels.OverlayPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PulsePC">
+    <UserControl.Resources>
+        <!-- Список клавиш: рамка тушью, без теней и скруглений (как в разделе «Звук») -->
+        <Style x:Key="KeyItem" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
+            <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
+            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="b" Background="Transparent" Padding="10,5">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="{DynamicResource Track}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="KeyList" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
+            <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
+            <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Width" Value="104"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="MaxDropDownHeight" Value="264"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusDash}"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource KeyItem}"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Grid Background="Transparent">
+                                            <Border x:Name="hover" Background="{DynamicResource Track}" Opacity="0"/>
+                                            <Rectangle x:Name="frame" Stroke="{DynamicResource Ink1}" StrokeThickness="1"/>
+                                            <Path x:Name="arrow" Data="M 0,0 L 4,4 L 8,0" Stroke="{DynamicResource Ink1}" StrokeThickness="1.25"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,1,10,0"/>
+                                        </Grid>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="hover" Property="Opacity" Value="1"/>
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter TargetName="frame" Property="Stroke" Value="{DynamicResource Ink4}"/>
+                                                <Setter TargetName="frame" Property="StrokeDashArray" Value="2 2"/>
+                                                <Setter TargetName="arrow" Property="Stroke" Value="{DynamicResource Ink4}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                              IsHitTestVisible="False" VerticalAlignment="Center" Margin="10,0,26,1"/>
+                            <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" VerticalOffset="-1"
+                                   AllowsTransparency="False" Focusable="False" PopupAnimation="None">
+                                <Border Background="{DynamicResource Raised}" BorderBrush="{DynamicResource Ink1}" BorderThickness="1"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <ScrollViewer CanContentScroll="True">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource Ink4}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ModName" TargetType="TextBlock" BasedOn="{StaticResource Body}">
+            <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="7,0,16,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <!-- Показание в списке «что показывать»: флажок, название и пояснение -->
+        <Style x:Key="ItemName" TargetType="TextBlock" BasedOn="{StaticResource Body}">
+            <Setter Property="Foreground" Value="{DynamicResource Ink1}"/>
+            <Setter Property="Margin" Value="12,0,0,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="ChoiceRow" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+        <TextBlock x:Name="State" Style="{StaticResource Verdict}" TextWrapping="Wrap" Text="Оверлей выключен."/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,8,0,0" TextWrapping="Wrap"
+                   Text="Небольшая табличка поверх игры: FPS, худший 1 % кадров, видеокарта, процессор и другое — не сворачивая игру."/>
+        <DockPanel x:Name="ExclusiveNote" Visibility="Collapsed" Margin="0,16,0,0">
+            <local:StateMarker Level="Warn" DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,5,10,0"/>
+            <TextBlock x:Name="ExclusiveText" Style="{StaticResource Body}" TextWrapping="Wrap"/>
+        </DockPanel>
+
+        <!-- 1. Включатель и клавиша -->
+        <local:TrackedText Source="ОВЕРЛЕЙ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <Border Style="{StaticResource ChoiceRow}">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Показывать поверх игры" Style="{StaticResource RowTitle}"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0" TextWrapping="Wrap"
+                               Text="Только пока идёт запись игры и её окно на переднем плане. Свернули игру или перешли в другое окно — оверлей прячется."/>
+                </StackPanel>
+                <CheckBox x:Name="OnToggle" Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Top" Margin="24,3,2,0"
+                          AutomationProperties.Name="Показывать поверх игры" Click="OnToggle_Click"/>
+            </Grid>
+        </Border>
+        <Border Style="{StaticResource ChoiceRow}">
+            <StackPanel Margin="0,12">
+                <TextBlock Text="Горячая клавиша" Style="{StaticResource RowTitle}"/>
+                <TextBlock x:Name="HotkeyNow" Style="{StaticResource Body}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                <WrapPanel Margin="0,10,0,0">
+                    <StackPanel x:Name="HotkeyControls" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,8">
+                        <CheckBox x:Name="ModCtrl" IsChecked="True"/>
+                        <TextBlock Text="Ctrl" Style="{StaticResource ModName}" Tag="{Binding ElementName=ModCtrl}" MouseLeftButtonUp="ModName_Click"/>
+                        <CheckBox x:Name="ModAlt"/>
+                        <TextBlock Text="Alt" Style="{StaticResource ModName}" Tag="{Binding ElementName=ModAlt}" MouseLeftButtonUp="ModName_Click"/>
+                        <CheckBox x:Name="ModShift" IsChecked="True"/>
+                        <TextBlock Text="Shift" Style="{StaticResource ModName}" Tag="{Binding ElementName=ModShift}" MouseLeftButtonUp="ModName_Click"/>
+                        <CheckBox x:Name="ModWin"/>
+                        <TextBlock Text="Win" Style="{StaticResource ModName}" Tag="{Binding ElementName=ModWin}" MouseLeftButtonUp="ModName_Click"/>
+                        <ComboBox x:Name="KeyBox" Style="{StaticResource KeyList}"/>
+                    </StackPanel>
+                    <Button x:Name="BtnHotkey" Content="Сохранить сочетание" Margin="0,0,10,8" Click="Hotkey_Click"/>
+                </WrapPanel>
+                <TextBlock x:Name="HotkeyResult" Style="{StaticResource Caption}" TextWrapping="Wrap" Visibility="Collapsed"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 2. Что показывать -->
+        <local:TrackedText Source="ЧТО ПОКАЗЫВАТЬ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <Grid x:Name="ItemsGrid" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="0" Grid.Column="0" Margin="0,6,16,6">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <CheckBox x:Name="ItemFps" Tag="Fps" VerticalAlignment="Top" Margin="0,2,0,0" Click="Item_Click"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource ItemName}" Tag="{Binding ElementName=ItemFps}" MouseLeftButtonUp="ItemName_Click" Text="FPS сейчас"/>
+            </Grid>
+            <Grid Grid.Row="0" Grid.Column="1" Margin="0,6,0,6">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <CheckBox x:Name="ItemLow1" Tag="Low1" VerticalAlignment="Top" Margin="0,2,0,0" Click="Item_Click"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource ItemName}" Tag="{Binding ElementName=ItemLow1}" MouseLeftButtonUp="ItemName_Click" Text="Худший 1 % кадров за последние 30&#160;с"/>
+            </Grid>
+            <Grid Grid.Row="1" Grid.Column="0" Margin="0,6,16,6">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <CheckBox x:Name="ItemGpu" Tag="Gpu" VerticalAlignment="Top" Margin="0,2,0,0" Click="Item_Click"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource ItemName}" Tag="{Binding ElementName=ItemGpu}" MouseLeftButtonUp="ItemName_Click" Text="Видеокарта: загрузка и температура"/>
+            </Grid>
+            <Grid Grid.Row="1" Grid.Column="1" Margin="0,6,0,6">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <CheckBox x:Name="ItemCpu" Tag="Cpu" VerticalAlignment="Top" Margin="0,2,0,0" Click="Item_Click"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource ItemName}" Tag="{Binding ElementName=ItemCpu}" MouseLeftButtonUp="ItemName_Click" Text="Процессор: загрузка"/>
+            </Grid>
+            <Grid Grid.Row="2" Grid.Column="0" Margin="0,6,16,6">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <CheckBox x:Name="ItemGraph" Tag="FrameGraph" VerticalAlignment="Top" Margin="0,2,0,0" Click="Item_Click"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource ItemName}" Tag="{Binding ElementName=ItemGraph}" MouseLeftButtonUp="ItemName_Click" Text="График времени кадра за 10&#160;с"/>
+            </Grid>
+            <Grid Grid.Row="2" Grid.Column="1" Margin="0,6,0,6">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <CheckBox x:Name="ItemVram" Tag="Vram" VerticalAlignment="Top" Margin="0,2,0,0" Click="Item_Click"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource ItemName}" Tag="{Binding ElementName=ItemVram}" MouseLeftButtonUp="ItemName_Click" Text="Видеопамять: сколько занято"/>
+            </Grid>
+            <Grid Grid.Row="3" Grid.Column="0" Margin="0,6,16,6">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <CheckBox x:Name="ItemPing" Tag="Ping" VerticalAlignment="Top" Margin="0,2,0,0" Click="Item_Click"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource ItemName}" Tag="{Binding ElementName=ItemPing}" MouseLeftButtonUp="ItemName_Click" Text="Пинг: до сервера игры, если он известен, иначе до интернета"/>
+            </Grid>
+            <Grid Grid.Row="3" Grid.Column="1" Margin="0,6,0,6">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <CheckBox x:Name="ItemClock" Tag="Clock" VerticalAlignment="Top" Margin="0,2,0,0" Click="Item_Click"/>
+                <TextBlock Grid.Column="1" Style="{StaticResource ItemName}" Tag="{Binding ElementName=ItemClock}" MouseLeftButtonUp="ItemName_Click" Text="Время"/>
+            </Grid>
+            <Grid Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,6,0,6">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <CheckBox x:Name="ItemBattery" Tag="Battery" VerticalAlignment="Top" Margin="0,2,0,0" Click="Item_Click"/>
+                <StackPanel Grid.Column="1">
+                    <TextBlock Style="{StaticResource ItemName}" Tag="{Binding ElementName=ItemBattery}" MouseLeftButtonUp="ItemName_Click" Text="Заряд устройств: гарнитура, мышь, клавиатура, геймпад"/>
+                    <TextBlock x:Name="BatteryNote" Style="{StaticResource Caption}" Margin="12,2,0,0" TextWrapping="Wrap"
+                               Text="До трёх устройств, самые разряженные первыми. Показывается, только если заряд хоть одного устройства известен."/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+        <TextBlock x:Name="NothingChosen" Style="{StaticResource Caption}" Margin="0,4,0,0" Visibility="Collapsed" TextWrapping="Wrap"
+                   Text="Ничего не отмечено — оверлей не появится."/>
+        <TextBlock Style="{StaticResource Caption}" Margin="0,6,0,0" TextWrapping="Wrap"
+                   Text="Красным — только тревога: FPS упал заметно ниже обычного, видеокарта нагрелась до 85&#160;°C, пинг от 150&#160;мс, заряд устройства 15&#160;% и ниже. Температуру процессора программа не показывает: Windows не отдаёт её без стороннего драйвера, а такие драйверы программа не ставит."/>
+
+        <!-- 3. Вид -->
+        <local:TrackedText Source="ВИД" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <Border Style="{StaticResource ChoiceRow}">
+            <StackPanel Margin="0,10">
+                <TextBlock Text="Угол экрана" Style="{StaticResource RowTitle}"/>
+                <WrapPanel Margin="-12,6,0,0">
+                    <RadioButton x:Name="CornerTl" Style="{StaticResource Range}" GroupName="OvCorner" Tag="tl" Content="слева вверху" Click="Corner_Click"/>
+                    <RadioButton x:Name="CornerTr" Style="{StaticResource Range}" GroupName="OvCorner" Tag="tr" Content="справа вверху" Click="Corner_Click"/>
+                    <RadioButton x:Name="CornerBl" Style="{StaticResource Range}" GroupName="OvCorner" Tag="bl" Content="слева внизу" Click="Corner_Click"/>
+                    <RadioButton x:Name="CornerBr" Style="{StaticResource Range}" GroupName="OvCorner" Tag="br" Content="справа внизу" Click="Corner_Click"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+        <Border Style="{StaticResource ChoiceRow}">
+            <StackPanel Margin="0,10">
+                <TextBlock Text="Размер" Style="{StaticResource RowTitle}"/>
+                <WrapPanel Margin="-12,6,0,0">
+                    <RadioButton x:Name="SizeS" Style="{StaticResource Range}" GroupName="OvSize" Tag="s" Content="маленький" Click="Size_Click"/>
+                    <RadioButton x:Name="SizeM" Style="{StaticResource Range}" GroupName="OvSize" Tag="m" Click="Size_Click"/>
+                    <RadioButton x:Name="SizeL" Style="{StaticResource Range}" GroupName="OvSize" Tag="l" Content="крупный" Click="Size_Click"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+        <Border Style="{StaticResource ChoiceRow}">
+            <StackPanel Margin="0,10">
+                <TextBlock Text="Раскладка" Style="{StaticResource RowTitle}"/>
+                <WrapPanel Margin="-12,6,0,0">
+                    <RadioButton x:Name="LayoutRow" Style="{StaticResource Range}" GroupName="OvLayout" Tag="row" Content="строкой" Click="Layout_Click"/>
+                    <RadioButton x:Name="LayoutCol" Style="{StaticResource Range}" GroupName="OvLayout" Tag="column" Content="столбиком" Click="Layout_Click"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+        <Border Style="{StaticResource ChoiceRow}">
+            <StackPanel Margin="0,10">
+                <TextBlock Text="Подложка" Style="{StaticResource RowTitle}"/>
+                <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0" TextWrapping="Wrap"
+                           Text="Насколько тёмная подложка под цифрами. Чем светлее картинка игры, тем плотнее нужна подложка."/>
+                <WrapPanel x:Name="OpacityChoices" Margin="-12,6,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 4. Предпросмотр -->
+        <local:TrackedText Source="ПРЕДПРОСМОТР" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <Border x:Name="Screen" Margin="0,12,0,0" Width="560" Height="315" HorizontalAlignment="Left"
+                Background="{DynamicResource Track}" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1" ClipToBounds="True">
+            <Grid>
+                <!-- Табличка шире «экрана» (все показания строкой) — уменьшается, а не обрезается. -->
+                <Viewbox x:Name="PreviewBox" StretchDirection="DownOnly" Margin="12"><local:OverlayView x:Name="Preview"/></Viewbox>
+            </Grid>
+        </Border>
+        <TextBlock Style="{StaticResource Caption}" Margin="0,6,0,0" TextWrapping="Wrap"
+                   Text="Подставные числа. Так табличка будет выглядеть в выбранном углу; в игре она стоит в углу того монитора, где окно игры."/>
+
+        <!-- 5. Честно о том, как это работает -->
+        <local:TrackedText Source="КАК ЭТО РАБОТАЕТ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,10,0,0" TextWrapping="Wrap"
+                   Text="Оверлей — отдельное окно поверх игры; в игру ничего не встраивается, поэтому античиты его не трогают. Виден в оконном и безрамочном режиме и в большинстве современных игр; в старом исключительном полноэкранном режиме Windows его не покажет — переключите игру в безрамочное окно."/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,8,0,0" TextWrapping="Wrap"
+                   Text="Окно оверлея не забирает фокус и пропускает мышь насквозь: щелчки попадают в игру. Числа обновляются два раза в секунду."/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,8,0,0" TextWrapping="Wrap"
+                   Text="Как и любое окно поверх игры, оверлей иногда заставляет Windows выводить игру через общий рабочий стол, а не напрямую, — задержка вывода может вырасти примерно на кадр (на современных видеокартах Windows часто обходится без этого). Если в соревновательной игре важна каждая миллисекунда, спрячьте оверлей клавишей."/>
+        <TextBlock x:Name="FpsNote" Style="{StaticResource Caption}" Margin="0,8,0,0" TextWrapping="Wrap"
+                   Text="FPS, 1 % и график времени кадра есть, только когда программа записывает кадры: с правами администратора и если игра не в осторожном режиме. Иначе в их ячейках будет «—»."/>
+        <TextBlock x:Name="Result" Style="{StaticResource Caption}" Margin="0,8,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
+    </StackPanel>
+</UserControl>

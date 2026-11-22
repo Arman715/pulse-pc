@@ -40,6 +40,8 @@ public sealed class SetupRequest
     public bool NoDesktop;      // без окна: без ярлыка на рабочем столе
     public bool Autostart;      // без окна: включить автозапуск
     public string ReadyEvent;   // «PulsePC.Setup.Ready.&lt;guid&gt;» — подать знак, когда окно открылось
+    public bool Relaunch;       // без окна (обновление без нажатия): после установки снова запустить программу
+    public bool RelaunchMinimized;  // … свёрнутой к часам (окно было скрыто)
 
     public static SetupRequest Parse(string[] args, string processPath)
     {
@@ -66,6 +68,8 @@ public sealed class SetupRequest
         r.Autostart = Has("--autostart");
         string ready = Value("--ready-event");
         if (ready != null && Regex.IsMatch(ready, @"^PulsePC\.Setup\.Ready\.[0-9a-f]{32}$")) r.ReadyEvent = ready;
+        r.Relaunch = r.Quiet && r.Mode == SetupMode.Install && (Has("--relaunch") || Has("--relaunch-minimized"));
+        r.RelaunchMinimized = r.Relaunch && Has("--relaunch-minimized");
         return r;
     }
 }
@@ -128,6 +132,8 @@ public sealed class SetupTarget
 public static class Installer
 {
     public const string AppName = "Пульс ПК";
+    /// <summary>Издатель в записи «Установленных приложений».</summary>
+    public const string Publisher = "Arman715";
     public const string ExeName = "PulsePC.exe";
     public const string ShortcutName = AppName + ".lnk";
     private const string UninstallRoot = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\";
@@ -620,7 +626,9 @@ public static class Installer
 
         key.SetValue("DisplayName", t.Test ? AppName + " (проверка установщика)" : AppName);
         key.SetValue("DisplayVersion", Version);
-        key.SetValue("Publisher", AppName);
+        // Издатель — нейтральной латиницей (автор на GitHub), чтобы в «Установленных приложениях» на любом языке Windows он читался.
+        // Свою запись программа узнаёт по имени раздела и папке (ProgramsList.IsSelf), а не по издателю.
+        key.SetValue("Publisher", Publisher);
         key.SetValue("DisplayIcon", exe + ",0");
         key.SetValue("InstallLocation", t.Dir);
         key.SetValue("UninstallString", uninstall);
@@ -718,10 +726,22 @@ public static class Installer
     {
         var locked = new List<string>();
         var names = AppFiles.Concat(ListedFiles(t)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        // Удаляет сама установленная программа (PulsePC.exe --uninstall из этой папки)? Тогда её библиотеки (*_cor3.dll и др.)
+        // стирать нельзя, пока она работает: часть из них подгружается только при выходе (выгрузка модуля C++/CLI), и без них
+        // программа падала при закрытии (DllNotFoundException в ModuleUninitializer — «сбой» после каждого удаления в 1.4.3).
+        // Такие файлы дочищает cmd после выхода — так же, как занятые.
+        bool selfInDir = false;
+        try
+        {
+            string me = Path.GetDirectoryName(Environment.ProcessPath ?? "") ?? "";
+            selfInDir = me.Length > 0 && string.Equals(Path.GetFullPath(me).TrimEnd('\\'), Path.GetFullPath(t.Dir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+        }
+        catch { }
         foreach (string rel in names.SelectMany(n => new[] { n, n + ".new", n + ".bak" }))
         {
             string f = Path.Combine(t.Dir, rel);
             if (!File.Exists(f)) continue;
+            if (selfInDir && f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)) { locked.Add(f); continue; }
             try { File.SetAttributes(f, FileAttributes.Normal); File.Delete(f); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { locked.Add(f); }
         }

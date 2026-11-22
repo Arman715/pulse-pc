@@ -252,7 +252,7 @@ public partial class FansPanel : UserControl, ISystemPanel
         stop.Text = Pct(s.StopPct);
     }
 
-    private static string Pct(double v) => double.IsNaN(v) ? "—" : $"{v:0}{Nb}%";
+    private static string Pct(double v) => double.IsNaN(v) ? "—" : $"{v:0}" + (L.En ? "%" : Nb + "%");
 
     /// <summary>Одна-две строки вывода по статистике: только то, что из неё действительно следует.</summary>
     private static string Advice(FanSummary game, FanSummary idle)
@@ -378,10 +378,11 @@ public partial class FansPanel : UserControl, ISystemPanel
         var hw = host.Hardware();
         string maker = hw?.MakerShort ?? "";
         string board = hw?.BoardShort;
-        bool laptop = BatteryInfo.Read().HasBattery;
+        bool laptop = LaptopCheck.Applies;
 
         if (laptop)
         {
+            CaseLabel.Source = L.T("ВЕНТИЛЯТОРЫ НОУТБУКА");
             CaseText.Text = L.T("В ноутбуке вентиляторами управляет сам ноутбук. Windows не даёт программам доступа к ним, поэтому их скорость здесь не видна.");
             CaseHow.Text = L.T("Режимы охлаждения ноутбука обычно есть в фирменной программе производителя: «тихий», «сбалансированный», «производительный». В неё стоит заглянуть, если ноутбук в играх сильно шумит или греется.");
             return;

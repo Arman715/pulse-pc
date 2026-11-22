@@ -140,6 +140,8 @@ public partial class MainWindow
 
             case Go g:
             {
+                // Раздел «Ноутбук» есть только на ноутбуке — на настольном ПК ссылка в него не показывается.
+                if (g.Target == "sys:Ноутбук" && !IsLaptopPc) return new TextBlock { Visibility = Visibility.Collapsed };
                 var link = new Button { Content = g.Text + "  →", Tag = g.Target, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 16, 0, 0) };
                 link.Click += (_, _) => GoFromHelp(g.Target);
                 return link;
@@ -154,6 +156,7 @@ public partial class MainWindow
     private void GoFromHelp(string target)
     {
         if (target == "scan") { ShowScan(); return; }
+        if (target == "whyslow") { WhySlow_Click(this, new RoutedEventArgs()); return; }
         OpenTarget(target);
     }
 }

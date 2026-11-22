@@ -19,10 +19,21 @@ public class BootSlowItem
     public double Seconds;        // насколько задержал загрузку
 }
 
+/// <summary>Кто затягивает загрузку по всем замеренным загрузкам: в скольких загрузках встречается и насколько в среднем.</summary>
+public class BootSlowStat
+{
+    public string Kind = "";
+    public string Name = "";
+    public int Boots;             // в скольких загрузках из прочитанных
+    public double AvgSeconds;     // средняя задержка
+}
+
 public class BootReport
 {
     public List<BootRecord> Boots = new();
     public List<BootSlowItem> Slow = new();
+    /// <summary>Все задержки из журнала, сведённые по имени (для тренда и «что тормозит» в «Диагностике»).</summary>
+    public List<BootSlowStat> SlowAll = new();
     public DateTime LastBoot;
     public string Error;          // почему подробностей нет (например, нет прав администратора)
 }
@@ -60,10 +71,12 @@ public static class BootPerf
                     }
                     else
                     {
-                        string kind = e.Id switch { 101 => L.T("программа"), 102 => L.T("драйвер"), 103 => L.T("служба"), 109 => L.T("устройство"), _ => null };
+                        string kind = e.Id switch { 101 => L.T("программа"), 102 => L.T("драйвер"), 103 => L.T("служба"), 109 => L.T("устройство"),
+                                                    106 => L.T("фоновая оптимизация"), 107 => L.T("политика компьютера"), 108 => L.T("политика пользователя"), 110 => L.T("запуск сеанса"), _ => null };
                         if (kind == null) continue;
                         string name = Str(data, "FriendlyName");
                         if (string.IsNullOrWhiteSpace(name)) name = Str(data, "Name");
+                        if (string.IsNullOrWhiteSpace(name) && e.Id is 106 or 107 or 108 or 110) name = kind;
                         double ms = Ms(data, "DegradationTime");
                         if (ms <= 0) ms = Ms(data, "TotalTime");
                         if (string.IsNullOrWhiteSpace(name) || ms <= 0) continue;
@@ -79,6 +92,14 @@ public static class BootPerf
                     .Select(x => x.Item).GroupBy(x => x.Kind + x.Name).Select(g => g.OrderByDescending(x => x.Seconds).First())
                     .OrderByDescending(x => x.Seconds).Take(6).ToList();
             }
+            // По всем загрузкам: кто затягивает их раз за разом (одна загрузка — одна отметка на имя).
+            if (report.Boots.Count > 0)
+                report.SlowAll = slowEvents
+                    .Select(x => (Boot: report.Boots.Where(b => Math.Abs((x.At - b.At).TotalMinutes) <= 10).Select(b => b.At).DefaultIfEmpty(DateTime.MinValue).First(), x.Item))
+                    .Where(x => x.Boot != DateTime.MinValue)
+                    .GroupBy(x => x.Item.Kind + "|" + x.Item.Name)
+                    .Select(g => new BootSlowStat { Kind = g.First().Item.Kind, Name = g.First().Item.Name, Boots = g.Select(x => x.Boot).Distinct().Count(), AvgSeconds = g.Average(x => x.Item.Seconds) })
+                    .OrderByDescending(x => x.Boots * x.AvgSeconds).Take(10).ToList();
             report.Boots.Reverse();     // по порядку времени: старые слева
         }
         catch (UnauthorizedAccessException) { report.Error = L.T("Подробности загрузки Windows видно только с правами администратора."); }

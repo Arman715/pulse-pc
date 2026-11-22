@@ -138,6 +138,23 @@
                 </StackPanel>
             </Grid>
         </Border>
+        <Border x:Name="PsuRow" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Мощность блока питания"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                               Text="Написана на наклейке блока питания или в описании компьютера. По ней «Диагностика» проверит, хватает ли запаса для видеокарты и процессора. Пусто — программа только оценит нагрузку."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="24,0,0,0">
+                    <TextBox x:Name="PsuBox" Style="{StaticResource Field}" Width="96" MaxLength="4" KeyDown="Box_KeyDown" TextChanged="Box_TextChanged"/>
+                    <TextBlock Style="{StaticResource Caption}" Text="Вт" Width="74" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
         <WrapPanel Margin="0,16,0,0">
             <Button x:Name="BtnSave" Style="{StaticResource Primary}" Content="Сохранить и пересчитать" Margin="0,0,10,8" Click="Save_Click"/>
         </WrapPanel>
@@ -281,7 +298,7 @@
         </Grid>
         <Grid>
             <TextBlock Style="{StaticResource Body}" Text="—"/>
-            <TextBlock Style="{StaticResource Tip}" Text="Материнская плата, память, диски и вентиляторы — около 50&#160;Вт; ещё около 10&#160;% теряется в блоке питания. Это тоже оценка."/>
+            <TextBlock x:Name="HowBase" Style="{StaticResource Tip}" Text="Материнская плата, память, диски и вентиляторы — около 50&#160;Вт; ещё около 10&#160;% теряется в блоке питания. Это тоже оценка."/>
         </Grid>
         <Grid>
             <TextBlock Style="{StaticResource Body}" Text="—"/>

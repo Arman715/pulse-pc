@@ -39,6 +39,14 @@ public static class RenderHarness
                 Render(dir, "pc-720x500", v => { v.Scene = Scene.Pc; v.Highlight = Part.Cpu; PcCallouts(v); }, 720, 500);
                 log.AppendLine(Perf(Scene.Pc));
             }
+            if (Want("laptop"))
+            {
+                Render(dir, "laptop", v => { v.Scene = Scene.Laptop; PcCallouts(v); });
+                Render(dir, "laptop-hl-gpu", v => { v.Scene = Scene.Laptop; v.Highlight = Part.Gpu; PcCallouts(v); });
+                Render(dir, "laptop-ghost-board", v => { v.Scene = Scene.Laptop; v.Highlight = Part.Motherboard; v.GhostOthers = true; v.SetCallout("pc.board", "Д  Материнская плата", "ASUS G814JV", compact: true); });
+                Render(dir, "laptop-720x500", v => { v.Scene = Scene.Laptop; v.Highlight = Part.Cpu; PcCallouts(v); }, 720, 500);
+                log.AppendLine(Perf(Scene.Laptop));
+            }
             if (Want("gpu"))
             {
                 Render(dir, "gpu", v => { v.Scene = Scene.Gpu; GpuCallouts(v); });

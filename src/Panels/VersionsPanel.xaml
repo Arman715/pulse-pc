@@ -99,7 +99,7 @@
     <StackPanel MaxWidth="780" HorizontalAlignment="Left">
         <TextBlock x:Name="State" Style="{StaticResource Verdict}" Text="Смотрю версии…"/>
         <TextBlock Style="{StaticResource Body}" Margin="0,8,0,0"
-                   Text="Свежие ли драйвер видеокарты, BIOS и сама программа. Драйвер и BIOS программа не скачивает и не ставит — только показывает, где их взять. Себя программа обновляет по вашей кнопке и только после проверки файла."/>
+                   Text="Свежие ли драйвер видеокарты, BIOS и сама программа. Драйвер и BIOS программа не скачивает и не ставит — только показывает, где их взять. Себя программа обновляет по вашей кнопке (или сама, если вы это разрешили) и только после проверки файла."/>
 
         <!-- ============ Таблица ============ -->
         <Grid Margin="0,24,0,6">
@@ -140,12 +140,50 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <WrapPanel Margin="0,8,0,0">
-                <Button x:Name="BtnUpdate" Style="{StaticResource Primary}" Content="Обновить" Margin="0,0,14,8" Click="BtnUpdate_Click"/>
+            <WrapPanel x:Name="UpdateButtons" Margin="0,8,0,0">
+                <!-- Подпись задаётся в коде (L.Pick): общий ключ «Обновить» переводится как «Refresh», а здесь нужно «Update». -->
+                <Button x:Name="BtnUpdate" Style="{StaticResource Primary}" Margin="0,0,14,8" Click="BtnUpdate_Click"/>
                 <TextBlock Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,0,8" MaxWidth="520"
                            Text="Программа скачает установщик, сверит его контрольную сумму и запустит его, а сама закроется. История и настройки сохранятся."/>
             </WrapPanel>
+            <!-- Переносная версия: обновляется вручную, архивом со страницы выпусков -->
+            <WrapPanel x:Name="PortableButtons" Margin="0,8,0,0" Visibility="Collapsed">
+                <Button x:Name="BtnReleases" Style="{StaticResource Primary}" Content="Открыть страницу выпусков" Margin="0,0,14,8" Click="Releases_Click"/>
+                <TextBlock Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,0,8" MaxWidth="520"
+                           Text="Переносная версия обновляется вручную: скачайте архив PulsePC-Portable новой версии и распакуйте его поверх этой папки. Папка Data с историей и настройками останется."/>
+            </WrapPanel>
             <local:ThinBar x:Name="Progress" Height="3" Fill="{StaticResource Ink1}" Margin="0,4,0,4" Visibility="Collapsed"/>
+
+            <!-- Один вопрос — при первой найденной новой версии: ставить ли обновления самой -->
+            <Border x:Name="AskBlock" Visibility="Collapsed" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="0,12,0,0" Padding="0,14,0,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Устанавливать обновления сами?"/>
+                    <TextBlock Style="{StaticResource Body}" Margin="0,4,0,0"
+                               Text="Программа скачает новую версию в фоне, проверит контрольную сумму и подпись автора — так же, как по кнопке, — и поставит её, когда вы не играете: в первые минуты после запуска программы или когда вы отошли от компьютера. Во время игры — никогда. После обновления — короткое уведомление, что нового."/>
+                    <WrapPanel Margin="0,10,0,0">
+                        <Button x:Name="BtnAutoYes" Content="Да, ставить сами" Margin="0,0,10,8" Click="AutoYes_Click"/>
+                        <Button x:Name="BtnAutoNo" Content="Нет, спрашивать меня" Margin="0,0,10,8" Click="AutoNo_Click"/>
+                    </WrapPanel>
+                    <TextBlock Style="{StaticResource Caption}" Text="Ответ можно поменять в любой момент ниже, в «Проверке»."/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- ============ Что нового после обновления ============ -->
+        <StackPanel x:Name="WhatsNewBlock" Visibility="Collapsed">
+            <local:TrackedText x:Name="WhatsNewLabel" Source="ЧТО НОВОГО" Style="{StaticResource Label}" Margin="0,24,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}" Margin="0,0,0,12"/>
+            <TextBlock x:Name="WhatsNewText" Style="{StaticResource Body}" Margin="0,0,0,8"/>
+            <ItemsControl x:Name="WhatsNewList" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <TextBlock Style="{StaticResource Body}" Text="—"/>
+                            <TextBlock Style="{StaticResource Tip}" Text="{Binding}"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </StackPanel>
 
         <!-- ============ Настройка проверки ============ -->
@@ -163,6 +201,21 @@
                                Text="Через минуту после запуска и дальше раз в сутки. О новой версии скажет уведомление у часов — один раз на каждую версию и не во время игры."/>
                 </StackPanel>
                 <CheckBox x:Name="AutoToggle" Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Top" Margin="24,3,2,0" Click="AutoToggle_Click"/>
+            </Grid>
+        </Border>
+        <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource RowTitle}" Text="Устанавливать обновления сами"/>
+                    <TextBlock x:Name="AutoInstallHint" Style="{StaticResource Body}" Margin="0,2,0,0"
+                               Text="Новая версия скачивается в фоне, проверяется так же, как по кнопке, и ставится, когда вы не играете. Во время игры — никогда."/>
+                    <TextBlock x:Name="AutoInstallState" Style="{StaticResource OptCaption}" Margin="0,4,0,0"/>
+                </StackPanel>
+                <CheckBox x:Name="AutoInstallToggle" Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Top" Margin="24,3,2,0" Click="AutoInstallToggle_Click"/>
             </Grid>
         </Border>
         <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">

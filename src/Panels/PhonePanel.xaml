@@ -13,7 +13,7 @@
     <StackPanel MaxWidth="780" HorizontalAlignment="Left">
         <TextBlock x:Name="State" Style="{StaticResource Verdict}" Text="Панель выключена."/>
         <TextBlock Style="{StaticResource Body}" Margin="0,8,0,0"
-                   Text="Страница в домашней сети: пока идёт игра, на экране телефона видны FPS, загрузка процессора и видеокарты, память и пинг. Поверх игры программа ничего не рисует, поэтому у античитов нет к ней вопросов."/>
+                   Text="Страница в домашней сети: пока идёт игра, на экране телефона видны FPS, загрузка процессора и видеокарты, память и пинг. В игру программа ничего не встраивает, поэтому у античитов нет к ней вопросов; по желанию можно включить и оверлей — отдельное окно поверх игры."/>
 
         <local:TrackedText Source="ВКЛЮЧЕНИЕ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
         <Rectangle Style="{StaticResource Hairline}"/>

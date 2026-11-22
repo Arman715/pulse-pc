@@ -1,4 +1,4 @@
-using System.Diagnostics.Eventing.Reader;
+﻿using System.Diagnostics.Eventing.Reader;
 using System.Globalization;
 using Microsoft.Win32;
 
@@ -36,7 +36,8 @@ public static class LogMarks
         [Bsod] = new() { Key = Bsod, Filter = "Provider[@Name='Microsoft-Windows-WER-SystemErrorReporting'] and (EventID=1001)" },
         [Gpu] = new() { Key = Gpu, Filter = GpuDriver.EventFilter },
         [Whea] = new() { Key = Whea, Filter = "Provider[@Name='Microsoft-Windows-WHEA-Logger'] and (Level=1 or Level=2 or Level=3)" },
-        [Disk] = new() { Key = Disk, Filter = "(Provider[@Name='disk'] or Provider[@Name='stornvme'] or Provider[@Name='storahci'] or Provider[@Name='Ntfs'] or Provider[@Name='volmgr']) and (Level=1 or Level=2)" },
+        // Без volmgr: его ошибки — про файл аварийного дампа (46 при загрузке бывает на многих исправных ПК), а не про состояние диска.
+        [Disk] = new() { Key = Disk, Filter = "((Provider[@Name='disk'] or Provider[@Name='stornvme'] or Provider[@Name='storahci'] or Provider[@Name='Ntfs']) and (Level=1 or Level=2)) or (Provider[@Name='disk'] and (EventID=51 or EventID=52))" },
         [Crash] = new() { Key = Crash, Log = "Application", Filter = "Provider[@Name='Application Error'] and (EventID=1000)" },
         [Hang] = new() { Key = Hang, Log = "Application", Filter = "Provider[@Name='Application Hang']" },
         [SystemErrors] = new() { Key = SystemErrors, Filter = "(Level=1 or Level=2)" },
@@ -118,9 +119,14 @@ public sealed class DiagFinding : DiagItem
     /// <summary>Куда ведёт ссылка: «tab:Очистка», «tab:Оптимизация» или «sys:&lt;раздел вкладки «Система»&gt;».</summary>
     public string Link { get; set; } = "";
     public string LinkText { get; set; } = "";
+    /// <summary>Какой разбор открывает «Подробнее и что делать» (вид записей журнала); пусто — как Kind.</summary>
+    public string Details { get; set; } = "";
+    public string DetailsKind => Details != "" ? Details : Kind;
     public bool CanHide => Kind != "" && Level != Severity.Ok;
     public bool HasLink => Link != "";
-    public bool HasActions => CanHide || HasLink;
+    /// <summary>Есть разбор записей журнала: что значит, что делать, открыть в «Просмотре событий».</summary>
+    public bool HasDetails => Level != Severity.Ok && LogMarks.Kinds.ContainsKey(DetailsKind);
+    public bool HasActions => CanHide || HasLink || HasDetails;
 }
 
 /// <summary>Проверка состояния системы: журналы, диски, память, видеокарта, настройки.</summary>
@@ -133,6 +139,9 @@ public static class Diagnostics
         var found = new List<DiagItem>();
         void Add(Severity level, string title, string detail, string count = "", string kind = "", string link = "", string linkText = "") =>
             found.Add(new DiagFinding { Level = level, Title = title, Detail = detail, Count = count, Kind = kind, Link = link, LinkText = linkText });
+        // Состояние диска — не запись журнала (скрыть нельзя), но «Подробнее» ведёт к разбору дисков.
+        void AddDisk(Severity level, string title, string detail, string count = "") =>
+            found.Add(new DiagFinding { Level = level, Title = title, Detail = detail, Count = count, Details = LogMarks.Disk });
 
         // --- Журналы Windows: за 7 дней, но не раньше отметки «просмотрено» ---
         DateTime? Mark(string kind) => LogMarks.SeenWithin(kind, Days, settings);
@@ -146,9 +155,8 @@ public static class Diagnostics
         if (kp == 0) Add(Severity.Ok, L.T("Аварийных выключений нет"), Period(LogMarks.Shutdown));
         else Add(Severity.Warn, L.T("Аварийные выключения"), L.F("Последнее — {0:dd.MM в HH:mm}. Компьютер выключился, не завершив работу: завис, сбой или пропало питание.", kpLast), kp.ToString(), LogMarks.Shutdown);
 
-        int bsod = Count(LogMarks.Bsod, out var bsodLast, out _);
-        if (bsod > 0) Add(Severity.Bad, L.T("Синие экраны"), L.F("Последний — {0:dd.MM в HH:mm}. Обычно виноват драйвер или неисправное железо.", bsodLast), bsod.ToString(), LogMarks.Bsod);
-        else Add(Severity.Ok, L.T("Синих экранов нет"), Period(LogMarks.Bsod));
+        // Синие экраны простыми словами: код, смысл, виновный драйвер по малому дампу (StabilityChecks, версия 1.5).
+        try { found.AddRange(StabilityChecks.Bsod(settings)); } catch (Exception ex) { Log.Error("синие экраны", ex); }
 
         // Видеодрайвер: здесь одна строка, подробный разбор — в разделе «Драйвер».
         int gpuErr = Count(LogMarks.Gpu, out var gpuLast, out _);
@@ -167,19 +175,23 @@ public static class Diagnostics
                 Add(Severity.Warn, L.T("Сбои драйвера видеокарты"), L.F("Последний — {0:dd.MM в HH:mm}.", gpuLast), gpuErr.ToString(), LogMarks.Gpu, link, linkText);
         }
 
-        int whea = Count(LogMarks.Whea, out var wheaLast, out _);
-        if (whea > 0) Add(Severity.Bad, L.T("Аппаратные ошибки"), L.F("Последняя — {0:dd.MM в HH:mm}. Процессор, память или шина сообщили об ошибке.", wheaLast), whea.ToString(), LogMarks.Whea);
-        else QuietOk(LogMarks.Whea, L.T("Аппаратных ошибок нет"));
+        // Аппаратные ошибки WHEA: за неделю и месяц, вид (процессор, память, PCIe) и совет (StabilityChecks).
+        try { found.AddRange(StabilityChecks.Whea(settings)); } catch (Exception ex) { Log.Error("аппаратные ошибки", ex); }
 
         int dsk = Count(LogMarks.Disk, out var dskLast, out _);
         if (dsk > 0) Add(Severity.Bad, L.T("Ошибки дисков в журнале"), L.F("Последняя — {0:dd.MM в HH:mm}. Сделайте копию важных данных.", dskLast), dsk.ToString(), LogMarks.Disk);
         else QuietOk(LogMarks.Disk, L.T("Ошибок дисков в журнале нет"));
 
+        // Вылеты игр — отдельными строками с модулем-виновником; в «Падениях программ» остаются только не игры.
+        var gameApps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try { found.AddRange(StabilityChecks.GameCrashes(settings, out gameApps)); } catch (Exception ex) { Log.Error("вылеты игр", ex); }
         int crashes = Count(LogMarks.Crash, out _, out var crashNames);
+        if (gameApps.Count > 0) { crashes -= crashNames.RemoveAll(gameApps.Contains); }
         if (crashes > 0) Add(Severity.Info, L.T("Падения программ"), L.F("Чаще всего: {0}.", TopNames(crashNames)), crashes.ToString(), LogMarks.Crash);
-        else Add(Severity.Ok, L.T("Программы не падали"), Period(LogMarks.Crash));
+        else Add(Severity.Ok, gameApps.Count > 0 ? L.T("Другие программы не падали") : L.T("Программы не падали"), Period(LogMarks.Crash));
 
         int hangs = Count(LogMarks.Hang, out _, out var hangNames);
+        if (gameApps.Count > 0) { hangs -= hangNames.RemoveAll(gameApps.Contains); }
         if (hangs > 0) Add(Severity.Info, L.T("Зависания программ"), L.F("Чаще всего: {0}.", TopNames(hangNames)), hangs.ToString(), LogMarks.Hang);
         else QuietOk(LogMarks.Hang, L.T("Программы не зависали"));
 
@@ -195,13 +207,13 @@ public static class Diagnostics
         foreach (var d in disks)
         {
             if (!string.Equals(d.Health, "Healthy", StringComparison.OrdinalIgnoreCase) && d.Health != "")
-                Add(Severity.Bad, L.F("Диск {0} сообщает о неисправности", d.Name), L.F("Состояние «{0}». Срочно скопируйте с него важные данные.", d.Health));
+                AddDisk(Severity.Bad, L.F("Диск {0} сообщает о неисправности", d.Name), L.F("Состояние «{0}». Срочно скопируйте с него важные данные.", d.Health));
             else if (d.ReadErrors > 0)
-                Add(Severity.Warn, L.F("Диск {0}: ошибки чтения", d.Name), L.F("Наработка {0:N0} ч. Не храните на нём ничего важного.", d.Hours), $"{d.ReadErrors:0}");
+                AddDisk(Severity.Warn, L.F("Диск {0}: ошибки чтения", d.Name), L.F("Наработка {0:N0} ч. Не храните на нём ничего важного и не дефрагментируйте его.", d.Hours), $"{d.ReadErrors:0}");
             else if (d.Wear >= 80)
-                Add(Severity.Warn, L.F("Диск {0} изношен", d.Name), L.T("Ресурс диска почти исчерпан. Сделайте копию важных данных."), Pct(d.Wear ?? 0));
+                AddDisk(Severity.Warn, L.F("Диск {0} изношен", d.Name), L.T("Ресурс диска почти исчерпан. Сделайте копию важных данных."), Pct(d.Wear ?? 0));
             else if (d.Temp >= 60)
-                Add(Severity.Warn, L.F("Диск {0} горячий", d.Name), L.T("Проверьте обдув корпуса."), $"{d.Temp:0} °C");
+                Add(Severity.Warn, L.F("Диск {0} горячий", d.Name), LaptopCheck.CoolingTip(), $"{d.Temp:0} °C");
         }
         if (disks.Count > 0 && disks.All(d => d.Health == "Healthy" && !(d.ReadErrors > 0)))
             Add(Severity.Ok, L.T("Диски исправны"), Fmt.Plural(disks.Count, "диск", "диска", "дисков"));
@@ -220,7 +232,7 @@ public static class Diagnostics
                 double freePct = 100.0 * drive.AvailableFreeSpace / drive.TotalSize;
                 string name = drive.Name.TrimEnd('\\');
                 string text = L.F("Свободно {0} из {1}.", Fmt.Size(drive.AvailableFreeSpace), Fmt.Size(drive.TotalSize));
-                if (freePct < 10) Add(Severity.Bad, L.F("На диске {0} почти нет места", name), text, Pct(freePct), link: cleanLink, linkText: cleanText);
+                if (freePct < 10) Add(Severity.Bad, L.F("На диске {0} почти нет места", name), text + HardwareChecks.SsdFullNote(metrics, name), Pct(freePct), link: cleanLink, linkText: cleanText);
                 else if (freePct < 20) Add(Severity.Warn, L.F("На диске {0} мало места", name), text, Pct(freePct), link: cleanLink, linkText: cleanText);
             }
             catch { }
@@ -241,7 +253,7 @@ public static class Diagnostics
                 : L.T("Драйвер этой видеокарты не сообщает Windows её температуру — так бывает у встроенной графики и старых драйверов. Загрузку и видеопамять программа всё равно показывает."));
         else
         {
-            if (gpu.Temp >= 86) Add(Severity.Bad, L.T("Видеокарта перегревается"), L.T("Проверьте вентиляторы и обдув корпуса."), $"{gpu.Temp:0} °C");
+            if (gpu.Temp >= 86) Add(Severity.Bad, L.T("Видеокарта перегревается"), LaptopCheck.Applies ? LaptopCheck.CoolingTip() : L.T("Проверьте вентиляторы и обдув корпуса."), $"{gpu.Temp:0} °C");
             else if (gpu.Temp >= 80) Add(Severity.Warn, L.T("Видеокарта горячая"), L.T("Под нагрузкой это допустимо, в простое — нет."), $"{gpu.Temp:0} °C");
             else Add(Severity.Ok, L.T("Температура видеокарты в норме"), L.F("{0:0} °C, драйвер {1}", gpu.Temp, gpu.Driver));
 
@@ -257,6 +269,9 @@ public static class Diagnostics
             }
         }
 
+        // --- Железо (версия 1.5): частота и каналы памяти, монитор, шина видеокарты, диски, блок питания, пыль ---
+        try { found.AddRange(HardwareChecks.Diagnose(metrics, settings)); } catch (Exception ex) { Log.Error("проверка железа", ex); }
+
         // --- Настройки ---
         var notApplied = tweaks.Where(t => t.Applied == false).Select(t => L.T(t.Title)).ToList();
         if (notApplied.Count == 0) Add(Severity.Ok, L.T("Игровые настройки на месте"), L.T("все применены"));
@@ -264,7 +279,8 @@ public static class Diagnostics
             link: "tab:Оптимизация", linkText: L.T("Включить — на вкладке «Оптимизация»"));
 
         // --- Прочее ---
-        if (PendingReboot()) Add(Severity.Warn, L.T("Windows ждёт перезагрузки"), L.T("Обновление или установка закончится только после перезагрузки."));
+        // Стабильность Windows: ожидание перезагрузки, драйвер стал хуже, загрузка Windows, проверка памяти, задержки драйверов, целостность.
+        try { found.AddRange(StabilityChecks.Diagnose(settings)); } catch (Exception ex) { Log.Error("стабильность Windows", ex); }
         double uptimeDays = Environment.TickCount64 / 86400000.0;
         if (uptimeDays >= 7) Add(Severity.Info, L.T("Давно не было перезагрузки"), L.T("Перезагрузка раз в несколько дней освобождает память и применяет обновления."), Fmt.Plural((int)Math.Round(uptimeDays), "день", "дня", "дней"));
         if (!Shell.IsAdmin()) Add(Severity.Info, L.T("Программа запущена без прав администратора"), L.T("Часть проверок и действий недоступна."));

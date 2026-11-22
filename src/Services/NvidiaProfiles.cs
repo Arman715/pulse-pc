@@ -183,7 +183,7 @@ public static class NvidiaProfiles
         string app = "";
         try { app = GpuVendors.FindControlApp(gpu?.Vendor ?? ""); } catch { }
         bool battery = false;
-        try { battery = BatteryInfo.Read().HasBattery; } catch { }
+        try { battery = LaptopCheck.Applies; } catch { }   // общий признак ноутбука
         Advise(state, gpu?.Vendor ?? "", gpu?.Name ?? "", gpu?.Integrated == true, gpu?.Basic == true, why, cap, hz, app, battery);
     }
 

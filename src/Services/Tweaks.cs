@@ -532,7 +532,7 @@ public static class GameApps
                 {
                     // "browser" - слишком общее имя: берём только Яндекс Браузер.
                     string path = null;
-                    try { path = p.MainModule?.FileName; } catch { }
+                    try { path = GameFinder.ProcessPath(p.Id); } catch { }     // с минимальными правами, без MainModule
                     if (path != null && path.IndexOf(@"\Yandex\", StringComparison.OrdinalIgnoreCase) < 0) continue;
                 }
                 result.Add(p);
@@ -570,7 +570,8 @@ public static class GameApps
                 foreach (var p in g) { try { bytes += p.WorkingSet64; } catch { } }
                 if (bytes < HeavyBytes) continue;
                 string path = null;
-                try { path = withWindow[0].MainModule?.FileName; } catch { }
+                // С минимальными правами: тяжёлое окно может оказаться вторым процессом игры под античитом.
+                try { path = GameFinder.ProcessPath(withWindow[0].Id); } catch { }
                 if (path != null && (path.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.Windows), StringComparison.OrdinalIgnoreCase)
                                      || GameDetector.LooksLikeGame(path))) continue;
                 string title = g.Key;

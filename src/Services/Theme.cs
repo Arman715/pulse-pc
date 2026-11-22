@@ -77,6 +77,10 @@ public static class Theme
     public static Color ColorOf(string key) =>
         (Color)ColorConverter.ConvertFromString(Colors.TryGetValue(key, out var c) ? (Dark ? c.Dark : c.Light) : "#FF00FF");
 
+    /// <summary>Цвет тёмной темы независимо от выбранной (оверлей поверх игры всегда тёмный).</summary>
+    public static Color DarkColorOf(string key) =>
+        (Color)ColorConverter.ConvertFromString(Colors.TryGetValue(key, out var c) ? c.Dark : "#FF00FF");
+
     /// <summary>Замороженная кисть цвета темы (для кода; можно пользоваться из любого потока).</summary>
     public static Brush Brush(string key)
     {

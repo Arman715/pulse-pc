@@ -45,6 +45,8 @@ public partial class VersionsPanel : UserControl, ISystemPanel
     public VersionsPanel()
     {
         InitializeComponent();
+        // Ключ «Обновить» в словаре — «Refresh» (обновить список); здесь это установка новой версии — «Update».
+        BtnUpdate.Content = L.Pick("Обновить", "Update");
         VersionCheck.Changed += () => host?.Ui(() => { if (!checkingHere) Shown(); });
     }
 
@@ -54,6 +56,7 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         bool admin = h.Admin;
         AutoToggle.IsEnabled = FeedBox.IsEnabled = BtnUpdate.IsEnabled = admin;
         AdminNote.Visibility = admin ? Visibility.Collapsed : Visibility.Visible;
+        if (Portable.Enabled) AdminNote.Text = L.T("Это переносная версия: история и настройки — в папке Data рядом с программой, новые версии ставятся вручную.");
     }
 
     public void Shown()
@@ -99,7 +102,7 @@ public partial class VersionsPanel : UserControl, ISystemPanel
             : newDriver ? L.F("Вышел драйвер видеокарты {0}", driver.Latest.Version)
             : newApp ? L.F("Вышла новая версия «Пульс ПК» — {0}", app.Release.Version)
             : busy && !driverKnown && !appKnown ? L.T("Проверяю версии…")
-            : driverKnown && appKnown ? L.T("Драйвер видеокарты и программа — последних версий")
+            : driverKnown && appKnown ? L.T("У драйвера видеокарты и программы последние версии")
             : driverKnown ? L.T("Драйвер видеокарты последней версии")
             : appKnown ? L.T("Программа последней версии")
             : anyError ? L.T("Проверить новые версии не удалось")
@@ -107,13 +110,20 @@ public partial class VersionsPanel : UserControl, ISystemPanel
             : L.T("Новые версии ещё не проверялись");
 
         // Обновление программы
+        var auto = VersionCheck.AutoState(host.Admin);
         UpdateBlock.Visibility = newApp ? Visibility.Visible : Visibility.Collapsed;
         if (newApp)
         {
             UpdateLabel.Source = L.F("ПУЛЬС ПК {0}: ЧТО НОВОГО", app.Release.Version);
             NotesList.ItemsSource = app.Release.Notes.Count > 0 ? app.Release.Notes : new List<string> { L.T("Описание изменений источник не прислал.") };
             BtnUpdate.IsEnabled = host.Admin && !updating;
+            UpdateButtons.Visibility = Portable.Enabled ? Visibility.Collapsed : Visibility.Visible;
+            PortableButtons.Visibility = Portable.Enabled ? Visibility.Visible : Visibility.Collapsed;
         }
+        // Один вопрос: при первой найденной новой версии, если ставить самой здесь вообще можно.
+        AskBlock.Visibility = newApp && auto.Ok && !VersionCheck.AutoAsked(s) ? Visibility.Visible : Visibility.Collapsed;
+        ShowAutoInstall(s, auto, newApp ? app.Release.Version : null);
+        ShowWhatsNew(s);
 
         AutoToggle.IsChecked = VersionCheck.AutoCheck(s);
         FeedHint.Text = L.T("Откуда программа узнаёт о своих новых версиях: адрес файла update.json (https://…/update.json) или репозиторий GitHub в виде «владелец/репозиторий».")
@@ -220,7 +230,7 @@ public partial class VersionsPanel : UserControl, ISystemPanel
 
     private static VersionRowView AppRow((FeedKind Kind, AppRelease Release, int Diff, string Error, DateTime? CheckedAt) a)
     {
-        var row = new VersionRowView { Title = L.T("Пульс ПК"), Subtitle = L.T("эта программа"), Installed = Installer.Version };
+        var row = new VersionRowView { Title = L.T("Пульс ПК"), Subtitle = Portable.Enabled ? L.T("эта программа, переносная версия") : L.T("эта программа"), Installed = Installer.Version };
         switch (a.Kind)
         {
             case FeedKind.None:
@@ -244,7 +254,9 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         {
             row.Level = Severity.Warn;
             row.LatestInk = Palette.Warn;
-            row.Verdict = L.T("Вышла новая версия. Что в ней изменилось и кнопка «Обновить» — ниже.");
+            row.Verdict = Portable.Enabled
+                ? L.T("Вышла новая версия. Переносная версия обновляется вручную: что изменилось и ссылка на страницу выпусков — ниже.")
+                : L.T("Вышла новая версия. Что в ней изменилось и кнопка «Обновить» — ниже.");
         }
         else
         {
@@ -416,6 +428,60 @@ public partial class VersionsPanel : UserControl, ISystemPanel
         BtnUpdate.IsEnabled = host.Admin;
         Result.Text = text;
         Result.Foreground = ink;
+    }
+
+    // ================================================================== обновление без нажатия
+
+    private void ShowAutoInstall(AppSettings s, (bool Ok, string Why) auto, string newVersion)
+    {
+        bool on = VersionCheck.AutoInstall(s);
+        AutoInstallToggle.IsChecked = on && auto.Ok;
+        AutoInstallToggle.IsEnabled = host.Admin && auto.Ok;
+        if (!auto.Ok)
+        {
+            AutoInstallState.Text = auto.Why;
+            return;
+        }
+        string error = s.Get(VersionCheck.KAutoError), failed = s.Get(VersionCheck.KAutoFailed);
+        AutoInstallState.Text =
+            !on ? (VersionCheck.AutoAsked(s) ? L.T("Выключено: новые версии ставятся только кнопкой «Обновить».") : "")
+            : newVersion != null && failed == newVersion ? L.F("Версия {0} не встала сама ({1}). Обновите её кнопкой «Обновить» выше.", newVersion, L.T(error))
+            : newVersion != null && error != "" ? L.F("Версия {0} пока не скачана: {1}. Программа попробует снова через час.", newVersion, L.T(error))
+            : newVersion != null ? L.F("Версия {0} поставится сама: в первые минуты после запуска программы или когда вы отойдёте от компьютера — не во время игры.", newVersion)
+            : L.T("Включено. Когда выйдет новая версия, она поставится сама — не во время игры.");
+    }
+
+    private void ShowWhatsNew(AppSettings s)
+    {
+        var recent = VersionCheck.RecentUpdate(s);
+        WhatsNewBlock.Visibility = recent.Recent ? Visibility.Visible : Visibility.Collapsed;
+        if (!recent.Recent) return;
+        WhatsNewLabel.Source = L.F("ЧТО НОВОГО В {0}", Installer.Version);
+        string when = recent.At is DateTime at ? VersionCheck.When(at) : "";
+        WhatsNewText.Text = recent.From != "" ? L.F("Программа обновлена {0}: была версия {1}, теперь {2}.", when, recent.From, Installer.Version)
+                                              : L.F("Программа обновлена {0} до версии {1}.", when, Installer.Version);
+        var notes = VersionCheck.WhatsNew(s);
+        WhatsNewList.ItemsSource = notes.Count > 0 ? notes : new List<string> { L.T("Описания изменений нет — оно на странице выпусков на GitHub.") };
+    }
+
+    private void SetAuto(bool on)
+    {
+        if (host == null || !host.Admin) return;
+        VersionCheck.SetAutoInstall(host.Settings, on);
+        Result.Foreground = Palette.Ink3;
+        Result.Text = on ? L.T("Новые версии будут ставиться сами — не во время игры. После обновления придёт короткое уведомление.")
+                         : L.T("Новые версии ставятся только кнопкой «Обновить».");
+        Shown();
+    }
+
+    private void AutoYes_Click(object sender, RoutedEventArgs e) => SetAuto(true);
+    private void AutoNo_Click(object sender, RoutedEventArgs e) => SetAuto(false);
+    private void AutoInstallToggle_Click(object sender, RoutedEventArgs e) => SetAuto(AutoInstallToggle.IsChecked == true);
+
+    private void Releases_Click(object sender, RoutedEventArgs e)
+    {
+        try { GameLibrary.OpenAsUser(Portable.ReleasesUrl); }
+        catch { Result.Text = L.F("Не открылось. Адрес: {0}", Portable.ReleasesUrl); }
     }
 
     // ================================================================== ссылки

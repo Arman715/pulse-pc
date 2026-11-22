@@ -10,9 +10,13 @@ namespace PulsePC.Services;
 public sealed class RamStick
 {
     public string Slot = "", Maker = "", Part = "";
+    /// <summary>BankLabel: у плат AMD в нём канал («P0 CHANNEL A»).</summary>
+    public string Bank = "";
     public double SizeGb;
     /// <summary>Скорость, на которой планка работает сейчас, и паспортная (JEDEC), МТ/с.</summary>
     public int Mts, RatedMts;
+    /// <summary>Число рангов (Attributes); 0 — неизвестно.</summary>
+    public int Ranks;
     /// <summary>8 — DIMM (настольный), 12 — SO-DIMM (ноутбук), 0 — неизвестно.</summary>
     public int FormFactor;
 }
@@ -92,10 +96,12 @@ public static class UpgradeAdvisor
     // ================================================================== чтение
     public static RamInfo ReadRam()
     {
+        // Проверочная подмена железа для снимков (PULSEPC_TEST_HW): выводы о памяти показываются на подставных планках.
+        if (MemoryProfile.TestRam() is RamInfo fake) return fake;
         var info = new RamInfo();
         const string script =
-            "$m = @(Get-CimInstance Win32_PhysicalMemory | ForEach-Object { [pscustomobject]@{ Slot=\"$($_.DeviceLocator)\"; Maker=\"$($_.Manufacturer)\"; " +
-            "Part=\"$($_.PartNumber)\".Trim(); Bytes=[double]$_.Capacity; Mhz=[int]$_.ConfiguredClockSpeed; Rated=[int]$_.Speed; Type=[int]$_.SMBIOSMemoryType; Form=[int]$_.FormFactor } }); " +
+            "$m = @(Get-CimInstance Win32_PhysicalMemory | ForEach-Object { [pscustomobject]@{ Slot=\"$($_.DeviceLocator)\"; Bank=\"$($_.BankLabel)\"; Maker=\"$($_.Manufacturer)\"; " +
+            "Part=\"$($_.PartNumber)\".Trim(); Bytes=[double]$_.Capacity; Mhz=[int]$_.ConfiguredClockSpeed; Rated=[int]$_.Speed; Type=[int]$_.SMBIOSMemoryType; Form=[int]$_.FormFactor; Rank=[int]$_.Attributes } }); " +
             "$a = @(Get-CimInstance Win32_PhysicalMemoryArray | Where-Object { $_.Use -eq 3 -or $_.Use -eq $null } | ForEach-Object { [pscustomobject]@{ Slots=[int]$_.MemoryDevices; MaxKb=[double]$(if ($_.MaxCapacityEx) { $_.MaxCapacityEx } else { $_.MaxCapacity }) } }); " +
             "[pscustomobject]@{ Ram=$m; Arr=$a } | ConvertTo-Json -Compress -Depth 3";
         try
@@ -107,7 +113,7 @@ public static class UpgradeAdvisor
             info = ParseRam(doc.RootElement);
         }
         catch { }
-        try { if (!info.Laptop && BatteryInfo.Read().HasBattery) info.Laptop = true; } catch { }
+        try { if (!info.Laptop && HardwareChecks.IsLaptop()) info.Laptop = true; } catch { }
         return info;
     }
 
@@ -128,9 +134,9 @@ public static class UpgradeAdvisor
             if (gb <= 0) continue;
             info.Sticks.Add(new RamStick
             {
-                Slot = S(m, "Slot"), Maker = HardwareInfo.RamMaker(S(m, "Maker")), Part = S(m, "Part"), SizeGb = gb,
+                Slot = S(m, "Slot"), Bank = S(m, "Bank"), Maker = HardwareInfo.RamMaker(S(m, "Maker")), Part = S(m, "Part"), SizeGb = gb,
                 Mts = HardwareInfo.RamMts(type, (int)N(m, "Mhz"), (int)N(m, "Rated")), RatedMts = HardwareInfo.RamMts(type, (int)N(m, "Rated"), 0),
-                FormFactor = (int)N(m, "Form"),
+                FormFactor = (int)N(m, "Form"), Ranks = (int)N(m, "Rank") is int rk and > 0 and <= 8 ? rk : 0,
             });
         }
         info.Type = HardwareInfo.RamTypeFor(type, info.Sticks.Select(s => s.Mts).DefaultIfEmpty(0).Max(), info.Sticks.Select(s => s.Part));
@@ -179,7 +185,7 @@ public static class UpgradeAdvisor
             Ram = ReadRam(),
             Facts = Facts(host?.Sessions() ?? Array.Empty<GameSession>()),
             Drives = ReadDrives(),
-            Cpu = HardwareInfo.ShortCpu(hw.CpuName),
+            Cpu = HardwareInfo.ShortCpu(MemoryProfile.TestCpu ?? hw.CpuName),
             Socket = hw.SocketName ?? "",
             Gpu = gpu?.Name ?? "",
             VramGb = gpu?.VramGb ?? 0,
@@ -241,7 +247,8 @@ public static class UpgradeAdvisor
 
     private static string Spec(RamInfo ram, double sizeGb)
     {
-        int mts = ram.Sticks.Select(s => s.Mts).DefaultIfEmpty(0).Max();
+        // Скорость по маркировке, а не текущая: при выключенном профиле планки работают на 2133, а куплены как 3200.
+        int mts = ram.Sticks.Select(s => Math.Max(s.Mts, MemoryProfile.PartSpeed(s.Part))).DefaultIfEmpty(0).Max();
         string type = ram.Type.Length > 0 ? ram.Type + (mts > 0 ? "-" + mts : "") : mts > 0 ? mts + Nb + L.T("МТ/с") : "";
         return $"{sizeGb:0}{Nb}{Fmt.GbUnit}" + (type.Length > 0 ? " " + type : "") + (ram.Laptop ? " SO-DIMM" : "");
     }
@@ -262,7 +269,9 @@ public static class UpgradeAdvisor
         bool uniform = !Mixed(ram);
         var first = s[0];
         string model = first.Part.Length > 0 ? $"{(first.Maker.Length > 0 ? first.Maker + " " : "")}{first.Part}" : "";
-        string after = " " + L.T("После установки проверьте в BIOS, что профиль XMP (у AMD — EXPO) включён, а здесь — что частота осталась прежней.");
+        // Про XMP — только у настольного ПК и с предупреждением о рисках (в BIOS ноутбуков профиля обычно нет).
+        string after = ram.Laptop ? " " + L.T("После установки проверьте здесь, что частота памяти осталась прежней.")
+            : " " + L.T("После установки проверьте здесь, что частота осталась прежней. Если раньше в BIOS был включён профиль XMP/EXPO, после смены планок его иногда приходится включить заново; если после этого начнутся сбои — выключите его.");
 
         if (ram.Slots <= 0)
         {
@@ -310,16 +319,28 @@ public static class UpgradeAdvisor
         // ---------- память: бесплатное прежде покупок
         if (ram.Sticks.Count > 0)
         {
-            var slow = ram.Sticks.Where(s => PartSpeed(s.Part) > s.Mts + 100 && s.Mts > 0).ToList();
-            if (slow.Count > 0)
+            // Частота и каналы — общий вывод MemoryProfile (тот же, что в осмотре и «Диагностике»): XMP/EXPO советуется только
+            // настольному ПК, только если частота не выше штатной для процессора, и всегда с предупреждением о рисках.
+            var setup = MemoryProfile.FromRam(ram, x.Cpu);
+            var speed = MemoryProfile.Speed(setup);
+            if (speed.AdviseProfile)
                 list.Add(new Advice
                 {
-                    Part = "Память", Score = 95, Level = Severity.Warn, Free = true,
-                    Title = "Память работает медленнее, чем умеет",
-                    Why = L.F("По маркировке ({0}) планки рассчитаны на {1} МТ/с, а работают на {2} МТ/с. Обычно это значит, что в BIOS не включён профиль XMP.",
-                              slow[0].Part, PartSpeed(slow[0].Part), slow[0].Mts),
-                    What = L.T("Включите в BIOS профиль XMP (у AMD — EXPO или DOCP). Это бесплатно и прибавляет FPS там, где игра упирается в процессор."),
-                    NotIf = L.T("Если после этого компьютер не загружается, сбросьте настройки BIOS к заводским — частота вернётся прежняя."),
+                    Part = "Память", Score = 80, Level = Severity.Info, Free = true,
+                    Title = speed.Title, Gist = L.T("похоже, профиль XMP/EXPO выключен"),
+                    Why = speed.Text, What = speed.What, NotIf = speed.Warning,
+                });
+            else if (speed.Kind is MemKind.AtOfficial or MemKind.LaptopBelow or MemKind.AbovePartial)
+                list.Add(new Advice { Part = "Память", Fine = true, Level = Severity.Ok, Title = speed.Title, Why = speed.Text });
+
+            var channels = MemoryProfile.Channels(setup);
+            if (channels.Kind == ChannelKind.SameChannel && !setup.Mobile)
+                list.Add(new Advice
+                {
+                    Part = "Память", Score = 90, Level = Severity.Warn, Free = true,
+                    Title = channels.Title, Gist = L.T("планки стоят в одном канале"),
+                    Why = channels.Text, What = channels.What,
+                    NotIf = L.T("Прибавка будет небольшой, если FPS ограничивает видеокарта; больше всего выигрывают игры, которые упираются в процессор, и встроенная графика."),
                 });
 
             if (ram.Sticks.Count == 1 && ram.Slots >= 2)
@@ -433,7 +454,7 @@ public static class UpgradeAdvisor
                     Title = "FPS ограничивает процессор",
                     Gist = L.F("{0:0} % времени видеокарта ждала его", f.CpuBound),
                     Why = L.F("{0:0} % времени видеокарта ждала процессор", f.CpuBound) + (f.TopCpuGame.Length > 0 ? L.F(", чаще всего — в {0}", f.TopCpuGame) : "") + ".",
-                    What = L.T("Сначала бесплатно: закрыть фоновые программы, проверить, что память в двух каналах и с XMP.") +
+                    What = L.T("Сначала бесплатно: закрыть фоновые программы и посмотреть выводы про память выше — работает ли она в двух каналах и на какой частоте.") +
                            (x.Socket.Length > 0 && x.Socket != "BGA" ? " " + L.F("Новый процессор — того же разъёма {0}, если плата его поддерживает (может понадобиться обновить BIOS).", x.Socket) : ""),
                     NotIf = L.T("Не поможет, если FPS упирается в лимит кадров в игре или в драйвере."),
                 });
@@ -604,8 +625,19 @@ public static class UpgradeAdvisor
             !few.Any(a => a.Part is "Видеокарта" or "Процессор") && !few.Any(a => a.Title.Contains("не хватает")) && (en || Verdict(few, fewInput.Facts).StartsWith("Данных мало")));
 
         var oneStick = Ram(2, 64, "DDR4", (8, 2133, "KF3200C16D4/8GX"));
-        var single = Advise(new AdvisorInput { Ram = oneStick, Facts = new SessionFacts() });
-        Check("XMP выключен (маркировка 3200, работает 2133) — первым, бесплатно", single.Count > 0 && single[0].Free && single[0].Title.StartsWith("Память работает медленнее"));
+        var single = Advise(new AdvisorInput { Ram = oneStick, Facts = new SessionFacts(), Cpu = "Core i5-12400F" });
+        Check("XMP похоже выключен (i5-12400F, маркировка 3200, работает 2133) — бесплатно и с предупреждением о рисках",
+            single.Any(a => a.Free && a.Title == "Похоже, профиль XMP/EXPO выключен" && a.NotIf.Length > 0));
+        var unknownCpu = Advise(new AdvisorInput { Ram = oneStick, Facts = new SessionFacts(), Cpu = "" });
+        Check("процессор неизвестен — про XMP ничего не утверждаем", !unknownCpu.Any(a => a.Title.Contains("XMP")));
+        var laptopRam = Ram(2, 64, "DDR5", (16, 5200, "M425R2GA3BB0-CWMOD"), (16, 5200, "M425R2GA3BB0-CWMOD"));
+        laptopRam.Laptop = true;
+        laptopRam.Sticks.ForEach(s => s.RatedMts = 5600);
+        var lap = Advise(new AdvisorInput { Ram = laptopRam, Facts = new SessionFacts(), Cpu = "Ryzen 9 8940HX" });
+        Check("ноутбук Ryzen 9 8940HX, 5600 на 5200 — XMP не советуется, «штатно» в норме", !lap.Any(a => !a.Fine && a.Title.Contains("XMP")) && lap.Any(a => a.Fine && a.Title == "Память работает на штатной скорости процессора"));
+        var sameCh = Ram(4, 128, "DDR4", (8, 3200, "X"), (8, 3200, "X"));
+        sameCh.Sticks[0].Slot = "DIMM_A1"; sameCh.Sticks[1].Slot = "DIMM_A2";
+        Check("две планки в одном канале — бесплатный совет переставить", Advise(new AdvisorInput { Ram = sameCh, Facts = new SessionFacts() }).Any(a => a.Free && a.Title == "Планки памяти стоят в одном канале"));
         Check("одна планка при двух слотах — одноканальный режим, докупить такую же",
             single.Any(a => a.Title.Contains("одноканальном") && (en || a.What.Contains("Докупите 1 × 8"))));
         Check("8 ГБ без сессий — не дублируется с одноканальным советом", !single.Any(a => a.Title.Contains("мало для новых игр")));
@@ -650,5 +682,5 @@ public static class UpgradeAdvisor
         return (fail == null ? "OK" : "FAIL: " + fail) + "\n" + sb;
     }
 
-    private static string Pct(double v) => double.IsNaN(v) ? "—" : $"{v:0} %";
+    private static string Pct(double v) => double.IsNaN(v) ? "—" : $"{v:0}" + (L.En ? "%" : " %");
 }

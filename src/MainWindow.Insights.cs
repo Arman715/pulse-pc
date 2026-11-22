@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Media;
 using PulsePC.Services;
 
@@ -12,6 +12,8 @@ public class DipRow
     public string Length { get; set; } = "";
     public string Cause { get; set; } = "";
     public string Detail { get; set; } = "";
+    /// <summary>Кто ещё занимал процессор и диск в момент просадки (пусто — никого заметного или старая сессия).</summary>
+    public string Culprits { get; set; } = "";
     public Brush CauseInk { get; set; }
 }
 
@@ -40,6 +42,7 @@ public partial class MainWindow
         ShowBottleneck(s);
         ShowClocks(s);
         ShowServer(s);
+        ShowReport15(s);
         // Другая сессия — прежнее «картинка сохранена» к ней не относится.
         ShareDone.Visibility = Visibility.Collapsed;
         BtnShare.IsEnabled = true;
@@ -71,7 +74,8 @@ public partial class MainWindow
             Length = L.F("{0:0.#} с", d.Seconds),
             Cause = CauseName(d.Cause),
             Detail = L.T(d.Detail),      // у старых сессий разбор записан по-русски
-            CauseInk = d.Cause is "ram" or "gpu-heat" ? Palette.Warn : d.Cause == "unknown" ? Palette.Ink3 : Palette.Ink1,
+            Culprits = d.Culprits is { Count: > 0 } ? L.F("Мешали: {0}.", SessionCulprits.Describe(d.Culprits)) : "",
+            CauseInk = d.Cause is "ram" or "gpu-heat" or "gpu-power" ? Palette.Warn : d.Cause == "unknown" ? Palette.Ink3 : Palette.Ink1,
         }).ToList();
     }
 
@@ -169,7 +173,8 @@ public partial class MainWindow
         if (s.AvgGpuClock > 0) parts.Add(L.F("Видеокарта под нагрузкой держала в среднем {0:0} МГц", s.AvgGpuClock));
         if (s.AvgCpuGhz > 0) parts.Add(L.F("процессор — {0:0.0#} ГГц", s.AvgCpuGhz));
         string head = parts.Count > 0 ? string.Join(", ", parts) + ". " : "";
-        bool heat = s.GpuThermalLimitPct >= 5 || s.GpuHardLimitPct >= 5 || s.CpuSlowPct >= 10;
+        // Пороги — те же, что у замечаний (SessionRecorder.BuildNotes): иначе «подробности в выводах ниже» указывали бы в пустоту.
+        bool heat = s.GpuThermalLimitPct >= 5 || s.GpuHardLimitPct >= 5 || s.CpuSlowPct >= 15;
         SessClockSummary.Text = head + (heat
             ? L.T("Частоты сбрасывались — это стоит проверить, подробности в выводах ниже.")
             : L.T("Частоты не сбрасывались. Упор в лимит питания — нормальная работа видеокарты: она разгоняется, пока хватает питания."));
@@ -182,9 +187,14 @@ public partial class MainWindow
             bars.Add(new BarVm { Label = label, Fraction = v / 100, Text = InsightPct(v), Ink = v >= warnFrom ? warnInk : Palette.Ink2 });
         }
         Add(L.T("видеокарта: упор в лимит питания"), s.GpuPowerLimitPct, 101, Palette.Ink2);
-        Add(L.T("видеокарта: снижение из-за нагрева"), s.GpuThermalLimitPct, 5, Palette.Warn);
+        // Предел температуры ниже 80 °C — не нагрев (так его задаёт ноутбук или программа разгона): подпись и цвет как в замечании.
+        double limitTemp = s.GpuThermalTempC ?? s.MaxTemp;
+        if (limitTemp > 0 && limitTemp < SessionAnalysis.TempLimitHotC(LaptopCheck.Applies))
+            Add(L.T("видеокарта: у предела температуры"), s.GpuThermalLimitPct, 101, Palette.Ink2);
+        else
+            Add(L.T("видеокарта: снижение из-за нагрева"), s.GpuThermalLimitPct, 5, Palette.Warn);
         Add(L.T("видеокарта: аварийное снижение"), s.GpuHardLimitPct, 5, Palette.Bad);
-        Add(L.T("процессор: ниже базовой частоты"), s.CpuSlowPct, 10, Palette.Warn);
+        Add(L.T("процессор: ниже базовой частоты"), s.CpuSlowPct, 15, Palette.Warn);
         SessClockBars.ItemsSource = bars;
     }
 
@@ -246,7 +256,7 @@ public partial class MainWindow
             WeekSessions.Value = w.Sessions;
             WeekDips.Value = w.Dips;
             WeekTemp.Value = w.MaxTemp;
-            WeekTemp.Foreground = w.MaxTemp >= 83 ? Palette.Warn : Palette.Ink1;
+            WeekTemp.Foreground = w.MaxTemp >= SessionAnalysis.HotMaxTempC(LaptopCheck.Applies) ? Palette.Warn : Palette.Ink1;
         }
         WeekGames.ItemsSource = w.Games;
         WeekNotes.ItemsSource = w.Notes;

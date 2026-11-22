@@ -1,0 +1,8 @@
+{
+  "Античит {0} — {1}; для EasyAntiCheat и BattlEye запись по умолчанию полная, осторожный режим — по переключателю.": "Anti-cheat: {0} ({1}); games with EasyAntiCheat and BattlEye are recorded in full by default, cautious mode is available with the switch.",
+  "В игре античит {0}; для EasyAntiCheat и BattlEye запись по умолчанию полная.": "Anti-cheat in this game: {0}; games with EasyAntiCheat and BattlEye are recorded in full by default.",
+  "У этой игры античит {0} ({1}) — для неё включён осторожный режим: FPS и сервер игры записываться не будут.": "This game has the {0} anti-cheat ({1}) — cautious mode is on for it: FPS and the game server won't be recorded.",
+  "видеокарта: у предела температуры": "GPU: at its temperature limit",
+  "Процессор справляется с запасом. Поднять FPS можно настройками графики: тени, сглаживание, разрешение рендера, {0} в режиме «Качество».": "The CPU has headroom. Graphics settings can raise FPS: shadows, anti-aliasing, render resolution, {0} in Quality mode.",
+  "Если снизить графику, FPS почти не вырастет. Помогает другое: закрыть фоновые программы, уменьшить дальность прорисовки, число объектов и теней — их считает процессор. {0} здесь почти бесполезен.": "Lowering graphics will barely raise FPS. What helps instead: close background apps, lower draw distance, object count, and shadows — the CPU calculates those. {0} barely helps here."
+}

@@ -10,6 +10,13 @@ public partial class App : Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Служебные переменные PULSEPC_* (папка данных, переносной режим, подставные данные) у программы с правами
+        // администратора — только заданные для этого процесса, а не постоянные переменные пользователя (HKCU\Environment):
+        // их может записать любая программа без прав, и автозапуск с правами взял бы данные из её папки.
+        DropUserOverrides();
+        // Переносная версия (portable.txt рядом с программой): история и настройки — в папке Data рядом с ней.
+        // Самым первым: до всего, что читает настройки или пишет журнал. Установщик и удаление так не запускаются.
+        if (Services.SetupRequest.Parse(e.Args, Environment.ProcessPath) == null) Services.Portable.Apply(Environment.ProcessPath);
         // Любая необработанная ошибка пишется в журнал; окно с ней — не чаще раза в 10 минут, программа продолжает работать.
         DispatcherUnhandledException += OnUiException;
         // Ошибка в фоновом потоке завершает процесс: успеть вернуть вентиляторы драйверу и «игровые» настройки системе.
@@ -48,6 +55,8 @@ public partial class App : Application
 
         // Служебные режимы: снимок одного раздела вкладки «Система» и самопроверка одной службы.
         if (Panels.PanelHarness.TryRun(e.Args)) { Shutdown(); return; }
+        // Служебный режим: снимки окна программы с подставными данными (страница проекта, справка).
+        if (Panels.WindowShots.TryRun(e.Args, this)) return;
 
         // Служебный режим: проверка безопасного удаления в песочнице, без окна.
         int i = Array.IndexOf(e.Args, "--selftest");
@@ -124,6 +133,30 @@ public partial class App : Application
     }
 
     private static Mutex single;
+
+    /// <summary>
+    /// Программа с правами: переменные PULSEPC_*, значение которых пришло из постоянных переменных пользователя, убираются
+    /// из окружения процесса (до переносного режима и до первого обращения к папкам данных).
+    /// </summary>
+    private static void DropUserOverrides()
+    {
+        try
+        {
+            if (!Services.Shell.IsAdmin()) return;
+            var dropped = new List<string>();
+            foreach (System.Collections.DictionaryEntry v in Environment.GetEnvironmentVariables(EnvironmentVariableTarget.User))
+            {
+                if (v.Key is not string name || !name.StartsWith("PULSEPC_", StringComparison.OrdinalIgnoreCase)) continue;
+                if (Environment.GetEnvironmentVariable(name) is { Length: > 0 } now && now == v.Value as string)
+                {
+                    Environment.SetEnvironmentVariable(name, null);
+                    dropped.Add(name);
+                }
+            }
+            if (dropped.Count > 0) Log.Info("постоянные переменные пользователя не действуют на программу с правами: " + string.Join(", ", dropped));
+        }
+        catch (Exception ex) { Log.Error("служебные переменные окружения", ex); }
+    }
 
     // ------------------------------------------------------------------ один экземпляр
     // Имена «PulsePC.*.Admin» общие для всего сеанса: программа без прав могла бы создать их заранее и тем самым
@@ -221,6 +254,7 @@ public partial class App : Application
     {
         try { Log.Error("программа завершается из-за ошибки", e.ExceptionObject as Exception); } catch { }
         try { FanControl.Shutdown(); } catch { }
+        try { DpcLatency.StopActive(); } catch { }        // сеанс трассировки ядра («Задержки драйверов») не оставлять работать
         try { GameHooks.RaiseEnded(wait: true); } catch { }
     }
 }

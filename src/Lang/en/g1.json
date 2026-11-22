@@ -128,7 +128,6 @@
   "Запустите игру. Внизу окна программы появится строка «● запись».": "Launch the game. A “● recording” line appears at the bottom of the program window.",
   "Играйте. Программа раз в полторы секунды запоминает FPS, загрузку, температуру видеокарты, память и пинг.": "Play. Every second and a half, the program saves FPS, load, graphics card temperature, memory, and ping.",
   "Закройте игру — через несколько секунд у часов появится «Сессия записана».": "Close the game — a few seconds later “Session recorded” appears in the tray.",
-  "Сессии короче двух минут не сохраняются: это обычно случайный запуск. В VALORANT и League of Legends FPS не записывается — у их античитов доступ к уровню ядра, и программа не рискует вашим аккаунтом. Остальное записывается и там.": "Sessions shorter than two minutes aren't saved: that's usually an accidental launch. In VALORANT and League of Legends, FPS isn't recorded — their anti-cheats have kernel-level access, and the program won't risk your account. Everything else is still recorded there.",
   "Открыть «Сессии»": "Open Sessions",
   "Как читать отчёт": "How to read the report",
   "Отчёт — вкладка «Сессии». Самое полезное в нём — блок «Что ограничивало FPS».": "The report is on the Sessions tab. The most useful part is the “What limited FPS” block.",
@@ -243,7 +242,6 @@
   "какие части программы работают, журнал ошибок и отчёт для вопроса": "which parts of the program are working, the error log, and a report for asking questions",
   "Открыть «Систему»": "Open System",
   "Обновление и удаление": "Updates and uninstalling",
-  "Программа обновляется сама — по вашей кнопке.": "The program updates itself — when you click the button.",
   "Раз в сутки программа проверяет, нет ли новой версии. Если есть — уведомление у часов и кнопка «Обновить» в разделе «Новые версии». Перед установкой программа сверяет контрольную сумму скачанного файла.": "Once a day the program checks for a new version. If there is one, you get a notification and an Update button in Updates (app). Before installing, the program verifies the checksum of the downloaded file.",
   "Открыть «Новые версии»": "Open Updates (app)",
   "Удаление": "Uninstalling",
@@ -274,7 +272,6 @@
   "Игра не записывается": "A game isn't recorded",
   "проверьте, что программа запущена (значок у часов). Сессии короче двух минут не сохраняются": "check that the program is running (tray icon). Sessions shorter than two minutes aren't saved",
   "В отчёте нет FPS": "No FPS in the report",
-  "включите «Записывать FPS в играх» в меню значка у часов. В VALORANT и LoL FPS не пишется намеренно": "turn on Record FPS in games in the tray icon menu. In VALORANT and LoL, FPS isn't recorded on purpose",
   "Кнопки серые, «только с правами администратора»": "Buttons are gray, “administrator rights only”",
   "запускайте программу ярлыком из установки — он сам просит права": "start the program from the shortcut the installer created — it asks for rights itself",
   "Хочется вернуть всё как было": "I want to undo everything",
@@ -346,7 +343,6 @@
   "Видеопамять была заполнена почти полностью ({0:0.0} из {1:0.0} ГБ). Снизьте качество текстур.": "VRAM was almost full ({0:0.0} of {1:0.0} GB). Lower texture quality.",
   "Терялось {0:0.0} % пакетов — в сетевой игре это «телепорты» и рывки.": "{0:0.0}% of packets were lost — in an online game that means “teleporting” and stutters.",
   "Пинг «гулял»: разброс {0:0} мс при среднем {1:0} мс.": "Ping was unstable: jitter {0:0} ms with an average of {1:0} ms.",
-  "Замечаний нет: температура, память и загрузка были в норме.": "No issues: temperature, memory, and load were normal.",
   "sessions.json не читается — копия сохранена как sessions.unreadable.json": "sessions.json can't be read — a copy was saved as sessions.unreadable.json",
   "чтение сессий: {0}": "reading sessions: {0}",
   "сессия {0} не сохранена: {1}": "session {0} wasn't saved: {1}",
@@ -400,5 +396,7 @@
   "ПРОЧЕЕ": "OTHER",
   "Запись сессий": "Session recording",
   "Кадры (PresentMon)": "Frames (PresentMon)",
-  "Сеть игры": "Game network"
+  "Сеть игры": "Game network",
+  "включите «Записывать FPS в играх» в меню значка у часов. В играх со строгим античитом FPS не пишется намеренно (осторожный режим); полную запись можно разрешить в «Установленных программах»": "turn on “Record FPS in games” in the tray icon menu. In games with a strict anti-cheat FPS isn’t recorded on purpose (cautious mode); you can allow full recording in “Installed programs”",
+  "Сессии короче двух минут не сохраняются: это обычно случайный запуск. В играх со строгим античитом (VALORANT, Call of Duty, Genshin Impact и другие) работает осторожный режим: FPS и сервер игры не записываются, остальное — как обычно.": "Sessions shorter than two minutes aren't saved: that's usually an accidental launch. Games with a strict anti-cheat (VALORANT, Call of Duty, Genshin Impact and others) use cautious mode: FPS and the game server aren't recorded, everything else as usual."
 }

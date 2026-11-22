@@ -209,7 +209,7 @@ public partial class UpgradePanel : UserControl, ISystemPanel
 
     private void ShowDrives(List<GameDrive> drives)
     {
-        DrivesEmpty.Text = L.T("Установленных игр не найдено (программа видит Steam, Epic, Riot и Astrum).");
+        DrivesEmpty.Text = L.T("Установленных игр не найдено. Программа ищет их в магазинах (Steam, Epic, GOG, Xbox и других) и на дисках; игру, которой нет в списке, можно добавить вручную на вкладке «Сессии».");
         DrivesEmpty.Visibility = drives.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         DriveList.ItemsSource = drives.Select(d => new DriveItem
         {

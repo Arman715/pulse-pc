@@ -11,6 +11,8 @@ public sealed class PowerScheme
 {
     public string Guid { get; set; } = "";
     public string Name { get; set; } = "";
+    /// <summary>Название для показа: в английском интерфейсе стандартные схемы Windows — по-английски (Name не трогается: по нему сравнивают).</summary>
+    public string DisplayName => L.Data(Name);
     public string Hint { get; set; } = "";
     /// <summary>Пометка справа в списке: «включена», «включится в игре» или пусто.</summary>
     public string Mark { get; set; } = "";

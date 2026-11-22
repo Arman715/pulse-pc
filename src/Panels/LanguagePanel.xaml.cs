@@ -18,11 +18,20 @@ public partial class LanguagePanel : UserControl, ISystemPanel
     {
         InitializeComponent();
         State.Text = L.En ? "Language: English" : "Язык: русский";
-        Intro.Text = "Язык меню, отчётов и уведомлений. Названия игр и файлов не переводятся.\nLanguage of menus, reports and notifications. Game and file names are not translated.";
-        ChoiceLabel.Source = "ЯЗЫК · LANGUAGE";
-        string win = L.Resolve("") == "en" ? "English" : "Русский";
-        AutoTitle.Text = "Как в Windows · Same as Windows";
-        AutoCaption.Text = (L.En ? "now: " : "сейчас: ") + win;
+        // Сначала — на языке интерфейса, вторым — на другом.
+        const string introRu = "Язык меню, отчётов и уведомлений. Названия игр и файлов не переводятся.";
+        const string introEn = "Language of menus, reports and notifications. Game and file names are not translated.";
+        Intro.Text = L.En ? introEn + "\n" + introRu : introRu + "\n" + introEn;
+        ChoiceLabel.Source = L.En ? "LANGUAGE · ЯЗЫК" : "ЯЗЫК · LANGUAGE";
+        // Каждый вариант подписан на обоих языках: родное название и через точку — на другом языке.
+        RuTitle.Text = "Русский · Russian";
+        EnTitle.Text = "English · Английский";
+        RuCaption.Visibility = EnCaption.Visibility = Visibility.Collapsed;
+        bool winEn = L.Resolve("") == "en";
+        AutoTitle.Text = L.En ? "Same as Windows · Как в Windows" : "Как в Windows · Same as Windows";
+        AutoCaption.Text = L.En
+            ? (winEn ? "now: English · сейчас: английский" : "now: Russian · сейчас: русский")
+            : (winEn ? "сейчас: английский · now: English" : "сейчас: русский · now: Russian");
     }
 
     public void Attach(PanelHost host)

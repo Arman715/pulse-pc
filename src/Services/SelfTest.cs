@@ -106,7 +106,7 @@ public static class SelfTest
             if (!fans.StartsWith("OK")) failed++;
 
             // --- Откат настроек Windows и сетевой карты: разбор копий, кавычки PowerShell (чистые функции, система не трогается) ---
-            foreach (var (name, run) in new (string, Func<string>)[] { ("Настройки Windows", Tweaks.SelfTest), ("Сетевая карта", NetPower.SelfTest), ("Игры, добавленные вручную", GameDetector.SelfTest), ("Пинг и сохранение сессий", SessionChecks.SelfTest) })
+            foreach (var (name, run) in new (string, Func<string>)[] { ("Настройки Windows", Tweaks.SelfTest), ("Сетевая карта", NetPower.SelfTest), ("Игры, добавленные вручную", GameDetector.SelfTest), ("Пинг и сохранение сессий", SessionChecks.SelfTest), ("Оверлей", Overlay.SelfTest), ("Осторожный режим (античит)", AntiCheat.SelfTest), ("Заряд устройств", DeviceBattery.SelfTest), ("Записи журналов: что значит и что делать", LogDetails.SelfTest) })
             {
                 string res = run();
                 log.AppendLine().AppendLine(name + ": " + res.Replace("\n", "\n  "));
@@ -145,6 +145,14 @@ public static class SelfTest
             if (!ok) failed++;
         }
         catch (Exception ex) { log.AppendLine("Просадки: EXCEPTION " + ex.Message); failed++; }
+        // Ложные выводы отчёта, на которые жаловались пользователи 1.5.0, — влияет на итог.
+        try
+        {
+            string truth = TruthCheck(out int bad);
+            log.AppendLine().AppendLine().Append(truth);
+            failed += bad;
+        }
+        catch (Exception ex) { log.AppendLine("Правдивость отчёта: EXCEPTION " + ex.Message); failed++; }
         // Чужое железо на выдуманных данных: видеокарты AMD/Intel/NVIDIA, драйверы, процессоры, память, батарея — влияет на итог.
         try
         {
@@ -248,6 +256,130 @@ public static class SelfTest
         return "Настройки игр (запись и откат):" + Environment.NewLine + string.Join(Environment.NewLine, lines.Select(l => "  " + l));
     }
 
+    /// <summary>
+    /// Ложные выводы, на которые жаловались пользователи 1.5.0: «не хватало памяти» при 32 ГБ и 9 ГБ свободных (игра просто читала
+    /// файлы — счётчик подгрузки страниц высокий), «сброс частоты из-за нагрева» на ноутбуке при 70 °C и по сигналу питания.
+    /// Плюс исправление уже записанных старых сессий.
+    /// </summary>
+    private static string TruthCheck(out int bad)
+    {
+        var lines = new List<string> { "Правдивость отчёта (жалобы пользователей):" };
+        int fails = 0;
+        void Check(string what, bool ok) { lines.Add($"  {(ok ? "OK  " : "FAIL")} {what}"); if (!ok) fails++; }
+        double savedTotal = SessionAnalysis.TestTotalRamGb;
+        try
+        {
+            // --- память
+            SessionAnalysis.TestTotalRamGb = 32;
+            Check("32 ГБ, свободно 9 ГБ, подгрузка 2000 стр/с → памяти хватает", !SessionAnalysis.MemoryShort(9, 2000, 32));
+            Check("32 ГБ, свободно 2 ГБ, подгрузка 900 стр/с → не хватает (идёт подкачка)", SessionAnalysis.MemoryShort(2, 900, 32));
+            Check("16 ГБ, свободно 0,5 ГБ → не хватает", SessionAnalysis.MemoryShort(0.5, 0, 16));
+            Check("16 ГБ, свободно 3 ГБ, подгрузка 900 → хватает", !SessionAnalysis.MemoryShort(3, 900, 16));
+            Check("нет данных о памяти (0 или NaN) → никакого вывода", !SessionAnalysis.MemoryShort(0, 5000, 16) && !SessionAnalysis.MemoryShort(double.NaN, 5000, 16));
+
+            var start = new DateTime(2026, 1, 1, 20, 0, 0);
+            List<SessionSample> Make(Action<int, SessionSample[]> dip)
+            {
+                var arr = new SessionSample[200];
+                for (int i = 0; i < 200; i++)
+                    arr[i] = new SessionSample { At = start.AddSeconds(i * 1.5), Fps = 150, Cpu = 40, MaxCore = 70, Ghz = 4.2, Gpu = 98, GpuTemp = 66, GpuClock = 2600, RamAvail = 9, PagesIn = 0, DiskBusy = 5 };
+                for (int i = 60; i <= 62; i++) dip(i, arr);
+                return arr.ToList();
+            }
+            GameSession Run(List<SessionSample> samples)
+            {
+                var g = new GameSession { Game = "проверка", Start = start, End = start.AddSeconds(300) };
+                SessionAnalysis.Apply(g, samples, 2.5, new Dictionary<int, string>(), new List<DateTime>());
+                g.MinRamGb = samples.Where(x => x.RamAvail > 0).Min(x => x.RamAvail);
+                g.MaxTemp = samples.Max(x => x.GpuTemp);
+                g.Notes = SessionRecorder.BuildNotes(g);
+                return g;
+            }
+
+            var streaming = Run(Make((i, a) => { a[i].Fps = 60; a[i].PagesIn = 2500; a[i].RamAvail = 9; }));
+            Check("просадка при подгрузке 2500 стр/с и 9 ГБ свободных → «диск», не «память»",
+                streaming.Dips?.Count == 1 && streaming.Dips[0].Cause == "disk" && !streaming.Notes.Any(n => n.Contains("памят") && n.Contains("не хват")));
+            Check("в замечаниях нет «файла подкачки», когда памяти хватало", !streaming.Notes.Any(n => n.Contains("файлу подкачки")));
+
+            // --- нагрев на ноутбуке: предел 70 °C и сигнал питания
+            var tempLimit = Run(Make((i, a) => { a[i].Fps = 60; a[i].GpuTemp = 70; a[i].LimitThermal = true; }));
+            Check("предел температуры при 70 °C → «предел температуры», а не «нагрев»",
+                tempLimit.Dips?.Count == 1 && tempLimit.Dips[0].Cause == "gpu-temp-limit" && tempLimit.GpuThermalTempC == 70);
+            var hot = Run(Make((i, a) => { a[i].Fps = 60; a[i].GpuTemp = 86; a[i].LimitThermal = true; }));
+            Check("предел температуры при 86 °C → «нагрев видеокарты»", hot.Dips?.Count == 1 && hot.Dips[0].Cause == "gpu-heat");
+            Check("ноутбук: предел при 84 °C — «предел температуры», при 88 °C — «нагрев»; ПК: 84 °C — «нагрев»",
+                SessionAnalysis.GpuTempLimit(84, true).Cause == "gpu-temp-limit" && SessionAnalysis.GpuTempLimit(88, true).Cause == "gpu-heat" && SessionAnalysis.GpuTempLimit(84, false).Cause == "gpu-heat");
+            var brake = Run(Make((i, a) => { a[i].Fps = 60; a[i].GpuTemp = 68; a[i].LimitHardware = true; }));
+            Check("аварийный сигнал питания при 68 °C → «питание видеокарты», не «нагрев»",
+                brake.Dips?.Count == 1 && brake.Dips[0].Cause == "gpu-power" && !brake.Dips[0].Detail.Contains("нагрев"));
+
+            // Длительный предел 70 °C — замечание без «почистите радиатор».
+            var longLimit = Run(Make((i, a) => { }).Select((x, i) => { if (i >= 30) { x.LimitThermal = true; x.GpuTemp = 70; } return x; }).ToList());
+            Check("замечание о пределе 70 °C — «это не перегрев», без «почистите радиатор»",
+                (L.Code != "ru" || longLimit.Notes.Any(n => n.Contains("не перегрев"))) && !longLimit.Notes.Any(n => n.Contains("Почистите радиатор")));
+
+            // --- старые сессии (записаны 1.5.0 и раньше) исправляются при чтении
+            var old = new GameSession
+            {
+                Game = "старая", Start = start, End = start.AddMinutes(30), MinRamGb = 9, MaxTemp = 70, MaxPagesIn = 3000,
+                GpuThermalLimitPct = 0, GpuHardLimitPct = 12,
+                Dips = new List<FpsDip>
+                {
+                    new() { At = start.AddMinutes(5), Seconds = 3, FromFps = 140, ToFps = 60, Cause = "ram", Detail = "Свободной памяти оставалось 9,0 ГБ, Windows доставала данные из файла подкачки." },
+                    new() { At = start.AddMinutes(9), Seconds = 3, FromFps = 140, ToFps = 70, Cause = "gpu-heat", Detail = "Видеокарта сбросила частоту из-за нагрева (70 °C)." },
+                },
+            };
+            bool repaired = SessionAnalysis.RepairOld(old);
+            Check("старая сессия: «память» при 9 ГБ → «диск», «нагрев» по сигналу питания → «питание видеокарты»",
+                repaired && old.Dips[0].Cause == "disk" && old.Dips[1].Cause == "gpu-power");
+            old.Notes = SessionRecorder.BuildNotes(old);
+            Check("старая сессия: замечания пересобраны без ложной подкачки", !old.Notes.Any(n => n.Contains("файлу подкачки")));
+            var fine = new GameSession { MinRamGb = 0.6, MaxTemp = 88, GpuThermalLimitPct = 20, Dips = new List<FpsDip> { new() { Cause = "ram" }, new() { Cause = "gpu-heat" } } };
+            Check("настоящие нехватка памяти и перегрев не трогаются", !SessionAnalysis.RepairOld(fine) && fine.Dips[0].Cause == "ram" && fine.Dips[1].Cause == "gpu-heat");
+
+            // --- проверка кода 1.5.0: одно событие — один вывод, максимум и минимум из разных моментов — не вывод
+            SessionAnalysis.TestTotalRamGb = 16;
+            // Карта грузится при 6 ГБ свободных (подгрузка 2500 стр/с), а 1,3 ГБ свободно — минутой позже, без подкачки.
+            var apart = Run(Make((i, a) => { }).Select((x, i) => { if (i == 40) { x.PagesIn = 2500; x.RamAvail = 6; } if (i == 90) x.RamAvail = 1.3; return x; }).ToList());
+            Check("подгрузка при 6 ГБ и 1,3 ГБ свободных в другой момент (16 ГБ) → без «файла подкачки»",
+                apart.PagingSamples == 0 && !apart.Notes.Any(n => n.Contains("файлу подкачки")));
+            var together = Run(Make((i, a) => { }).Select((x, i) => { if (i >= 90 && i <= 94) { x.PagesIn = 2500; x.RamAvail = 1.3; } return x; }).ToList());
+            Check("подгрузка 2500 стр/с при 1,3 ГБ свободных в те же секунды → «файл подкачки»",
+                together.PagingSamples == 5 && (L.Code != "ru" || together.Notes.Any(n => n.Contains("файлу подкачки"))));
+            var oldApart = new GameSession { MinRamGb = 1.3, MaxPagesIn = 3000, Dips = new List<FpsDip> { new() { Cause = "disk" } } };
+            Check("старая сессия без совпадения по времени (просадки не «память») → без «файла подкачки»",
+                !SessionAnalysis.PagingHurt(oldApart) && !SessionRecorder.BuildNotes(oldApart).Any(n => n.Contains("файлу подкачки")));
+
+            // hw_slowdown NVIDIA включается и от перегрева: при 86 °C это нагрев, а не «разъём питания».
+            var hotBrake = Run(Make((i, a) => { }).Select((x, i) => { if (i >= 30) { x.LimitThermal = true; x.LimitHardware = true; x.GpuTemp = 86; } return x; }).ToList());
+            Check("перегрев с hw_slowdown → один вывод о нагреве, без «разъёма питания»",
+                hotBrake.GpuHardLimitPct == 0 && (L.Code != "ru" || hotBrake.Notes.Any(n => n.Contains("из-за нагрева"))) && !hotBrake.Notes.Any(n => n.Contains("разъём питания") || n.Contains("по сигналу")));
+
+            // «Чаще всего — подгрузка с диска», когда 190 рывков из 200 без видимой причины, — неправда.
+            var mostlyOther = new GameSession { Smoothness = 50, StutterPerMin = 6, StutterKinds = new List<StutterGroup> { new() { Kind = "disk", Count = 10 }, new() { Kind = "other", Count = 190 } } };
+            var mostlyDisk = new GameSession { Smoothness = 50, StutterPerMin = 6, StutterKinds = new List<StutterGroup> { new() { Kind = "disk", Count = 150 }, new() { Kind = "other", Count = 50 } } };
+            Check("плавность: «чаще всего — …» только для самого частого вида рывков",
+                (L.Code != "ru" || SessionRecorder.BuildNotes(mostlyOther).Any(n => n.StartsWith("Плавность") && !n.Contains("чаще всего")))
+                && (L.Code != "ru" || SessionRecorder.BuildNotes(mostlyDisk).Any(n => n.Contains("чаще всего — подгрузка с диска"))));
+
+            // Сессия, записанная по исправленным правилам, при чтении не «чинится»: нагрев в просадке при видеокарте ниже 50 %
+            // (не вошёл в GpuThermalLimitPct) и отдельный сигнал питания не превращают нагрев в «питание».
+            var fresh = new GameSession { MaxTemp = 88, GpuThermalLimitPct = 0, GpuHardLimitPct = 6, PagingSamples = 0, Dips = new List<FpsDip> { new() { Cause = "gpu-heat" } } };
+            Check("новая сессия при чтении не меняется", !SessionAnalysis.RepairOld(fresh) && fresh.Dips[0].Cause == "gpu-heat");
+            // Свернули игру (Alt+Tab) — она сама снизила FPS до 30: это не «резкая просадка» с выдуманной причиной.
+            var alt = Run(Make((i, a) => { a[i].Fps = 30; a[i].Gpu = 30; a[i].Unfocused = true; }));
+            var lnch = Run(Make((i, a) => { a[i].Fps = 60; }).Select(x => { x.Unfocused = true; return x; }).ToList());
+            Check("FPS упал, пока игра была свёрнута, → не просадка; окно у лаунчера всю игру → просадки ищутся как обычно",
+                alt.Dips?.Count == 0 && lnch.Dips?.Count == 1);
+            Check("порог «нагревалась до …»: ПК — 83 °C, ноутбук — 87 °C (сессия и неделя одинаково)",
+                SessionAnalysis.HotMaxTempC(false) == 83 && SessionAnalysis.HotMaxTempC(true) == 87);
+        }
+        finally { SessionAnalysis.TestTotalRamGb = savedTotal; }
+        bad = fails;
+        lines.Insert(1, fails == 0 ? "  итог: все проверки пройдены" : $"  итог: не пройдено {fails}");
+        return string.Join(Environment.NewLine, lines);
+    }
+
     /// <summary>Разбор просадок на искусственной сессии с заранее известными причинами.</summary>
     private static string DipsCheck(out bool ok)
     {
@@ -270,7 +402,7 @@ public static class SelfTest
         SessionAnalysis.Apply(session, samples, 2.5, new Dictionary<int, string> { [61] = "Браузер 2,0 ГБ" }, new List<DateTime>());
         var causes = session.Dips?.Select(d => d.Cause).ToList() ?? new List<string>();
         ok = causes.SequenceEqual(new[] { "ram", "cpu", "unknown" })
-             && session.Dips[0].Detail.Contains("Браузер")
+             && (L.Code != "ru" || session.Dips[0].Detail.Contains("Браузер"))
              && session.BoundGpuPct > 90
              && session.GpuPowerLimitPct > 99 && session.CpuSlowPct == 0;
         return $"{(ok ? "OK  " : "FAIL")}  Просадки: найдено {causes.Count} ({string.Join(", ", causes)}), ожидалось 3 (ram, cpu, unknown); "
@@ -365,7 +497,7 @@ public static class SelfTest
         Check("нет датчика температуры (0) и мусор → NaN", double.IsNaN(Kmt.TempFromDeci(0)) && double.IsNaN(Kmt.TempFromDeci(65535)) && Kmt.TempFromDeci(400) == 40);
         var na = new GpuSample();
         Check("без датчиков: потребление и вентилятор — прочерк", na.PowerText == "—" && na.FanText == "—"
-            && new GpuSample { PowerPct = 12 }.PowerText == "12 % от макс." && new GpuSample { Power = 120 }.PowerText == "120 Вт");
+            && (L.Code != "ru" || new GpuSample { PowerPct = 12 }.PowerText == "12 % от макс." && new GpuSample { Power = 120 }.PowerText == "120 Вт"));
 
         // --- версии драйверов
         (string Vendor, string Raw, string Radeon, string Want)[] versions =
@@ -398,7 +530,7 @@ public static class SelfTest
             && intel.Advice[0].Text.Contains("Intel Graphics Software"));
         var basic = new NvState();
         NvidiaProfiles.Advise(basic, "AMD", "AMD Radeon RX 580", false, true, "", 138, 144, "", false);
-        Check("драйвер не установлен: одна фраза, без советов", basic.Reason.Contains("не установлен") && basic.Advice.Count == 0);
+        Check("драйвер не установлен: одна фраза, без советов", (L.Code != "ru" || basic.Reason.Contains("не установлен")) && basic.Advice.Count == 0);
         var nv = new NvState();
         NvidiaProfiles.Advise(nv, "NVIDIA", "NVIDIA GeForce RTX 4060", false, false, "Драйвер не отвечает", 157, 165, "", false);
         Check("NVIDIA без ответа драйвера: причина как есть", nv.Reason == "Драйвер не отвечает");
@@ -429,6 +561,29 @@ public static class SelfTest
         {
             string s = HardwareInfo.SocketFor(cpu), n = HardwareInfo.ShortCpu(cpu), v = HardwareInfo.CpuVendor(cpu);
             Check($"{cpu} → {s}, «{n}», {v}", s == socket && n == shortName && v == vendor);
+        }
+        // Название процессора не должно обрезаться (жалобы пользователей 1.5.0: «Ryzen 9 5900X 12-», «Ultra 7 155H» на чертеже).
+        (string Raw, string Short, string WithVendor, string Blueprint)[] names =
+        {
+            ("AMD Ryzen 9 5900X 12-Core Processor", "Ryzen 9 5900X", "AMD Ryzen 9 5900X", "Ryzen 9 5900X"),
+            ("AMD Ryzen Threadripper PRO 5995WX 64-Cores", "Ryzen Threadripper PRO 5995WX", "AMD Ryzen Threadripper PRO 5995WX", "Ryzen Threadripper PRO 5995WX"),
+            ("12th Gen Intel(R) Core(TM) i5-12400F", "Core i5-12400F", "Intel Core i5-12400F", "i5-12400F"),
+            ("11th Gen Intel(R) Core(TM) i7-11800H @ 2.30GHz", "Core i7-11800H", "Intel Core i7-11800H", "i7-11800H"),
+            ("Intel(R) Core(TM) i7-8700 CPU @ 3.20GHz", "Core i7-8700", "Intel Core i7-8700", "i7-8700"),
+            ("Intel(R) Core(TM) Ultra 7 155H", "Core Ultra 7 155H", "Intel Core Ultra 7 155H", "Core Ultra 7 155H"),
+            ("Intel(R) Core(TM) 5 120U", "Core 5 120U", "Intel Core 5 120U", "Core 5 120U"),
+            ("AMD Ryzen 7 7840HS w/ Radeon 780M Graphics", "Ryzen 7 7840HS", "AMD Ryzen 7 7840HS", "Ryzen 7 7840HS"),
+            ("AMD Ryzen 5 PRO 4650G with Radeon Graphics", "Ryzen 5 PRO 4650G", "AMD Ryzen 5 PRO 4650G", "Ryzen 5 PRO 4650G"),
+            ("Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz", "Xeon E5-2680 v4", "Intel Xeon E5-2680 v4", "Xeon E5-2680 v4"),
+            ("Intel(R) Celeron(R) N4020 CPU @ 1.10GHz", "Celeron N4020", "Intel Celeron N4020", "Celeron N4020"),
+            ("AMD Athlon Silver 3050U with Radeon Graphics", "Athlon Silver 3050U", "AMD Athlon Silver 3050U", "Athlon Silver 3050U"),
+            ("AMD Ryzen 9 8940HX with Radeon Graphics", "Ryzen 9 8940HX", "AMD Ryzen 9 8940HX", "Ryzen 9 8940HX"),
+            ("13th Gen Intel(R) Core(TM) i9-13980HX", "Core i9-13980HX", "Intel Core i9-13980HX", "i9-13980HX"),
+        };
+        foreach (var (raw, shortName, withVendor, bp) in names)
+        {
+            string a = HardwareInfo.ShortCpu(raw), b = HardwareInfo.ShortCpu(raw, withVendor: true), c = HardwareInfo.BlueprintCpu(raw);
+            Check($"название целиком: «{raw}» → «{a}» / «{b}» / чертёж «{c}»", a == shortName && b == withVendor && c == bp);
         }
         Check("разъём из Windows, если модель незнакома: «AM5» → AM5, «U3E1» → пусто",
             HardwareInfo.SocketFor("AMD Ryzen Embedded V3C48", "AM5") == "AM5" && HardwareInfo.SocketFor("Some CPU", "U3E1") == "");
@@ -466,8 +621,8 @@ public static class SelfTest
         // --- батарея ноутбука
         Check("настольный: про батарею ничего", BatteryInfo.Advice(new BatteryInfo(), true) == "");
         string onBattery = BatteryInfo.Advice(new BatteryInfo { HasBattery = true, OnBattery = true, Percent = 42 }, true);
-        Check("ноутбук от батареи: предупреждение с зарядом", onBattery.Contains("от батареи") && onBattery.Contains("42 %") && onBattery.Contains("зарядку"));
-        Check("ноутбук на зарядке: совет играть от зарядки", BatteryInfo.Advice(new BatteryInfo { HasBattery = true, OnBattery = false, Percent = 100 }, false).Contains("от зарядки"));
+        Check("ноутбук от батареи: предупреждение с зарядом", onBattery.Contains("42") && (L.Code != "ru" || onBattery.Contains("от батареи") && onBattery.Contains("зарядку")));
+        Check("ноутбук на зарядке: совет играть от зарядки", BatteryInfo.Advice(new BatteryInfo { HasBattery = true, OnBattery = false, Percent = 100 }, false) is { Length: > 0 } chargerText && (L.Code != "ru" || chargerText.Contains("от зарядки")));
 
         bad = fails;
         return $"Чужое железо (выдуманные данные): {(fails == 0 ? "все проверки пройдены" : "не пройдено " + fails)}" + Environment.NewLine

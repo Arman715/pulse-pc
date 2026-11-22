@@ -29,7 +29,7 @@
                     <Rectangle Width="1" Height="20" Fill="{StaticResource LineStrong}" Margin="18,0,16,0"/>
                     <TextBlock Text="Первичный осмотр" Foreground="{StaticResource Ink2}" VerticalAlignment="Center"/>
                 </StackPanel>
-                <Button Style="{StaticResource CloseButton}" Content="&#xE8BB;" HorizontalAlignment="Right" Click="Close_Click" ToolTip="Закрыть"/>
+                <Button Style="{StaticResource CloseButton}" Content="&#xE8BB;" HorizontalAlignment="Right" Click="Close_Click" ToolTip="Закрыть" AutomationProperties.Name="Закрыть"/>
                 <Rectangle Height="1" Fill="{StaticResource LineStrong}" VerticalAlignment="Bottom"/>
             </Grid>
 

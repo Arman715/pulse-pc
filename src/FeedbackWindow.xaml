@@ -75,7 +75,7 @@
                     <Rectangle Width="1" Height="20" Fill="{StaticResource LineStrong}" Margin="18,0,16,0"/>
                     <TextBlock x:Name="CaptionText" Foreground="{StaticResource Ink2}" VerticalAlignment="Center"/>
                 </StackPanel>
-                <Button Style="{StaticResource CloseButton}" Content="&#xE8BB;" HorizontalAlignment="Right" Click="Close_Click" ToolTip="Закрыть"/>
+                <Button Style="{StaticResource CloseButton}" Content="&#xE8BB;" HorizontalAlignment="Right" Click="Close_Click" ToolTip="Закрыть" AutomationProperties.Name="Закрыть"/>
                 <Rectangle Height="1" Fill="{StaticResource LineStrong}" VerticalAlignment="Bottom"/>
             </Grid>
 
@@ -92,11 +92,14 @@
                         <StackPanel x:Name="ProblemKind">
                             <local:TrackedText Source="ЧТО СЛУЧИЛОСЬ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
                             <Rectangle Style="{StaticResource Hairline}"/>
-                            <StackPanel Orientation="Horizontal" Margin="-12,10,0,0">
+                            <!-- Слева у каждого переключателя — разделитель; у первого он не нужен, его срезает рамка -->
+                            <Border ClipToBounds="True" Margin="0,10,0,0">
+                            <StackPanel Orientation="Horizontal" Margin="-12,0,0,0">
                                 <RadioButton x:Name="KindError" Style="{StaticResource Range}" GroupName="Kind" Content="Ошибка или сбой" IsChecked="True"/>
                                 <RadioButton x:Name="KindWrong" Style="{StaticResource Range}" GroupName="Kind" Content="Работает не так"/>
                                 <RadioButton x:Name="KindIdea" Style="{StaticResource Range}" GroupName="Kind" Content="Неудобно, есть идея"/>
                             </StackPanel>
+                            </Border>
                         </StackPanel>
 
                         <!-- Отзыв: оценка -->

@@ -6,7 +6,7 @@ using System.Windows.Media.Animation;
 
 namespace PulsePC.Blueprint;
 
-public enum Scene { Pc, Gpu, Cpu, Ram, Storage, Router, Gamepad }
+public enum Scene { Pc, Gpu, Cpu, Ram, Storage, Router, Gamepad, Laptop }
 public enum Part { None, Cpu, Gpu, Ram, Storage, Motherboard, Psu }
 
 /// <summary>
@@ -162,7 +162,7 @@ public sealed class BlueprintView : FrameworkElement
     {
         if (padding.HasValue) return padding.Value;
         // Pc: слева место под подписи (x = 0), справа — колонка «край корпуса + 40» шириной ~170.
-        if (Scene == Scene.Pc) return new Thickness(130, 12, 215, 12);
+        if (Scene is Scene.Pc or Scene.Laptop) return new Thickness(130, 12, 215, 12);
         double side = Math.Clamp(size.Width * 0.13, 70, 170);
         return new Thickness(side, 16, side, 16);
     }
@@ -384,7 +384,7 @@ public sealed class BlueprintView : FrameworkElement
             bool idle = p >= 1 && phase == Phase.Idle && HiMix >= 1;
             if (idle)
             {
-                var key = (e, Highlight, HiMix, ghostOthers && Scene == Scene.Pc, BlueprintPalette.Version);
+                var key = (e, Highlight, HiMix, ghostOthers && Scene is Scene.Pc or Scene.Laptop, BlueprintPalette.Version);
                 if (staticCache == null || staticKey != key)
                 {
                     var g = new DrawingGroup();
@@ -470,7 +470,7 @@ public sealed class BlueprintView : FrameworkElement
     private void DrawScene(DrawingContext dc, Layout L, double p, double e)
     {
         var m = model;
-        bool ghostMode = ghostOthers && Scene == Scene.Pc;
+        bool ghostMode = ghostOthers && Scene is Scene.Pc or Scene.Laptop;
         var shifts = new Transform[L.Layers.Length];
         for (int i = 0; i < shifts.Length; i++)
         {
@@ -866,7 +866,7 @@ public sealed class BlueprintView : FrameworkElement
             if (c.Compact)
             {
                 double hl = HiLevel(def.Part);
-                if (Scene == Scene.Pc && ghostOthers) hl = def.Part == Highlight ? 1 : 0;
+                if (Scene is Scene.Pc or Scene.Laptop && ghostOthers) hl = def.Part == Highlight ? 1 : 0;
                 lineBrush = hl > 0.5 ? BlueprintPalette.RedBrush : BlueprintPalette.Ink2Brush;
                 lw = hl > 0.5 ? BlueprintPalette.LeaderWidth : BlueprintPalette.CompactLeaderWidth;
                 dotD = hl > 0.5 ? BlueprintPalette.LeaderDot : BlueprintPalette.CompactDot;
@@ -1008,7 +1008,7 @@ public sealed class BlueprintView : FrameworkElement
         {
             phase = Phase.Drawing;
             Fade = 1;
-            int ms = Scene == Scene.Pc ? 1150 : 1050;
+            int ms = Scene is Scene.Pc or Scene.Laptop ? 1150 : 1050;
             Anim(ProgressProperty, 0, 1, ms, null, () => { if (my == gen) AfterDraw(my, explodes); }, linear: true);
         }
         else

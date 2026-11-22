@@ -178,6 +178,32 @@ public sealed class GameNetMonitor : IDisposable
 
     public void Dispose() { try { Stop(); } catch { } }
 
+    /// <summary>
+    /// Последний пинг до сервера игры, мс (для оверлея): лёгкое чтение без сводки. NaN — сервер не найден
+    /// или последние три ping остались без ответа (многие игровые серверы на ping не отвечают вовсе).
+    /// </summary>
+    public double ServerPingNow()
+    {
+        try
+        {
+            PingTarget ping;
+            lock (gate)
+            {
+                Remote r = current is { WasServer: true } ? current : null;
+                if (r == null)
+                    foreach (var x in remotes.Values)
+                        if (x.WasServer && (r == null || x.In + x.Out > r.In + r.Out)) r = x;
+                ping = r?.Ping;
+            }
+            if (ping == null) return double.NaN;
+            double[] v = ping.Snapshot();
+            for (int i = v.Length - 1; i >= Math.Max(0, v.Length - 3); i--)
+                if (!double.IsNaN(v[i])) return v[i];
+            return double.NaN;
+        }
+        catch { return double.NaN; }
+    }
+
     public GameNetStats Snapshot()
     {
         try

@@ -122,14 +122,40 @@ public static class Feedback
         string text;
         try { text = HealthWatch.Report(admin, 150); }
         catch (Exception ex) { text = "report failed: " + ex.Message; }
+        // Окно обещает «версия, процессор и видеокарта» — модели берутся из реестра (только названия, ничего личного).
+        try { text = Hardware() + Environment.NewLine + text; } catch { }
         // Те же правила, что в самом отчёте: имя пользователя и компьютера — только целым словом. Простая замена подстроки
         // при коротком имени («Ann», «PC») портила весь отчёт («ch%USERNAME%el»), а при пустом имени бросала исключение.
         return HealthWatch.Scrub(text);
     }
 
-    /// <summary>mailto: с темой и текстом. Длинный текст обрезается: браузеры и почтовые программы не принимают ссылки длиннее ~2000 знаков.</summary>
-    public static string MailTo(string subject, string body) =>
-        "mailto:" + Address + "?subject=" + Uri.EscapeDataString(subject) + "&body=" + Uri.EscapeDataString(Crlf(Short(body)));
+    /// <summary>«Processor: …; Graphics: …; RAM: … GB; laptop: yes/no» — по-английски, чтобы отчёт читался одинаково при любом языке.</summary>
+    private static string Hardware()
+    {
+        string cpu = "";
+        using (var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0"))
+            cpu = (k?.GetValue("ProcessorNameString") as string ?? "").Trim();
+        var gpus = new List<string>();
+        using (var cls = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"))
+        {
+            foreach (string sub in cls?.GetSubKeyNames() ?? Array.Empty<string>())
+            {
+                if (!int.TryParse(sub, out _)) continue;
+                using var a = cls.OpenSubKey(sub);
+                string name = (a?.GetValue("DriverDesc") as string ?? "").Trim();
+                string ver = (a?.GetValue("DriverVersion") as string ?? "").Trim();
+                if (name.Length > 0 && !gpus.Any(g => g.StartsWith(name, StringComparison.OrdinalIgnoreCase)))
+                    gpus.Add(ver.Length > 0 ? $"{name} (driver {ver})" : name);
+            }
+        }
+        double ram = 0;
+        try { ram = Math.Round(Metrics.ReadRam().TotalGb); } catch { }
+        return $"Processor: {(cpu == "" ? "?" : cpu)}{Environment.NewLine}Graphics: {(gpus.Count == 0 ? "?" : string.Join("; ", gpus))}{Environment.NewLine}"
+             + $"RAM: {ram:0} GB; laptop: {(LaptopCheck.Applies ? "yes" : "no")}";
+    }
+
+    /// <summary>mailto: с темой и текстом (длинный текст укорачивается, см. <see cref="ComposeUrl"/>).</summary>
+    public static string MailTo(string subject, string body) => ComposeUrl(Service.App, subject, body);
 
     /// <summary>Где у человека почта: сайт почты (новое письмо открывается в браузере) или почтовая программа.</summary>
     public enum Service { Gmail, Yandex, MailRu, Outlook, App }
@@ -143,17 +169,42 @@ public static class Feedback
         _ => L.T("Почтовая программа"),
     };
 
-    /// <summary>Адрес «нового письма» с уже заполненными адресом, темой и текстом.</summary>
+    /// <summary>
+    /// Самый длинный адрес письма. Длиннее — обрезают почтовые сайты и сам Windows: ссылка-ярлык .url, через которую программа
+    /// открывает длинные адреса (Проводник режет свой параметр на 259 знаках), читается целиком примерно до 5000 знаков.
+    /// </summary>
+    public const int MaxUrl = 4500;
+
+    /// <summary>
+    /// Адрес «нового письма» с уже заполненными адресом, темой и текстом. Кириллица в адресе вырастает вшестеро (%D0%9F),
+    /// поэтому длинный текст укорачивается так, чтобы адрес поместился, а в конец письма дописывается, что полный текст —
+    /// в буфере обмена (окно копирует его туда, когда открывает письмо).
+    /// </summary>
     public static string ComposeUrl(Service s, string subject, string body)
     {
-        string to = Uri.EscapeDataString(Address), su = Uri.EscapeDataString(subject), b = Uri.EscapeDataString(Crlf(Short(body)));
+        body ??= "";
+        string url = BuildUrl(s, subject, body);
+        if (body.Length <= 1500 && url.Length <= MaxUrl) return url;
+        string note = "\n…\n" + L.T("(Текст не поместился в ссылку целиком. Полный текст уже в буфере обмена — выделите эту строку и вставьте его: Ctrl+V.)");
+        int lo = 0, hi = Math.Min(body.Length, 1500);
+        while (lo < hi)
+        {
+            int mid = (lo + hi + 1) / 2;
+            if (BuildUrl(s, subject, body[..mid] + note).Length <= MaxUrl) lo = mid; else hi = mid - 1;
+        }
+        return BuildUrl(s, subject, body[..lo].TrimEnd() + note);
+    }
+
+    private static string BuildUrl(Service s, string subject, string body)
+    {
+        string to = Uri.EscapeDataString(Address), su = Uri.EscapeDataString(subject), b = Uri.EscapeDataString(Crlf(body));
         return s switch
         {
             Service.Gmail => $"https://mail.google.com/mail/?view=cm&fs=1&to={to}&su={su}&body={b}",
             Service.Yandex => $"https://mail.yandex.ru/compose?to={to}&subject={su}&body={b}",
             Service.MailRu => $"https://e.mail.ru/compose/?to={to}&subject={su}&body={b}",
             Service.Outlook => $"https://outlook.live.com/mail/0/deeplink/compose?to={to}&subject={su}&body={b}",
-            _ => MailTo(subject, body),
+            _ => "mailto:" + Address + "?subject=" + su + "&body=" + b,
         };
     }
 
@@ -164,7 +215,6 @@ public static class Feedback
         if (r.Archive != null) ShowInFolder(r.Archive);
     }
 
-    private static string Short(string body) => body.Length > 1500 ? body[..1500] + "…" : body;
     private static string Crlf(string s) => s.Replace("\r\n", "\n").Replace("\n", "\r\n");
 
     public static void ShowInFolder(string file)

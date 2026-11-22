@@ -50,7 +50,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel>
-                        <TextBlock Text="{Binding Name}" Style="{StaticResource RowTitle}"/>
+                        <TextBlock Text="{Binding DisplayName}" Style="{StaticResource RowTitle}"/>
                         <TextBlock Text="{Binding Hint}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                     </StackPanel>
                     <TextBlock Grid.Column="1" Text="{Binding Mark}" Style="{StaticResource MonoNum}" VerticalAlignment="Top" Margin="24,3,2,0"/>

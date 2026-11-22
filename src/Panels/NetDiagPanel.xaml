@@ -1,0 +1,145 @@
+﻿<UserControl x:Class="PulsePC.Panels.NetDiagPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PulsePC">
+    <UserControl.Resources>
+        <!-- Вывод проверки: маркер состояния, заголовок, что это значит и что сделать. -->
+        <DataTemplate x:Key="NoteRow">
+            <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+                <DockPanel Margin="0,10">
+                    <local:StateMarker Level="{Binding Level}" DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,5,10,0"/>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource RowTitle}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding Text}" Style="{StaticResource Body}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+        <!-- Показание: название слева, значение моноширинным справа, пояснение подписью. -->
+        <DataTemplate x:Key="FactRow">
+            <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Name}" Style="{StaticResource Body}" Foreground="{DynamicResource Ink1}" TextWrapping="Wrap" Margin="0,0,12,0"/>
+                    <TextBlock Grid.Column="1" Text="{Binding Value}" Style="{StaticResource MonoNum}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                    <TextBlock Grid.Column="2" Text="{Binding Note}" Style="{StaticResource Caption}" TextWrapping="Wrap" VerticalAlignment="Top" Margin="16,2,0,0"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+        <!-- Узел трассировки: номер, адрес, участок, пинг, потери. -->
+        <DataTemplate x:Key="HopRow">
+            <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="32"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="80"/>
+                        <ColumnDefinition Width="96"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Ttl}" Style="{StaticResource MonoNum}" Foreground="{DynamicResource Ink3}" HorizontalAlignment="Left"/>
+                    <TextBlock Grid.Column="1" Text="{Binding Address}" Style="{StaticResource MonoNum}" HorizontalAlignment="Left" TextAlignment="Left" TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
+                    <TextBlock Grid.Column="2" Text="{Binding Segment}" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="3" Text="{Binding Ping}" Style="{StaticResource MonoNum}" HorizontalAlignment="Right"/>
+                    <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <local:StateMarker Level="{Binding LossLevel}" Visibility="{Binding MarkVisible}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding Loss}" Style="{StaticResource MonoNum}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+        <!-- DNS-сервер: адрес, чей, текущий ли, время ответа, сколько раз не ответил. -->
+        <DataTemplate x:Key="DnsRow">
+            <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+                <Grid Margin="0,7">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="90"/>
+                        <ColumnDefinition Width="150"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Address}" Style="{StaticResource MonoNum}" HorizontalAlignment="Left" TextAlignment="Left"/>
+                    <TextBlock Grid.Column="1" Text="{Binding Who}" Style="{StaticResource Body}" Foreground="{DynamicResource Ink1}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Grid.Column="2" Text="{Binding Median}" Style="{StaticResource MonoNum}" HorizontalAlignment="Right"/>
+                    <TextBlock Grid.Column="3" Text="{Binding Fails}" Style="{StaticResource Caption}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="780" HorizontalAlignment="Left">
+        <!-- ======================================================== Wi‑Fi -->
+        <StackPanel x:Name="WifiBlock" Visibility="Collapsed">
+            <local:TrackedText Source="WI‑FI" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+            <Rectangle Style="{StaticResource Hairline}"/>
+            <TextBlock x:Name="WifiState" Style="{StaticResource Body}" Margin="0,10,0,4"/>
+            <ItemsControl x:Name="WifiFacts" ItemTemplate="{StaticResource FactRow}" Focusable="False"/>
+            <ItemsControl x:Name="WifiNotes" ItemTemplate="{StaticResource NoteRow}" Focusable="False"/>
+        </StackPanel>
+
+        <!-- ======================================================== пинг под нагрузкой -->
+        <local:TrackedText Source="ПИНГ ПОД НАГРУЗКОЙ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,10,0,0"
+                   Text="Если во время скачиваний пинг в игре взлетает, виноват переполненный буфер роутера или провайдера (bufferbloat). Проверка меряет пинг до роутера и 1.1.1.1 в покое, а затем до 10 секунд — пока программа скачивает тестовые данные с сервера проверки скорости Cloudflare."/>
+        <TextBlock Style="{StaticResource Caption}" Margin="0,6,0,0"
+                   Text="Скачивается до 250&#160;МБ — на лимитном мобильном интернете не запускайте. Проверяется только скачивание; отдача (стримы, загрузка в облако) может вести себя иначе."/>
+        <WrapPanel Margin="0,12,0,0">
+            <Button x:Name="BtnLoad" Content="Проверить пинг под нагрузкой" Margin="0,0,12,6" Click="BtnLoad_Click"/>
+            <TextBlock x:Name="LoadStatus" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,0,6"/>
+        </WrapPanel>
+        <ItemsControl x:Name="LoadFacts" ItemTemplate="{StaticResource FactRow}" Focusable="False"/>
+        <ItemsControl x:Name="LoadNotes" ItemTemplate="{StaticResource NoteRow}" Focusable="False"/>
+
+        <!-- ======================================================== трассировка -->
+        <local:TrackedText Source="ГДЕ ТЕРЯЮТСЯ ПАКЕТЫ" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,10,0,0"
+                   Text="Трассировка проходит по всем узлам до цели и 10 раз спрашивает каждый. По тому, с какого узла начинаются потери, видно, где проблема: у вас дома, у провайдера или дальше."/>
+        <TextBlock x:Name="TraceTarget" Style="{StaticResource Caption}" Margin="0,6,0,0"/>
+        <WrapPanel Margin="0,12,0,0">
+            <Button x:Name="BtnTraceGame" Content="Проверить до сервера игры" Margin="0,0,12,6" Click="BtnTrace_Click" Visibility="Collapsed"/>
+            <Button x:Name="BtnTraceInet" Content="Проверить до 1.1.1.1" Margin="0,0,12,6" Click="BtnTrace_Click"/>
+            <TextBlock x:Name="TraceStatus" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,0,6"/>
+        </WrapPanel>
+        <StackPanel x:Name="TraceBody" Visibility="Collapsed">
+            <TextBlock x:Name="TraceTitle" Style="{StaticResource RowTitle}" Margin="0,8,0,6"/>
+            <Border BorderBrush="{DynamicResource Ink1}" BorderThickness="0,1,0,1">
+                <Grid Margin="0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="32"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="130"/>
+                        <ColumnDefinition Width="80"/>
+                        <ColumnDefinition Width="96"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="№" Style="{StaticResource Caption}"/>
+                    <TextBlock Grid.Column="1" Text="узел" Style="{StaticResource Caption}"/>
+                    <TextBlock Grid.Column="2" Text="участок" Style="{StaticResource Caption}"/>
+                    <TextBlock Grid.Column="3" Text="пинг" Style="{StaticResource Caption}" HorizontalAlignment="Right"/>
+                    <TextBlock Grid.Column="4" Text="потери" Style="{StaticResource Caption}" HorizontalAlignment="Right"/>
+                </Grid>
+            </Border>
+            <ItemsControl x:Name="Hops" ItemTemplate="{StaticResource HopRow}" Focusable="False"/>
+            <ItemsControl x:Name="TraceNotes" ItemTemplate="{StaticResource NoteRow}" Focusable="False"/>
+            <TextBlock Style="{StaticResource Caption}" Margin="0,8,0,0"
+                       Text="Промежуточные узлы часто отвечают на пинг через раз или не отвечают вовсе — они бережут процессор, а пакеты через них идут нормально. Настоящая потеря видна, только если она держится до конца пути. Граница «у провайдера» — приблизительная: программа судит по адресам."/>
+        </StackPanel>
+
+        <!-- ======================================================== DNS -->
+        <local:TrackedText Source="СКОРОСТЬ DNS" Style="{StaticResource Label}" Margin="0,28,0,6"/>
+        <Rectangle Style="{StaticResource Hairline}"/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,10,0,0"
+                   Text="DNS переводит имена сайтов и серверов в адреса. Проверка спрашивает 8 адресов у текущего DNS и у общедоступных: Cloudflare 1.1.1.1, Google 8.8.8.8 и Яндекс 77.88.8.8."/>
+        <WrapPanel Margin="0,12,0,0">
+            <Button x:Name="BtnDns" Content="Проверить скорость DNS" Margin="0,0,12,6" Click="BtnDns_Click"/>
+            <TextBlock x:Name="DnsStatus" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,0,6"/>
+        </WrapPanel>
+        <ItemsControl x:Name="DnsRows" ItemTemplate="{StaticResource DnsRow}" Focusable="False"/>
+        <ItemsControl x:Name="DnsNotes" ItemTemplate="{StaticResource NoteRow}" Focusable="False"/>
+    </StackPanel>
+</UserControl>

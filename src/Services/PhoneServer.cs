@@ -31,6 +31,7 @@ public static class PhoneServer
     private const int HeaderTimeoutMs = 1500;    // столько ждём строку запроса и заголовки
     private const int IoTimeoutMs = 4000;        // весь ответ
     private const int HistorySize = 80;          // две минуты при шаге 1,5 с
+    private const int GamesShown = 8;            // «Последние игры» на телефоне
     private const string KeyAlphabet = "abcdefghjkmnpqrstuvwxyz23456789";   // без похожих знаков: i, l, o, 0, 1
     private const int KeyLength = 12;            // 31^12 ≈ 2^59: перебором не подобрать
 
@@ -204,7 +205,7 @@ public static class PhoneServer
                 }
                 int port = test.Address != null && test.Port > 0 ? test.Port
                     : int.TryParse(host.Settings.Get("phone.port"), out int p) && p is >= 1024 and <= 65000 ? p : DefaultPort;
-                fresh = Instance.TryStart(address, port, PortTries, key, host.Live, VramTotalGb, out trouble);
+                fresh = Instance.TryStart(address, port, PortTries, key, host.Live, VramTotalGb, out trouble, host.Sessions);
             }
             lock (Gate)
             {
@@ -514,6 +515,8 @@ public static class PhoneServer
         private readonly string key;
         private readonly Func<LiveData> live;
         private readonly Func<double> vramTotal;
+        /// <summary>Записанные игры для «Последних игр» на телефоне (новые первыми).</summary>
+        private readonly Func<IReadOnlyList<GameSession>> sessions;
         private readonly Dictionary<string, DateTime> clients = new();
         private readonly Dictionary<IPAddress, int> perAddress = new();     // открытые соединения по адресам (под замком perAddress, с active)
         private readonly double[] history = new double[HistorySize];
@@ -528,16 +531,17 @@ public static class PhoneServer
         public string Key => key;
         private readonly byte[] pageBytes;
 
-        private Instance(TcpListener listener, IPAddress address, int port, string key, Func<LiveData> live, Func<double> vramTotal)
+        private Instance(TcpListener listener, IPAddress address, int port, string key, Func<LiveData> live, Func<double> vramTotal, Func<IReadOnlyList<GameSession>> sessions)
         {
-            this.listener = listener; Address = address; Port = port; this.key = key; this.live = live; this.vramTotal = vramTotal;
+            this.listener = listener; Address = address; Port = port; this.key = key; this.live = live; this.vramTotal = vramTotal; this.sessions = sessions;
             pageBytes = Encoding.UTF8.GetBytes(Page(key));
             sampler = new Timer(_ => Sample(), null, 0, 1500);
             _ = Task.Run(AcceptLoop);
         }
 
         /// <summary>Занять первый свободный порт начиная с заданного. port = 0 — любой свободный (для самопроверки).</summary>
-        public static Instance TryStart(IPAddress address, int port, int tries, string key, Func<LiveData> live, Func<double> vramTotal, out string problem)
+        public static Instance TryStart(IPAddress address, int port, int tries, string key, Func<LiveData> live, Func<double> vramTotal, out string problem,
+            Func<IReadOnlyList<GameSession>> sessions = null)
         {
             problem = "";
             for (int i = 0; i < tries; i++)
@@ -549,7 +553,7 @@ public static class PhoneServer
                 {
                     l.Server.ExclusiveAddressUse = true;
                     l.Start(16);
-                    return new Instance(l, address, ((IPEndPoint)l.LocalEndpoint).Port, key, live, vramTotal);
+                    return new Instance(l, address, ((IPEndPoint)l.LocalEndpoint).Port, key, live, vramTotal, sessions);
                 }
                 catch (SocketException) { try { l.Stop(); } catch { } }
             }
@@ -695,10 +699,11 @@ public static class PhoneServer
                 // Адрес сверяется целиком и за постоянное время; путь никогда не превращается в имя файла.
                 bool page = Same(path, "/" + key + "/") || Same(path, "/" + key);
                 bool data = Same(path, "/" + key + "/d");
+                bool games = Same(path, "/" + key + "/s");
                 bool icon = Same(path, "/" + key + "/icon.png");
                 bool manifest = Same(path, "/" + key + "/manifest.json");
                 bool profile = Same(path, "/" + key + "/pulse.mobileconfig");
-                if (!page && !data && !icon && !manifest && !profile)
+                if (!page && !data && !games && !icon && !manifest && !profile)
                 {
                     await Task.Delay(300, timeout.Token);        // подбор ключа перебором становится бессмысленно долгим
                     await Send(stream, 404, "Not Found", "text/plain; charset=utf-8", Encoding.UTF8.GetBytes(L.T("Такой страницы нет.")), head, timeout.Token);
@@ -711,6 +716,7 @@ public static class PhoneServer
                 if (page) await Send(stream, 200, "OK", "text/html; charset=utf-8", pageBytes, head, timeout.Token,
                     "Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'\r\n");
                 else if (icon) await Send(stream, 200, "OK", "image/png", IconBytes, head, timeout.Token);
+                else if (games) await Send(stream, 200, "OK", "application/json; charset=utf-8", Encoding.UTF8.GetBytes(GamesJson()), head, timeout.Token);
                 else if (manifest) await Send(stream, 200, "OK", "application/manifest+json; charset=utf-8", Encoding.UTF8.GetBytes(Manifest(key)), head, timeout.Token);
                 else if (profile) await Send(stream, 200, "OK", "application/x-apple-aspen-config", Profile(Url, key), head, timeout.Token,
                     "Content-Disposition: attachment; filename=\"PulsePC.mobileconfig\"\r\n");
@@ -746,7 +752,8 @@ public static class PhoneServer
             var sb = new StringBuilder(1024);
             sb.Append("{\"rec\":").Append(d.Recording ? "true" : "false");
             sb.Append(",\"game\":").Append(JsonSerializer.Serialize(d.Game ?? ""));
-            sb.Append(",\"nofps\":").Append(d.Recording && SessionRecorder.SkipsFps(d.Game ?? "") ? "true" : "false");
+            // Осторожный режим идущей записи (античит уровня ядра или выбор человека) — FPS не считается.
+            sb.Append(",\"nofps\":").Append(d.Recording && (CautiousMode.Current?.Cautious ?? SessionRecorder.SkipsFps(d.Game ?? "")) ? "true" : "false");
             sb.Append(",\"sec\":").Append(Num(d.SessionSeconds, 0));
             sb.Append(",\"fps\":").Append(Num(d.Fps, 0));
             sb.Append(",\"cpu\":").Append(Num(d.CpuLoad, 0));
@@ -766,6 +773,30 @@ public static class PhoneServer
 
         private static string Num(double v, int digits) =>
             double.IsNaN(v) || double.IsInfinity(v) ? "null" : Math.Round(v, digits).ToString(CultureInfo.InvariantCulture);
+
+        /// <summary>Последние игры одной строкой JSON: игра, когда (текстом на языке программы), длительность, FPS, 1 %, плавность.</summary>
+        private string GamesJson()
+        {
+            IReadOnlyList<GameSession> list = Array.Empty<GameSession>();
+            try { list = sessions?.Invoke() ?? Array.Empty<GameSession>(); } catch { }
+            var sb = new StringBuilder(1024);
+            sb.Append("{\"s\":[");
+            int n = 0;
+            foreach (var s in list.Where(x => x != null).OrderByDescending(x => x.Start).Take(GamesShown))
+            {
+                if (n++ > 0) sb.Append(',');
+                sb.Append("{\"g\":").Append(JsonSerializer.Serialize(s.Game ?? ""));
+                sb.Append(",\"w\":").Append(JsonSerializer.Serialize(s.Start.ToString(L.En ? "MMM d, HH:mm" : "d MMM, HH:mm", L.Culture)));
+                sb.Append(",\"d\":").Append(JsonSerializer.Serialize(Fmt.Duration(s.Duration)));
+                sb.Append(",\"fps\":").Append(Num(s.AvgFps ?? double.NaN, 0));
+                sb.Append(",\"low\":").Append(Num(s.Low1Fps ?? double.NaN, 0));
+                sb.Append(",\"sm\":").Append(Num(s.Smoothness ?? double.NaN, 0));
+                sb.Append(",\"t\":").Append(s.MaxTemp > 0 ? Num(s.MaxTemp, 0) : "null");
+                sb.Append('}');
+            }
+            sb.Append("]}");
+            return sb.ToString();
+        }
 
         public void Dispose()
         {
@@ -817,7 +848,13 @@ public static class PhoneServer
         Instance server = null;
         try
         {
-            server = Instance.TryStart(IPAddress.Loopback, 0, 1, key, () => fake, () => 8, out string problem);
+            var fakeGames = new List<GameSession>
+            {
+                new() { Game = "Deadlock", Start = new DateTime(2026, 11, 21, 18, 5, 0), End = new DateTime(2026, 11, 21, 19, 17, 0), AvgFps = 143.4, Low1Fps = 97.6, Smoothness = 82, MaxTemp = 71 },
+                new() { Game = "VALORANT", Start = new DateTime(2026, 11, 20, 21, 0, 0), End = new DateTime(2026, 11, 20, 22, 0, 0) },
+                new() { Game = "Старая <игра>", Start = new DateTime(2026, 11, 19, 12, 0, 0), End = new DateTime(2026, 11, 19, 12, 30, 0), AvgFps = 60 },
+            };
+            server = Instance.TryStart(IPAddress.Loopback, 0, 1, key, () => fake, () => 8, out string problem, () => fakeGames);
             Check("сервер поднялся", server != null, server != null ? "порт " + server.Port : problem);
             if (server != null)
             {
@@ -846,6 +883,21 @@ public static class PhoneServer
                 }
                 catch (Exception ex) { jsonNote = ex.Message; }
                 Check("показания в JSON, пустые — null", jsonOk, jsonNote);
+
+                string gamesJson = Ask($"GET /{key}/s HTTP/1.1\r\nHost: x\r\n\r\n");
+                bool gamesOk = false; string gamesNote = "";
+                try
+                {
+                    using var doc = JsonDocument.Parse(Body(gamesJson));
+                    var s = doc.RootElement.GetProperty("s");
+                    gamesOk = Code(gamesJson) == 200 && s.GetArrayLength() == 3 && s[0].GetProperty("g").GetString() == "Deadlock"
+                              && s[0].GetProperty("fps").GetDouble() == 143 && s[0].GetProperty("low").GetDouble() == 98 && s[0].GetProperty("sm").GetDouble() == 82
+                              && s[1].GetProperty("fps").ValueKind == JsonValueKind.Null && s[2].GetProperty("g").GetString() == "Старая <игра>";
+                    gamesNote = Body(gamesJson);
+                }
+                catch (Exception ex) { gamesNote = ex.Message; }
+                Check("последние игры в JSON: новые первыми, FPS, 1 %, плавность; без замера — null", gamesOk, gamesNote);
+                Check("страница показывает последние игры и пишет имя игры текстом, а не разметкой", Body(page).Contains("id=\"hist\"") && Body(page).Contains("textContent = g.g"));
 
                 Check("без ключа — 404", Code(Ask("GET / HTTP/1.1\r\nHost: x\r\n\r\n")) == 404);
                 Check("чужой ключ — 404", Code(Ask("GET /abcdef/ HTTP/1.1\r\nHost: x\r\n\r\n")) == 404 && Code(Ask("GET /abcdef/d HTTP/1.1\r\nHost: x\r\n\r\n")) == 404);
@@ -1077,6 +1129,11 @@ public static class PhoneServer
         ("offline", L.Pick("нет связи", "offline")),
         ("online", L.Pick("на связи", "online")),
         ("noData", L.Pick("показаний нет", "no readings")),
+        ("histTitle", L.Pick("Последние игры", "Recent games")),
+        ("histEmpty", L.Pick("Игр ещё не было. После первой игры здесь появится её итог: FPS, 1 % и плавность.", "No games yet. After your first game its summary will appear here: FPS, 1% low and smoothness.")),
+        ("low", L.Pick("1 %", "1% low")),
+        ("smooth", L.Pick("плавность", "smoothness")),
+        ("noFpsShort", L.Pick("FPS не считался", "FPS not measured")),
     };
 
     /// <summary>Вся страница одним файлом: без внешних шрифтов, картинок и библиотек. Тексты — метки {T:имя}, см. Page.</summary>
@@ -1151,6 +1208,19 @@ body {
 .warn .name::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px; border: 1px solid var(--warn);
   background: repeating-linear-gradient(135deg, var(--warn) 0 1px, transparent 1px 3px); }
 .note { color: var(--ink3); font-size: 12px; padding: 12px 0 4px; }
+.hist { margin-top: 18px; }
+.hist .kicker { display: block; padding-bottom: 6px; border-bottom: 1px solid var(--ink); }
+.hrow { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 0 10px; border-bottom: 1px solid var(--line); }
+.hg { min-width: 0; }
+.hg b { display: block; font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
+.hg span { display: block; color: var(--ink3); font-size: 12.5px; margin-top: 2px; }
+.hv { text-align: right; white-space: nowrap; }
+.hv .hn { font: 600 21px/1 var(--num); font-stretch: condensed; font-variant-numeric: tabular-nums; }
+.hv small { font-size: 12px; font-weight: 600; color: var(--ink3); }
+.hv span { display: block; color: var(--ink3); font-size: 12px; margin-top: 3px; }
+.hv .bad { color: var(--warn); }
+.histEmpty { color: var(--ink3); font-size: 13px; padding: 10px 0; display: none; }
+.off .hist { opacity: .38; }
 .off .hero, .off .plot, .off .rows { opacity: .38; }
 
 @media (orientation: landscape) and (min-width: 560px) {
@@ -1196,6 +1266,11 @@ body {
       <div class="row" id="ram"><div class="top"><span class="name">{T:ram}</span><span class="val">—</span></div><div class="bar"><i></i></div></div>
       <div class="row" id="ping"><div class="top"><span class="name">{T:ping}</span><span class="val">—</span></div><div class="bar"><i></i></div></div>
     </div>
+    <div class="hist" id="hist">
+      <span class="kicker">{T:histTitle}</span>
+      <div id="histRows"></div>
+      <div class="histEmpty" id="histEmpty">{T:histEmpty}</div>
+    </div>
     <div class="note">{T:note}</div>
   </div>
 </div>
@@ -1204,8 +1279,8 @@ body {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var sheet = $('sheet'), chart = $('chart');
-  var url = location.pathname.replace(/\/+$/, '') + '/d';
-  var data = null, fails = 0, gone = false, timer = 0;
+  var url = location.pathname.replace(/\/+$/, '') + '/d', gamesUrl = location.pathname.replace(/\/+$/, '') + '/s';
+  var data = null, fails = 0, gone = false, timer = 0, gamesAt = 0, wasRec = false;
 
   function has(v) { return typeof v === 'number' && isFinite(v); }
   function num(v, digits) { return has(v) ? v.toFixed(digits || 0).replace('.', '{T:dec}') : '—'; }
@@ -1310,12 +1385,57 @@ body {
       : '{T:lostRetry}';
   }
 
+  // Последние игры: строка — игра, когда и сколько; справа FPS, ниже 1 % и плавность.
+  function games(list) {
+    var box = $('histRows');
+    box.textContent = '';
+    $('histEmpty').style.display = list.length ? 'none' : 'block';
+    list.forEach(function (g) {
+      var row = document.createElement('div'); row.className = 'hrow';
+      var left = document.createElement('div'); left.className = 'hg';
+      var name = document.createElement('b'); name.textContent = g.g;
+      var when = document.createElement('span'); when.textContent = g.w + ' · ' + g.d;
+      left.appendChild(name); left.appendChild(when);
+      var right = document.createElement('div'); right.className = 'hv';
+      if (has(g.fps)) {
+        var n = document.createElement('span'); n.className = 'hn'; n.style.display = 'inline'; n.style.marginTop = '0'; n.style.color = 'var(--ink)'; n.textContent = num(g.fps);
+        var u = document.createElement('small'); u.textContent = ' FPS';
+        right.appendChild(n); right.appendChild(u);
+        var sub = document.createElement('span');
+        var parts = [];
+        if (has(g.low)) parts.push('{T:low} ' + num(g.low));
+        if (has(g.sm)) parts.push('{T:smooth} ' + num(g.sm));
+        sub.textContent = parts.join(' · ');
+        if (has(g.sm) && g.sm < 60) sub.className = 'bad';
+        right.appendChild(sub);
+      } else {
+        var none = document.createElement('span'); none.textContent = '{T:noFpsShort}';
+        right.appendChild(none);
+      }
+      row.appendChild(left); row.appendChild(right);
+      box.appendChild(row);
+    });
+  }
+  function pollGames() {
+    gamesAt = Date.now();
+    fetch(gamesUrl, { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+      .then(function (d) { games(d.s || []); })
+      .catch(function () { });
+  }
+
   function poll() {
     var stopper = window.AbortController ? new AbortController() : null;
     var guard = stopper ? setTimeout(function () { stopper.abort(); }, 4000) : 0;
     fetch(url, { cache: 'no-store', signal: stopper ? stopper.signal : undefined })
       .then(function (r) { gone = r.status === 404; if (!r.ok) throw new Error(String(r.status)); return r.json(); })
-      .then(function (d) { fails = 0; data = d; render(d); })
+      .then(function (d) {
+        fails = 0; data = d; render(d);
+        // Игра закончилась — через несколько секунд в списке появится её итог; иначе список обновляется раз в минуту.
+        if (wasRec && !d.rec) setTimeout(pollGames, 6000);
+        else if (Date.now() - gamesAt > 60000) pollGames();
+        wasRec = !!d.rec;
+      })
       .catch(function () { fails++; })
       .then(function () { clearTimeout(guard); status(); clearTimeout(timer); if (!document.hidden) timer = setTimeout(poll, 1500); });
   }

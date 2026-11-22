@@ -42,6 +42,8 @@ public sealed class PanelHost
     public Func<LiveData> Live { get; init; } = () => new LiveData();
     /// <summary>Записанные игровые сессии, новые первыми. Снимок: можно читать из фонового потока.</summary>
     public Func<IReadOnlyList<GameSession>> Sessions { get; init; } = () => Array.Empty<GameSession>();
+    /// <summary>Идущая игра для оверлея (процесс, запись кадров, пинг до сервера); null — записи нет. Вызывать в потоке интерфейса.</summary>
+    public Func<LiveGameFeed> GameFeed { get; init; } = () => null;
     /// <summary>Паспорт железа; null, пока не прочитан.</summary>
     public Func<HardwareInfo> Hardware { get; init; } = () => null;
     /// <summary>Выполнить действие в потоке интерфейса.</summary>

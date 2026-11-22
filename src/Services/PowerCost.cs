@@ -73,6 +73,12 @@ public static class PowerCost
     public const int DefaultTdp = 65;
     /// <summary>Плата, память, диски, вентиляторы, подсветка — середина обычных 40–60 Вт.</summary>
     public const double BaseW = 50;
+    /// <summary>Ноутбук: плата, память, SSD, вентиляторы и встроенный экран — около 15 Вт (оценка).</summary>
+    public const double LaptopBaseW = 15;
+    /// <summary>Для самопроверки: подменяет признак ноутбука (null — общий признак LaptopCheck).</summary>
+    internal static bool? TestLaptop;
+    /// <summary>Постоянная часть расхода для этого компьютера: у ноутбука она втрое меньше.</summary>
+    public static double BaseNow => (TestLaptop ?? LaptopCheck.Applies) ? LaptopBaseW : BaseW;
     /// <summary>Потери в блоке питания (КПД около 90 %).</summary>
     public const double LossShare = 0.10;
     /// <summary>Видеокарта в простое, если датчика нет, — оценка.</summary>
@@ -193,7 +199,7 @@ public static class PowerCost
     public static void Finish(PowerMode p, int tdp, double monitorW)
     {
         p.CpuW = tdp * Math.Clamp(double.IsNaN(p.CpuLoad) ? 0 : p.CpuLoad, 0, 100) / 100;
-        p.BaseW = BaseW;
+        p.BaseW = BaseNow;
         p.LossW = double.IsNaN(p.GpuW) ? double.NaN : (p.GpuW + p.CpuW + p.BaseW) * LossShare;
         p.MonitorW = Math.Max(0, monitorW);
     }
@@ -326,6 +332,9 @@ public static class PowerCost
         string fail = null;
         void Check(string what, bool ok) { sb.AppendLine((ok ? "  ok   " : "  FAIL ") + what); if (!ok) fail ??= what; }
 
+        TestLaptop = true;
+        Check("ноутбук: постоянная часть 15 Вт", BaseNow == LaptopBaseW);
+        TestLaptop = false;   // расчёты ниже — для настольного компьютера
         Check("TDP: i5-12400F — 65 Вт", CpuTdp("12th Gen Intel(R) Core(TM) i5-12400F", out bool k1) == 65 && k1);
         Check("TDP: i7-13700K — 125 Вт", CpuTdp("13th Gen Intel(R) Core(TM) i7-13700K", out _) == 125);
         Check("TDP: i9-14900KS — 150 Вт", CpuTdp("Intel(R) Core(TM) i9-14900KS", out _) == 150);
@@ -398,6 +407,7 @@ public static class PowerCost
                 sb.AppendLine($"Оценка: в игре {real.Game.TotalW:0} Вт, без игр {real.Idle.TotalW:0} Вт, в сутки {Kwh(real.KwhDay)} кВт·ч (по {real.Days} дн.)");
         }
         catch (Exception ex) { sb.AppendLine("Сессии не прочитаны: " + ex.Message); }
+        TestLaptop = null;
         return (fail == null ? "OK" : "FAIL: " + fail) + "\n" + sb;
     }
 }

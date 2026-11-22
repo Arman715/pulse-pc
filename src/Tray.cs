@@ -27,8 +27,13 @@ public sealed class TrayIcon : IDisposable
         closeToTrayItem.CheckedChanged += (_, _) => { settings.CloseToTray = closeToTrayItem.Checked; settings.Save(); };
         var fpsItem = new WinForms.ToolStripMenuItem(L.T("Записывать FPS в играх")) { CheckOnClick = true, Checked = settings.RecordFps };
         fpsItem.CheckedChanged += (_, _) => { settings.RecordFps = fpsItem.Checked; settings.Save(); SettingsChanged?.Invoke(); };
+        // Оверлей поверх игры: настройка программы, состояние берётся у службы при каждом открытии меню.
+        var overlayItem = new WinForms.ToolStripMenuItem(L.T("Оверлей поверх игры")) { CheckOnClick = true };
+        overlayItem.Click += (_, _) => { try { Overlay.SetEnabled(overlayItem.Checked); } catch (Exception ex) { Log.Error("оверлей из меню у часов", ex); } };
+        menu.Opening += (_, _) => { overlayItem.Checked = Overlay.Enabled; overlayItem.Enabled = Overlay.Ready; };
         menu.Items.Add(alertsItem);
         menu.Items.Add(fpsItem);
+        menu.Items.Add(overlayItem);
         menu.Items.Add(closeToTrayItem);
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add(L.T("Выход"), null, (_, _) => ExitRequested?.Invoke());
@@ -109,7 +114,9 @@ public sealed class Alerts
         if (hot >= 3 && now - lastHot > Cooldown)
         {
             lastHot = now;
-            tray.Notify(L.T("Видеокарта перегревается"), L.F("Сейчас {0:0} °C. Проверьте, крутятся ли вентиляторы и не забит ли корпус пылью.", gpuTemp), true);
+            tray.Notify(L.T("Видеокарта перегревается"), LaptopCheck.Applies
+                ? L.F("Сейчас {0:0} °C.", gpuTemp) + " " + LaptopCheck.CoolingTip()
+                : L.F("Сейчас {0:0} °C. Проверьте, крутятся ли вентиляторы и не забит ли корпус пылью.", gpuTemp), true);
         }
 
         lowRam = ramAvailGb > 0 && ramAvailGb < 1.0 ? lowRam + 1 : 0;

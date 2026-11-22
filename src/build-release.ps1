@@ -1,4 +1,5 @@
-﻿# Сборка дистрибутива «Пульс ПК»: один файл dist\PulsePC-Setup-<версия>.exe (+ .sha256, .sig и update.json рядом).
+﻿# Сборка дистрибутива «Пульс ПК»: один файл dist\PulsePC-Setup-<версия>.exe (+ .sha256, .sig и update.json рядом)
+# и переносная версия dist\PulsePC-Portable-<версия>.zip (+ .sha256).
 #
 # Что внутри. Сборок две:
 #   1) установленная программа — однофайловый PulsePC.exe БЕЗ распаковки библиотек (IncludeNativeLibrariesForSelfExtract=false):
@@ -7,6 +8,8 @@
 #      в %TEMP%\.net (туда может писать любая программа пользователя, и подменённая DLL выполнилась бы с правами администратора).
 #   2) установщик — та же программа, однофайловая, с распаковкой (чтобы её можно было скачать одним файлом) и со встроенным
 #      архивом PulsePC.app.zip из сборки 1. По имени «PulsePC-Setup…» она запускается как установщик; удаление — PulsePC.exe --uninstall.
+#   3) переносная версия — файлы сборки 1 и portable.txt в архиве PulsePC-Portable-<версия>.zip: рядом с portable.txt программа
+#      хранит историю и настройки в папке Data, автозапуск и «Установленные приложения» не трогает, сама не обновляется.
 #
 #   .\build-release.ps1              - дистрибутив в dist\ (требует прав администратора при запуске, как и программа; нужен ключ подписи)
 #   .\build-release.ps1 -NoElevate   - то же без запроса прав, в папку -Out (только для проверки сборки, не для раздачи; подпись — если есть ключ)
@@ -209,6 +212,42 @@ else {
     $notesFile = Join-Path $here 'release-notes.txt'
     if (Test-Path $notesFile) { $noteList = @(Get-Content $notesFile -Encoding UTF8 | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
 }
+# ------------------------------------------------------------------ переносная версия
+# Те же файлы, что ставит установщик (сборка 1), в папке PulsePC-Portable архива, и portable.txt рядом с программой.
+# Подписи нет: переносная версия не обновляется сама (раздел «Новые версии» даёт ссылку на страницу выпусков).
+function New-PortableZip([System.IO.FileInfo[]]$files, [string]$zipPath, [string]$ver) {
+    if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+    $bom = New-Object System.Text.UTF8Encoding $true
+    $z = [IO.Compression.ZipFile]::Open($zipPath, [IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach ($f in $files) { [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($z, $f.FullName, "PulsePC-Portable/$($f.Name)", [IO.Compression.CompressionLevel]::Optimal) }
+        $texts = [ordered]@{
+            'portable.txt' = "Пульс ПК $ver — переносная версия.`r`n`r`n" +
+                "Этот файл включает переносной режим: история, настройки и журнал программы хранятся в папке Data рядом с ней.`r`n" +
+                "Автозапуск и запись в «Установленных приложениях» программа не создаёт. Новые версии ставятся вручную: скачайте`r`n" +
+                "PulsePC-Portable-<версия>.zip со страницы https://github.com/Arman715/pulse-pc/releases и распакуйте поверх этой папки —`r`n" +
+                "папка Data с историей и настройками останется. Если удалить этот файл, программа будет хранить данные как установленная.`r`n`r`n" +
+                "Pulse PC $ver — portable version.`r`n`r`n" +
+                "This file turns on portable mode: the program keeps its history, settings and log in the Data folder next to it.`r`n" +
+                "It does not add itself to startup or to Installed apps. New versions are installed manually: download`r`n" +
+                "PulsePC-Portable-<version>.zip from https://github.com/Arman715/pulse-pc/releases and unpack it over this folder —`r`n" +
+                "the Data folder with history and settings stays. Delete this file and the program stores data like the installed one.`r`n"
+            'THIRD-PARTY.txt' = "Пульс ПК использует сторонний компонент:`r`n`r`n" +
+                "PresentMon — Intel Corporation, лицензия MIT. Встроен в программу и распаковывается при первой записи кадров.`r`n" +
+                "Исходный код: https://github.com/GameTechDev/PresentMon`r`n"
+        }
+        foreach ($k in $texts.Keys) {
+            $w = New-Object IO.StreamWriter(($z.CreateEntry("PulsePC-Portable/$k")).Open(), $bom)
+            try { $w.Write($texts[$k]) } finally { $w.Dispose() }
+        }
+    } finally { $z.Dispose() }
+}
+$portable = Join-Path (Split-Path $target -Parent) "PulsePC-Portable-$version.zip"
+New-PortableZip $appFiles $portable $version
+$portableHash = (Get-FileHash $portable -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText("$portable.sha256", "$portableHash  $(Split-Path $portable -Leaf)`n", $utf8)
+Write-Host ("Переносная версия: {0}  ({1:N1} МБ)" -f $portable, ((Get-Item $portable).Length / 1MB))
+
 $manifest = [ordered]@{ version = "$version"; url = $name; sha256 = $hash; date = (Get-Date -Format 'yyyy-MM-dd'); notes = $noteList }
 if ($sigB64) { $manifest.sig = $sigB64 }
 $manifestPath = Join-Path (Split-Path $target -Parent) 'update.json'
@@ -217,6 +256,6 @@ Write-Host "SHA-256: $hash"
 Write-Host "Для обновления рядом: $name.sha256, $name.sig и update.json"
 if ($release) {
     Write-Host ""
-    Write-Host "Выпуск на GitHub (все четыре файла):"
-    Write-Host "  gh release create v$version `"$target`" `"$target.sha256`" `"$target.sig`" `"$manifestPath`" --repo Arman715/pulse-pc --title `"Пульс ПК $version`" --notes-file release-notes.txt"
+    Write-Host "Выпуск на GitHub (четыре файла обновления и переносная версия):"
+    Write-Host "  gh release create v$version `"$target`" `"$target.sha256`" `"$target.sig`" `"$manifestPath`" `"$portable`" `"$portable.sha256`" --repo Arman715/pulse-pc --title `"Пульс ПК $version`" --notes-file release-notes.txt"
 }

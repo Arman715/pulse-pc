@@ -90,7 +90,10 @@ public static class Weekly
             w.Notes.Add(L.F("Главная причина просадок за неделю — {0} ({1}).", SessionAnalysis.CauseTitle(causes.Key), SessionAnalysis.Times(causes.Count())));
         int lowRam = week.Count(s => s.MinRamGb > 0 && s.MinRamGb < 1.0);
         if (lowRam >= 2) w.Notes.Add(L.F("В {0} из {1} не хватало памяти. Перед игрой закрывайте тяжёлые программы (вкладка «Оптимизация») или добавьте памяти.", Fmt.Plural(lowRam, "сессии", "сессиях", "сессиях"), week.Count));
-        if (w.MaxTemp >= 83) w.Notes.Add(L.F("Видеокарта нагревалась до {0:0} °C — проверьте обдув корпуса.", w.MaxTemp));
+        // Тот же порог, что в замечаниях к сессии: у ноутбука видеокарта рассчитана на 87 °C, и 84 °C для него — не повод.
+        if (w.MaxTemp >= SessionAnalysis.HotMaxTempC(LaptopCheck.Applies)) w.Notes.Add(LaptopCheck.Applies
+            ? L.F("Видеокарта нагревалась до {0:0} °C.", w.MaxTemp) + " " + LaptopCheck.CoolingTip()
+            :L.F("Видеокарта нагревалась до {0:0} °C — проверьте обдув корпуса.", w.MaxTemp));
         return w;
     }
 

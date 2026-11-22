@@ -70,6 +70,8 @@ public static class L
     public static string T(string ru)
     {
         if (!En || string.IsNullOrEmpty(ru) || !HasCyrillic(ru)) return ru;
+        if (WindowsNames.TryGetValue(ru.Trim(), out var win))
+            return ru.Trim() == ru.Trim().ToUpperInvariant() ? win.ToUpperInvariant() : win;   // подпись заглавными — и перевод заглавными
         if (exact.TryGetValue(ru, out var en)) return en;
         if (cache.TryGetValue(ru, out en)) return en;
         en = Match(ru) ?? TrimmedMatch(ru) ?? ru;
@@ -81,9 +83,28 @@ public static class L
     public static string F(string ru, params object[] args)
     {
         string template = En && exact.TryGetValue(ru, out var en) ? en : ru;
+        if (En && args != null)
+            for (int i = 0; i < args.Length; i++)
+                if (args[i] is string s) args[i] = Data(s);
         try { return string.Format(Culture, template, args); }
         catch (FormatException) { return string.Format(Culture, ru, args); }
     }
+
+    /// <summary>
+    /// Названия стандартных схем питания Windows: на русской Windows они приходят по-русски, а в английском интерфейсе программы
+    /// должны быть английскими (так их зовёт английская Windows). Только точные стандартные названия — свои схемы человека
+    /// («Игровая», «My plan») остаются как есть. Логика программы сравнивает исходные названия; подмена — только для показа.
+    /// </summary>
+    private static readonly Dictionary<string, string> WindowsNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Сбалансированная"] = "Balanced",
+        ["Высокая производительность"] = "High performance",
+        ["Экономия энергии"] = "Power saver",
+        ["Максимальная производительность"] = "Ultimate Performance",
+    };
+
+    /// <summary>Данные из Windows для показа: в английском интерфейсе стандартные названия схем питания — по-английски.</summary>
+    public static string Data(string s) => En && s != null && WindowsNames.TryGetValue(s.Trim(), out var e) ? e : s;
 
     /// <summary>Выбор между русским и английским текстом прямо в коде — для мест, где словарь неудобен (длинная разметка, HTML).</summary>
     public static string Pick(string ru, string en) => En ? en : ru;
@@ -189,15 +210,18 @@ public static class L
             var sb = new StringBuilder("^");
             int last = 0, slots = 0;
             var seen = new HashSet<int>();
+            // Обычный и неразрывный пробел считаются одним: сессии старых версий (и тексты, набранные по-разному) записаны
+            // то с тем, то с другим, а перевод должен находиться в обоих случаях.
+            static string Lit(string s) => Regex.Escape(s).Replace(" ", "\\ ").Replace("\\ ", "[  ]");
             foreach (Match m in Regex.Matches(ru, @"\{(\d+)(:[^}]*)?\}"))
             {
-                sb.Append(Regex.Escape(ru[last..m.Index]));
+                sb.Append(Lit(ru[last..m.Index]));
                 int n = int.Parse(m.Groups[1].Value);
                 sb.Append(seen.Add(n) ? $"(?<a{n}>.+?)" : $"\\k<a{n}>");
                 slots = Math.Max(slots, n + 1);
                 last = m.Index + m.Length;
             }
-            sb.Append(Regex.Escape(ru[last..])).Append('$');
+            sb.Append(Lit(ru[last..])).Append('$');
             // В английском шаблоне форматы чисел уже не нужны: подставляется готовый текст.
             string template = Regex.Replace(en, @"\{(\d+):[^}]*\}", "{$1}");
             return new Pattern(new Regex(sb.ToString(), RegexOptions.Singleline | RegexOptions.CultureInvariant), template, slots);

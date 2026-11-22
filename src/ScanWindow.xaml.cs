@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -52,6 +52,8 @@ public partial class ScanWindow : Window
     public ScanWindow()
     {
         InitializeComponent();
+        // На ноутбуке осмотр рисует ноутбук, а не системный блок (точки выносок у сцен общие).
+        try { if (PulsePC.Services.LaptopCheck.Applies) Drawing.Scene = PulsePC.Blueprint.Scene.Laptop; } catch { }
         WindowFit.Attach(this);
         Motion.Init(this);
         Header.Line2 = L.F("ПЕРВЫЙ ЗАПУСК · {0:d}", DateTime.Now);
@@ -289,6 +291,17 @@ public partial class ScanWindow : Window
         detail.SetResourceReference(StyleProperty, "Body");
         stack.Children.Add(title);
         stack.Children.Add(detail);
+        // Замечание из журналов Windows — «Подробнее и что делать»: записи простыми словами, план и открытие в «Просмотре событий».
+        if (f.Kind != "" && LogMarks.Kinds.ContainsKey(f.Kind))
+        {
+            string kind = f.Kind, title0 = f.Title;
+            var level = f.Severity;
+            var more = new Button { Content = L.T("Подробнее и что делать"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 5, 0, 0) };
+            more.SetResourceReference(StyleProperty, "Link");
+            more.SetResourceReference(Control.ForegroundProperty, "Ink1");
+            more.Click += (_, _) => new LogDetailsWindow(this, kind, title0, level, null, LogMarks.Settings).Show();
+            stack.Children.Add(more);
+        }
         if (f.TargetPage >= 0 && f.PageName != "")
         {
             int page = f.TargetPage;

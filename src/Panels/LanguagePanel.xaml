@@ -11,15 +11,16 @@
         <Rectangle Style="{StaticResource Hairline}"/>
         <StackPanel Margin="0,14,0,0">
             <RadioButton x:Name="OptRu" GroupName="Lang" Margin="0,0,0,10" Click="Option_Click">
+                <!-- Подписи двуязычные и задаются в коде (LanguagePanel.xaml.cs): на любом языке интерфейса их поймут оба. -->
                 <StackPanel>
-                    <TextBlock Text="Русский" Style="{StaticResource RowTitle}"/>
-                    <TextBlock Text="Russian" Style="{StaticResource Caption}"/>
+                    <TextBlock x:Name="RuTitle" Style="{StaticResource RowTitle}"/>
+                    <TextBlock x:Name="RuCaption" Style="{StaticResource Caption}"/>
                 </StackPanel>
             </RadioButton>
             <RadioButton x:Name="OptEn" GroupName="Lang" Margin="0,0,0,10" Click="Option_Click">
                 <StackPanel>
-                    <TextBlock Text="English" Style="{StaticResource RowTitle}"/>
-                    <TextBlock Text="английский" Style="{StaticResource Caption}"/>
+                    <TextBlock x:Name="EnTitle" Style="{StaticResource RowTitle}"/>
+                    <TextBlock x:Name="EnCaption" Style="{StaticResource Caption}"/>
                 </StackPanel>
             </RadioButton>
             <RadioButton x:Name="OptAuto" GroupName="Lang" Click="Option_Click">

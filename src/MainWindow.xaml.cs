@@ -132,9 +132,10 @@ public partial class MainWindow : Window
         InitUpkeep();
         InitCustomGames();
         InitTitleButtons();
-        sessions.CollectionChanged += (_, _) => { UpdateRateBar(); UpdateCleanSessions(); };
+        sessions.CollectionChanged += (_, _) => { UpdateRateBar(); UpdateCleanSessions(); ApplySessionsSide(); };
         UpdateCleanSessions();
         InitSystem();
+        InitHealth();       // оценка здоровья ПК и «Почему тормозит» (MainWindow.Health.cs)
         // F1 — справка, откуда угодно в окне.
         PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.F1) { ShowHelp(); e.Handled = true; } };
         // Один раз после обновления: прежний перезапуск сетевой карты мог оставить её выключенной — включить обратно.
@@ -259,6 +260,9 @@ public partial class MainWindow : Window
         // Развёрнутое окно с собственным заголовком выступает за край экрана на толщину рамки.
         Root.Padding = WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
         MaxButton.Content = WindowState == WindowState.Maximized ? "" : "";
+        // Подсказка и имя для экранного диктора — по состоянию окна.
+        MaxButton.ToolTip = WindowState == WindowState.Maximized ? L.T("Восстановить") : L.T("Развернуть");
+        System.Windows.Automation.AutomationProperties.SetName(MaxButton, (string)MaxButton.ToolTip);
         if (WindowState != WindowState.Minimized) UpdateOverview();   // после сворачивания сразу показать свежие данные
     }
 
@@ -281,11 +285,11 @@ public partial class MainWindow : Window
 
         switch (index)
         {
-            case PgOverview: UpdateOverview(); Drawing.Play(); break;
+            case PgOverview: UpdateOverview(); ShowHealth(); Drawing.Play(); break;
             case PgSessions: UpdateSessionLive(); PadDrawing.Play(); break;
             case PgHistory: HistScroll.ScrollToTop(); OpenHistory(); break;
-            case PgNet: net.Active = true; UpdateNetPage(); RouterDrawing.Play(); break;
-            case PgDiag: LoadBoot(); break;
+            case PgNet: net.Active = true; UpdateNetPage(); RouterDrawing.Play(); ShowNetChecks(); break;
+            case PgDiag: LoadBoot(); LoadStability(); break;
             case PgTweaks: RefreshApps(); LoadTunes(notify: false); break;
             case PgSystem: OpenSystem(); break;
         }
@@ -494,7 +498,7 @@ public partial class MainWindow : Window
         else
         {
             LivePanel.Visibility = Visibility.Collapsed;
-            SessionsHint.Visibility = Visibility.Visible;
+            ApplySessionsSide();
             FooterRec.Visibility = Visibility.Collapsed;
             if (recBlinking) { recBlinking = false; RecDot.BeginAnimation(OpacityProperty, null); }
         }
@@ -541,8 +545,26 @@ public partial class MainWindow : Window
         ShowSession(SessionList.SelectedItem as GameSession);
 
     /// <summary>Списку сессий — не меньше ~150 точек по высоте: всё, что выше него в колонке, при нехватке места прокручивается.</summary>
-    private void SessionsBody_SizeChanged(object sender, SizeChangedEventArgs e) =>
-        SessionsSide.MaxHeight = Math.Max(120, e.NewSize.Height - 48 - 150);     // 48 — поля колонки сверху и снизу
+    /// <summary>Невысокое окно: верх колонки «Сессий» без рисунка и подсказки, чтобы список сессий занимал основное место.</summary>
+    private bool sessionsCompact;
+
+    private void SessionsBody_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool compact = e.NewSize.Height < 600;
+        if (compact == sessionsCompact && e.PreviousSize.Height > 0) return;
+        sessionsCompact = compact;
+        ApplySessionsSide();
+        RenderCustomGames();
+    }
+
+    /// <summary>Рисунок геймпада и подсказка «оставьте программу запущенной»: в невысоком окне — только пока сессий нет.</summary>
+    private void ApplySessionsSide()
+    {
+        bool roomy = !sessionsCompact || sessions.Count == 0;
+        PadDrawing.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
+        SessionsHint.Visibility = roomy && !recorder.IsRecording ? Visibility.Visible : Visibility.Collapsed;
+        SessionsSideLine.Margin = new Thickness(0, roomy ? 16 : 10, 0, 0);
+    }
 
     private void ShowSession(GameSession s)
     {
@@ -559,6 +581,8 @@ public partial class MainWindow : Window
         SessionReport.Visibility = Visibility.Visible;
         SessGame.Text = s.Game;
         SessWhen.Text = $"{s.Start.ToString(L.Pick("d MMMM, HH:mm", "MMMM d, HH:mm"))} – {s.End:HH:mm} · {Fmt.Duration(s.Duration)}";
+        ShowBehaviorMark(s);     // «найдена по поведению» и «Это не игра» (MainWindow.Games.cs)
+        ShowCautiousMark(s);     // осторожный режим: античит и «Записывать полностью» (MainWindow.Cautious.cs)
 
         // Та же игра в прошлые разы: с предыдущей сессией сравниваются числа, остальные идут в таблицу внизу.
         var same = sessions.Where(x => x.Game == s.Game).OrderByDescending(x => x.Start).ToList();
@@ -585,16 +609,21 @@ public partial class MainWindow : Window
             SessFpsCap.Text = L.T("в среднем") + Delta(s.AvgFps, prev?.AvgFps, 1, "0");
             SessLow1Cap.Text = L.T("в худшем 1 % кадров") + Delta(s.Low1Fps, prev?.Low1Fps, 1, "0");
             SessFpsChart.SetData(s.FpsSeries);
+            // Плавность — у сессий с версии 1.5 (по времени кадров).
+            SessSmooth.Visibility = SessSmoothCap.Visibility = s.Smoothness != null ? Visibility.Visible : Visibility.Collapsed;
+            SessSmooth.Value = s.Smoothness ?? double.NaN;
+            SessSmooth.Foreground = s.Smoothness < 60 ? Palette.Warn : Palette.Ink1;
+            SessSmoothCap.Text = L.T("плавность") + Delta(s.Smoothness, prev?.Smoothness, 1, "0");
         }
         else
         {
-            SessNoFps.Text = SessionRecorder.SkipsFps(s.Game)
-                ? L.T("FPS в этой игре не записывается: её античит работает на уровне ядра, и рисковать аккаунтом незачем.")
+            SessNoFps.Text = CautiousMode.ForSession(s)?.Cautious == true
+                ? L.T("FPS не записывался: в этой игре работал осторожный режим — подробности под названием игры.")
                 : L.T("FPS в этой сессии не записывался.");
         }
 
         SessMaxTemp.Value = s.MaxTemp;
-        SessMaxTemp.Foreground = s.MaxTemp >= 83 ? Palette.Warn : Palette.Ink1;
+        SessMaxTemp.Foreground = s.MaxTemp >= SessionAnalysis.HotMaxTempC(LaptopCheck.Applies) ? Palette.Warn : Palette.Ink1;
         SessAvgGpu.Value = s.AvgGpu;
         SessAvgCpu.Value = s.AvgCpu;
         SessMinRam.Value = s.MinRamGb;
@@ -606,18 +635,12 @@ public partial class MainWindow : Window
         SessMinRamCap.Text = L.T("минимум свободной памяти") + Delta(s.MinRamGb, prev?.MinRamGb, 0.2, "0.0", " " + Fmt.GbUnit);
 
         SessCompareBlock.Visibility = same.Count >= 2 ? Visibility.Visible : Visibility.Collapsed;
-        SessCompare.ItemsSource = same.Count < 2 ? null : same.Take(8).Select(x => new CompareRow
-        {
-            When = x.Start.ToString(L.Pick("d MMM, HH:mm", "MMM d, HH:mm")),
-            Length = Fmt.Duration(x.Duration),
-            Fps = x.AvgFps > 0 ? x.AvgFps.Value.ToString("0") : "—",
-            Low = x.Low1Fps > 0 ? x.Low1Fps.Value.ToString("0") : "—",
-            Temp = x.MaxTemp > 0 ? x.MaxTemp.ToString("0") : "—",
-            Gpu = x.AvgGpu > 0 ? x.AvgGpu.ToString("0") + L.Pick(" %", "%") : "—",
-            Ram = x.MinRamGb > 0 ? x.MinRamGb.ToString("0.0") + " " + Fmt.GbUnit : "—",
-            Ink = ReferenceEquals(x, s) ? Palette.Ink1 : Palette.Ink2,
-            Weight = ReferenceEquals(x, s) ? FontWeights.SemiBold : FontWeights.Normal,
-        }).ToList();
+        // Вторая сессия для сравнения рядом: по умолчанию — предыдущая (или следующая, если эта — самая старая).
+        // Своя для каждой открытой сессии: выбор строки в таблице действует, пока открыт этот отчёт.
+        if (!ReferenceEquals(partnerFor, s) || comparePartner == null || ReferenceEquals(comparePartner, s) || !sessions.Contains(comparePartner))
+            comparePartner = prev ?? (at > 0 ? same[at - 1] : null);
+        partnerFor = s;
+        FillCompareRows(s, same);
 
         bool hasNet = s.AvgPingMs != null;
         SessNetRow.Visibility = hasNet ? Visibility.Visible : Visibility.Collapsed;
@@ -756,6 +779,16 @@ public partial class MainWindow : Window
     }
 
     // ================================================================== сеть
+    private bool netChecksAttached;
+
+    /// <summary>Проверки сети по кнопке (Panels\NetDiagPanel): подключаются при первом открытии вкладки, Wi‑Fi перечитывается каждый раз.</summary>
+    private void ShowNetChecks()
+    {
+        if (panelHost == null) return;
+        if (!netChecksAttached) { NetChecks.Attach(panelHost); netChecksAttached = true; }
+        NetChecks.Shown();
+    }
+
     private void UpdateNetPage()
     {
         if (page != PgNet || Hidden) return;
@@ -854,17 +887,18 @@ public partial class MainWindow : Window
 
     private static string ShortCpu(string name)
     {
-        if (string.IsNullOrWhiteSpace(name)) return L.T("процессор");
-        foreach (var junk in new[] { "(R)", "(TM)", "Intel", "Core", "AMD", "Processor", "CPU" }) name = name.Replace(junk, "");
-        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(p => !p.EndsWith("Gen", StringComparison.OrdinalIgnoreCase) && !p.EndsWith("th")).ToArray();
-        return parts.Length > 0 ? string.Join(" ", parts) : name.Trim();
+        string s = HardwareInfo.ShortCpu(name);
+        return s == "" ? L.T("процессор") : s;
     }
+
+    /// <summary>Подставной список «Что занимает память» — только для служебных снимков окна (Panels.WindowShots).</summary>
+    internal static List<(string Name, int Count, long Bytes)> ShotProcs;
 
     private void UpdateTopProcesses()
     {
         try
         {
-            var top = Process.GetProcesses()
+            var top = ShotProcs ?? Process.GetProcesses()
                 .GroupBy(p => p.ProcessName)
                 .Select(g => { long sum = 0; foreach (var p in g) { try { sum += p.WorkingSet64; } catch { } } return (Name: g.Key, Count: g.Count(), Bytes: sum); })
                 .OrderByDescending(x => x.Bytes).Take(procs.Count).ToList();
@@ -944,6 +978,7 @@ public partial class MainWindow : Window
             await RefreshTweaksAsync();
             var snapshot = tweaks.ToList();
             var items = await Task.Run(() => Diagnostics.Run(metrics, snapshot, settings));
+            RecordHealth(items);        // оценка здоровья на «Обзоре» — по тем же находкам (MainWindow.Health.cs)
 
             diagAttention.Clear(); diagInfo.Clear(); diagOk.Clear();
             foreach (var item in items)
@@ -1023,6 +1058,13 @@ public partial class MainWindow : Window
     {
         LogMarks.Reset(settings);
         await RunDiagAsync();
+    }
+
+    /// <summary>«Подробнее и что делать»: разбор записей журнала (только чтение).</summary>
+    private void DiagDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not DiagFinding f || !f.HasDetails) return;
+        new LogDetailsWindow(this, f.DetailsKind, f.Title, f.Level, metrics.Disks, settings).Show();
     }
 
     private void DiagLink_Click(object sender, RoutedEventArgs e)
@@ -1425,6 +1467,11 @@ public partial class MainWindow : Window
 /// <summary>Строка таблицы сравнения сессий одной игры.</summary>
 public class CompareRow
 {
+    /// <summary>Сессия строки — по щелчку она становится второй в сравнении рядом.</summary>
+    public GameSession Session { get; set; }
+    public string Smooth { get; set; }
+    public string Hint { get; set; }
+    public Visibility PartnerMark { get; set; } = Visibility.Collapsed;
     public string When { get; set; }
     public string Length { get; set; }
     public string Fps { get; set; }

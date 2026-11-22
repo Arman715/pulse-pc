@@ -1,0 +1,12 @@
+{
+  "показать все ({0})": "show all ({0})",
+  "свернуть": "collapse",
+  "Сегодня оценка ещё не считалась — последний столбик графика пустой.": "The score hasn't been calculated today yet — the last bar of the chart is empty.",
+  "НОУТБУК": "LAPTOP",
+  "ОБЩИЙ ВИД, ПАНЕЛЬ С КЛАВИАТУРОЙ СНЯТА": "GENERAL VIEW, KEYBOARD DECK REMOVED",
+  "Восстановить": "Restore",
+  "У драйвера видеокарты и программы последние версии": "The graphics driver and the app are up to date",
+  "чтение и запись {0}": "read and write {0}",
+  "Проверить до сервера игры": "Trace to the game server",
+  "Проверить до 1.1.1.1": "Trace to 1.1.1.1"
+}

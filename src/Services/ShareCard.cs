@@ -32,6 +32,8 @@ public static class ShareCard
     {
         "ram" => L.T("Не хватило памяти"),
         "gpu-heat" => L.T("Нагрев видеокарты"),
+        "gpu-temp-limit" => L.T("Предел температуры видеокарты"),
+        "gpu-power" => L.T("Питание видеокарты"),
         "disk" => L.T("Диск не успевал"),
         "cpu" => L.T("Процессор не успевал"),
         "gpu" => L.T("Видеокарта на пределе"),
@@ -44,12 +46,14 @@ public static class ShareCard
     {
         if (s.BoundGpuPct == null) return null;
         double gpuPct = s.BoundGpuPct ?? 0, cpuPct = s.BoundCpuPct ?? 0, otherPct = s.BoundOtherPct ?? 0;
+        // DLSS есть только у NVIDIA — владельцам AMD и Intel называем их масштабирование (как в замечаниях к сессии).
+        string upscale = GameTuning.IsNvidia ? "DLSS" : "FSR / XeSS";
         if (gpuPct >= 50)
             return (L.T("Ограничивает видеокарта"),
-                L.T("Процессор справляется с запасом. Поднять FPS можно настройками графики: тени, сглаживание, разрешение рендера, DLSS в режиме «Качество»."));
+                L.F("Процессор справляется с запасом. Поднять FPS можно настройками графики: тени, сглаживание, разрешение рендера, {0} в режиме «Качество».", upscale));
         if (cpuPct >= 40 && cpuPct >= gpuPct)
             return (L.T("Ограничивает процессор"),
-                L.T("Если снизить графику, FPS почти не вырастет. Помогает другое: закрыть фоновые программы, уменьшить дальность прорисовки, число объектов и теней — их считает процессор. DLSS здесь почти бесполезен."));
+                L.F("Если снизить графику, FPS почти не вырастет. Помогает другое: закрыть фоновые программы, уменьшить дальность прорисовки, число объектов и теней — их считает процессор. {0} здесь почти бесполезен.", upscale));
         if (otherPct >= 50)
             return (L.T("Запас есть и у процессора, и у видеокарты"),
                 L.T("FPS сдерживает ограничитель: лимит FPS в игре или в драйвере, V-Sync или сама игра (меню, ожидание сервера). Нужно больше FPS — проверьте эти настройки."));
@@ -239,7 +243,7 @@ public static class ShareCard
                     var worst = g.OrderBy(d => d.ToFps).First();
                     var num = Txt(no.ToString(), Mono, 32, Palette.Accent);
                     dc.DrawText(num, new Point(M, y + 2));
-                    Brush ink = g.Key is "ram" or "gpu-heat" ? Palette.Warn : g.Key == "unknown" ? Palette.Ink3 : Palette.Ink1;
+                    Brush ink = g.Key is "ram" or "gpu-heat" or "gpu-power" ? Palette.Warn : g.Key == "unknown" ? Palette.Ink3 : Palette.Ink1;
                     var name = Txt(CauseName(g.Key), Text, 34, ink, FontWeights.SemiBold, w - 300, 1);
                     dc.DrawText(name, new Point(M + 52, y));
                     var count = Txt(SessionAnalysis.Times(g.Count()).Replace(" ", Nb), Mono, 28, Palette.Ink1);

@@ -98,21 +98,26 @@ public static class GameDetector
                     long mem = p.WorkingSet64;
                     // Игры занимают сотни мегабайт: дешёвый отсев до обращения к процессу. Для добавленных вручную порог ниже —
                     // небольшие и старые игры бывают легче.
-                    bool anyCustom = Volatile.Read(ref custom).Length > 0;
+                    // Найденные поиском и по поведению (GameFinder) тоже бывают лёгкими — для них порог такой же.
+                    bool anyCustom = Volatile.Read(ref custom).Length > 0 || GameFinder.HasIndex;
                     if (mem < (anyCustom ? 60L : 300L) * 1024 * 1024) continue;
                     string path = PathOf(p.Id);
                     string game = MatchCustom(path)?.Name;
                     if (game == null && mem >= 300L * 1024 * 1024) game = GameName(path, name);
-                    if (game != null && mem > bestMem) { best = new DetectedGame { Name = game, Pid = p.Id }; bestMem = mem; }
+                    game ??= GameFinder.Match(path, mem);     // GOG, Ubisoft, Xbox, EA, Battle.net…, игры на дисках и найденные по поведению
+                    if (game != null && mem > bestMem) { best = new DetectedGame { Name = game, Pid = p.Id, Path = path }; bestMem = mem; }
                 }
             }
             catch { }
         }
+        // Античит игры (осторожный режим): папка игры, службы, запустившиеся с ней, список — в фоне, процесс игры не открывается.
+        AntiCheat.Observe(best?.Name, best?.Path);
         return best;
     }
 
     /// <summary>Файл похож на игру (лежит в библиотеке Steam, Epic, Riot и т.д.) — такие не предлагается закрывать.</summary>
-    public static bool LooksLikeGame(string path) => MatchCustom(path) != null || GameName(path, Path.GetFileNameWithoutExtension(path ?? "")) != null;
+    public static bool LooksLikeGame(string path) => MatchCustom(path) != null || GameName(path, Path.GetFileNameWithoutExtension(path ?? "")) != null
+                                                     || GameFinder.Match(path, long.MaxValue) != null;
 
     /// <summary>Запущена ли сейчас программа из этой папки (игра перезаписывает свои настройки при выходе).</summary>
     public static bool IsRunningFrom(string dir)
@@ -250,6 +255,8 @@ public class DetectedGame
 {
     public string Name;
     public int Pid;
+    /// <summary>Файл процесса игры (прочитан с минимальными правами; null — не прочитался).</summary>
+    public string Path;
 }
 
 /// <summary>Итог одной игровой сессии.</summary>
@@ -290,11 +297,15 @@ public class GameSession
     public double? BoundOtherPct { get; set; }
     public double? GpuPowerLimitPct { get; set; }
     public double? GpuThermalLimitPct { get; set; }
+    /// <summary>Самая высокая температура видеокарты, при которой срабатывал предел температуры (с 1.5.1; у старых — null).</summary>
+    public double? GpuThermalTempC { get; set; }
     public double? GpuHardLimitPct { get; set; }
     public double? AvgGpuClock { get; set; }
     public double? AvgCpuGhz { get; set; }
     public double? CpuSlowPct { get; set; }
     public double? MaxPagesIn { get; set; }
+    /// <summary>Замеров, где подгрузка страниц (от 1000/с) и нехватка свободной памяти совпали по времени — настоящая подкачка (у старых — null).</summary>
+    public int? PagingSamples { get; set; }
     // Сервер игры
     public string Server { get; set; }
     public double? ServerPingMs { get; set; }
@@ -313,8 +324,50 @@ public class GameSession
     public DateTime? StartUtc { get; set; }
     public DateTime? EndUtc { get; set; }
 
+    // Отчёт после игры (с версии 1.5; у старых сессий всё это null — отчёт показывает то, что есть).
+    /// <summary>Сжатый ряд времени кадров и самые заметные рывки.</summary>
+    public FrameTimeline Frames { get; set; }
+    /// <summary>Плавность 0–100 (см. SessionAnalysis.SmoothnessScore).</summary>
+    public double? Smoothness { get; set; }
+    public int? Stutters { get; set; }
+    public double? StutterPerMin { get; set; }
+    /// <summary>Вид рывков: сборка шейдеров, диск, процессор, память, видеопамять.</summary>
+    public List<StutterGroup> StutterKinds { get; set; }
+    /// <summary>Что ещё нагружало процессор и диск за всю сессию (без самой игры и программы).</summary>
+    public List<Culprit> Background { get; set; }
+    /// <summary>Отметки на графиках: игра свёрнута, пауза в кадрах, сброс драйвера видеокарты, скачки пинга, виновники.</summary>
+    public List<SessionEvent> Events { get; set; }
+    /// <summary>Какой видеоадаптер рисовал игру (по счётчикам Windows «GPU Engine» процесса игры).</summary>
+    public string GpuUsed { get; set; }
+    public bool? GpuUsedIntegrated { get; set; }
+    /// <summary>Отдельная видеокарта, которая была в компьютере, но игру не рисовала (только если рисовала встроенная).</summary>
+    public string GpuIdle { get; set; }
+    /// <summary>Ноутбук: встроенная и отдельная графика переключаются (влияет только на совет, как переключить).</summary>
+    public bool? GpuHybrid { get; set; }
+    /// <summary>Условия игры: драйвер видеокарты, схема питания, свободная память в начале.</summary>
+    public string Driver { get; set; }
+    public string PowerPlan { get; set; }
+    public double? StartFreeRamGb { get; set; }
+    /// <summary>Заметка пользователя: что он менял перед этой игрой.</summary>
+    public string UserNote { get; set; }
+    /// <summary>Сколько процессора в среднем занимала сама программа вместе с записью кадров, % от всего процессора.</summary>
+    public double? AppCpuPct { get; set; }
+    /// <summary>Осторожный режим (античит уровня ядра): кадры, сеть игры и опрос процесса игры не записывались. У старых сессий — null.</summary>
+    public bool? Cautious { get; set; }
+    /// <summary>Чьё решение: auto — по античиту, manual — включил человек, full — человек разрешил полную запись.</summary>
+    public string CautiousBy { get; set; }
+    /// <summary>Запись кадров возобновилась посреди игры (человек разрешил полную запись): FPS — только с этого момента.</summary>
+    public DateTime? FramesFrom { get; set; }
+    /// <summary>Античит игры, если известен (название), и работает ли он на уровне ядра.</summary>
+    public string AntiCheat { get; set; }
+    public bool? AntiCheatKernel { get; set; }
+
     /// <summary>Сессия не легла на диск: причина (null — сохранена). В файл не пишется.</summary>
     [JsonIgnore] public string SaveError { get; set; }
+    /// <summary>Подпись в списке сессий: дата, длительность и плавность, если она есть.</summary>
+    [JsonIgnore] public string ListCaption => Smoothness is double sm ? Caption + " · " + L.F("плавность {0:0}", sm) : Caption;
+    /// <summary>Заметка в списке сессий (пусто — строки нет).</summary>
+    [JsonIgnore] public string NoteLine => string.IsNullOrWhiteSpace(UserNote) ? "" : UserNote.Trim().Replace('\n', ' ').Replace("\r", "");
 
     [JsonIgnore] public TimeSpan Duration => Seconds is double sec ? TimeSpan.FromSeconds(Math.Max(0, sec)) : End - Start;
     [JsonIgnore] public string Title => Game;
@@ -332,6 +385,13 @@ public sealed class SessionRecorder
     private FpsCapture fps;
     private GameNetMonitor gameNet;
     private readonly List<SessionSample> samples = new();
+    // Отчёт после игры (1.5): лёгкий опрос других процессов, адаптер игры, условия игры, нагрузка самой программы.
+    private ProcessActivity procs;
+    private GameGpuProbe gpuProbe;
+    private string gameImage, driver, powerPlan;
+    private double startFreeRam = double.NaN, selfCpuSum;
+    private int sampleNo, selfCpuN;
+    private readonly Stopwatch extraCost = new();
     private readonly Dictionary<int, string> memoryAt = new();   // номер замера → кто занимал память в момент просадки
     private readonly List<double> recentFps = new();
     private DateTime lastMemoryProbe;
@@ -357,16 +417,33 @@ public sealed class SessionRecorder
     /// <summary>FPS за последнюю секунду, если идёт запись кадров.</summary>
     public double LiveFps => fps?.LiveFps ?? double.NaN;
 
+    /// <summary>Идущая игра для оверлея (null — записи нет). Вызывать в потоке интерфейса, как и Update.</summary>
+    public LiveGameFeed LiveFeed()
+    {
+        if (CurrentGame == null) return null;
+        var watcher = gameNet;
+        return new LiveGameFeed
+        {
+            Pid = GamePid, Game = CurrentGame, Image = gameImage ?? "", Frames = fps,
+            ServerPingMs = () => watcher?.ServerPingNow() ?? double.NaN,
+        };
+    }
+
     /// <summary>Сессия закончилась и сохранена. Вызывается из фонового потока.</summary>
     public event Action<GameSession> Finished;
 
     private static int MinSeconds =>
         int.TryParse(Environment.GetEnvironmentVariable("PULSEPC_TEST_MINSEC"), out int s) ? s : 120;
 
-    // Игры с античитом уровня ядра, для которых запись кадров не включаем: рисковать блокировкой аккаунта незачем.
-    private static readonly string[] NoFpsGames = { "VALORANT", "League of Legends" };
+    /// <summary>
+    /// В этой игре кадры не записываются: осторожный режим (античит уровня ядра или выбор человека) — см. <see cref="CautiousMode"/>.
+    /// Раньше это был жёсткий список VALORANT и League of Legends; теперь они попадают сюда по встроенному списку и папке игры.
+    /// </summary>
+    public static bool SkipsFps(string game) => CautiousMode.For(game).Cautious;
 
-    public static bool SkipsFps(string game) => NoFpsGames.Contains(game, StringComparer.OrdinalIgnoreCase);
+    /// <summary>Решение для идущей записи: осторожный режим или полная запись.</summary>
+    private CautiousDecision cautious;
+    private string gamePath;
 
     /// <summary>Такт записи. sample — показания процессора, памяти и диска; FPS и видеокарту рекордер дописывает сам.</summary>
     public void Update(DetectedGame detected, SessionSample sample, GpuSample gpuSample, NetMonitor net)
@@ -379,30 +456,93 @@ public sealed class SessionRecorder
             if (CurrentGame != null && (CurrentGame != game || (detected.Pid != GamePid && !IsAlive(GamePid)))) Finish(net);
             if (CurrentGame == null) Begin(detected, net);
             misses = 0;
-            Add(sample, gpuSample);
+            RecheckCautious();
+            Add(sample, gpuSample, net);
         }
         else if (CurrentGame != null)
         {
             // Игра могла на секунду пропасть из списка (перезапуск через лаунчер) - не рвём сессию сразу.
             if (++misses >= 8) Finish(net);
-            else Add(sample, gpuSample);
+            else Add(sample, gpuSample, net);
         }
     }
 
     /// <summary>Завершить запись немедленно (при выходе из программы).</summary>
     public void Stop(NetMonitor net) { if (CurrentGame != null) Finish(net, wait: true); }
 
-    /// <summary>Процесс ещё работает. Нет доступа (защита античита) — считаем живым: рвать сессию из-за этого нельзя.</summary>
+    /// <summary>
+    /// Процесс ещё работает. Открывается только с правом PROCESS_QUERY_LIMITED_INFORMATION (код завершения) — так можно и для игр
+    /// в осторожном режиме. Нет доступа (защита античита) — считаем живым: рвать сессию из-за этого нельзя.
+    /// </summary>
     private static bool IsAlive(int pid)
     {
-        try { using var p = Process.GetProcessById(pid); return !p.HasExited; }
-        catch (ArgumentException) { return false; }
-        catch { return true; }
+        IntPtr h = OpenProcess(0x1000, false, pid);
+        if (h == IntPtr.Zero) return Marshal.GetLastWin32Error() != 87;      // 87 — такого процесса нет
+        try { return !GetExitCodeProcess(h, out uint code) || code == 259; }   // 259 — STILL_ACTIVE
+        finally { CloseHandle(h); }
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+    [DllImport("kernel32.dll")] private static extern bool GetExitCodeProcess(IntPtr h, out uint code);
+    [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr h);
+
+    /// <summary>
+    /// Античит мог найтись не сразу (его служба запускается через несколько секунд после игры): тогда запись кадров и сеть игры
+    /// останавливаются посреди сессии, и сессия считается записанной в осторожном режиме.
+    /// </summary>
+    private void RecheckCautious()
+    {
+        // Проверяется и без записи кадров (нет прав администратора): опрос «GPU Engine» по процессу игры тоже нужно остановить,
+        // а Protects(pid) — включить, иначе другие части программы открывали бы процесс игры как обычный.
+        if (cautious == null || CurrentGame == null || sampleNo % 4 != 0) return;
+        var now = CautiousMode.For(CurrentGame, gamePath);
+        if (cautious.Cautious)
+        {
+            // Человек сам разрешил полную запись посреди игры — запись кадров и сети начинается заново с этого момента.
+            // Явный выбор: «full» (полная запись при античите) или снятый ручной осторожный режим (у игр с EasyAntiCheat, BattlEye
+            // и без античита он снимается, и решение снова «auto»). Осторожный режим «по античиту» сам по себе не снимается.
+            if (!now.Cautious && (now.By == "full" || cautious.By == "manual")) ResumeFull(now);
+            return;
+        }
+        if (!now.Cautious) return;
+        cautious = now;
+        CautiousMode.SetCurrent(now, GamePid);
+        var capture = fps; var watcher = gameNet;
+        fps = null; gameNet = null; gpuProbe = null;
+        framesDropped = true; framesFrom = null;
+        Log.Info($"осторожный режим для {CurrentGame}: античит {now.AntiCheat?.Name} найден во время игры — запись кадров и сети игры остановлена");
+        Task.Run(() =>
+        {
+            try { capture?.Stop(); } catch { }
+            try { watcher?.Dispose(); } catch { }
+        });
+    }
+
+    /// <summary>Когда посреди игры возобновилась запись кадров (FPS в отчёте — только с этого момента).</summary>
+    private DateTime? framesFrom;
+    /// <summary>Запись кадров остановилась посреди игры (осторожный режим): FPS этой сессии не сохраняется.</summary>
+    private bool framesDropped;
+
+    private void ResumeFull(CautiousDecision now)
+    {
+        cautious = now;
+        framesFrom = DateTime.Now;
+        CautiousMode.SetCurrent(now, GamePid);
+        gpuProbe = now.AllowGpuProbe ? new GameGpuProbe() : null;
+        if (RecordFps && fps == null)
+        {
+            var capture = new FpsCapture();
+            if (capture.Start(GamePid)) fps = capture;
+            var watcher = new GameNetMonitor();
+            if (watcher.Start(GamePid)) gameNet = watcher; else watcher.Dispose();
+        }
+        Log.Info($"полная запись для {CurrentGame} включена вручную во время игры — кадры и сеть записываются с этого момента");
     }
 
     private void Begin(DetectedGame game, NetMonitor net)
     {
         CurrentGame = game.Name; GamePid = game.Pid; StartedAt = DateTime.Now; startedUtc = DateTime.UtcNow; misses = 0;
+        framesFrom = null; framesDropped = false;
         lastAddTs = 0; recordedSec = 0;
         cpu.Clear(); gpu.Clear(); temp.Clear(); fan.Clear();
         samples.Clear(); recentFps.Clear();
@@ -410,10 +550,24 @@ public sealed class SessionRecorder
         lock (memoryAt) { memoryAt.Clear(); probeGen++; }
         minRam = double.MaxValue; maxVram = 0; vramTotal = 0; powerSum = 0; powerCount = 0;
         netMark = net?.Internet.Begin();
+        procs?.Dispose();
+        procs = new ProcessActivity();
+        gameImage = null; driver = null; powerPlan = null;
+        startFreeRam = double.NaN; selfCpuSum = 0; selfCpuN = 0; sampleNo = 0;
+        extraCost.Reset();
+        // Осторожный режим (античит уровня ядра или выбор человека): решение — до запуска любой трассировки.
+        gamePath = game.Path;
+        cautious = CautiousMode.For(game.Name, game.Path);
+        CautiousMode.SetCurrent(cautious, game.Pid);
+        // «GPU Engine» по процессу игры — только вне осторожного режима.
+        gpuProbe = cautious.AllowGpuProbe ? new GameGpuProbe() : null;
+        // Имя файла игры: из пути (уже прочитан с минимальными правами) или из списка процессов Windows (процесс не открывается).
+        if (!string.IsNullOrEmpty(game.Path)) gameImage = Path.GetFileNameWithoutExtension(game.Path);
+        else if (cautious.AllowProcessOpen) try { using var gp = Process.GetProcessById(game.Pid); gameImage = gp.ProcessName; } catch { }
 
         fps = null; gameNet = null;
-        // Кадры и сетевые события — только с правами администратора и не в играх с античитом уровня ядра.
-        if (RecordFps && !NoFpsGames.Contains(game.Name, StringComparer.OrdinalIgnoreCase))
+        // Кадры и сетевые события — только с правами администратора и не в осторожном режиме.
+        if (RecordFps && cautious.AllowFrames && cautious.AllowGameNet)
         {
             var capture = new FpsCapture();
             if (capture.Start(game.Pid)) fps = capture;
@@ -422,10 +576,11 @@ public sealed class SessionRecorder
         }
     }
 
-    private void Add(SessionSample s, GpuSample g)
+    private void Add(SessionSample s, GpuSample g, NetMonitor net)
     {
         double cpuLoad = s.Cpu, ramAvailGb = s.RamAvail;
         s.At = DateTime.Now;
+        AddExtra(ref s, g, net);
         long ts = Stopwatch.GetTimestamp();
         if (lastAddTs != 0)
         {
@@ -443,6 +598,7 @@ public sealed class SessionRecorder
             if (capture?.Running == true) Health.Ok("Кадры (PresentMon)");
             if (gameNet?.Running == true) Health.Ok("Сеть игры");
         }
+        if (capture != null) capture.Away = s.Unfocused;
         s.Fps = capture != null && (DateTime.Now - capture.LiveAt).TotalSeconds < 2.5 ? capture.LiveFps : double.NaN;
         s.Gpu = g?.Load ?? double.NaN; s.GpuTemp = g?.Temp ?? double.NaN; s.GpuClock = g?.Clock ?? double.NaN;
         s.LimitPower = g?.LimitPower ?? false; s.LimitThermal = g?.LimitThermal ?? false; s.LimitHardware = g?.LimitHardware ?? false;
@@ -463,6 +619,38 @@ public sealed class SessionRecorder
     }
 
     /// <summary>
+    /// Отчёт после игры (1.5): другие процессы (один системный вызов), чтение диска игрой, игра на переднем плане, пинг,
+    /// видеопамять; условия игры — драйвер, схема питания, свободная память в начале; редкий опрос адаптера игры в фоне.
+    /// Всё это замеряется по времени (extraCost) — в журнал после сессии.
+    /// </summary>
+    private void AddExtra(ref SessionSample s, GpuSample g, NetMonitor net)
+    {
+        extraCost.Start();
+        try
+        {
+            sampleNo++;
+            if (double.IsNaN(startFreeRam) && s.RamAvail > 0) startFreeRam = s.RamAvail;
+            if (driver == null && !string.IsNullOrEmpty(g?.Driver)) driver = g.Driver;
+            // Через полминуты: к этому времени «Питание» успевает включить игровую схему, если так настроено.
+            if (sampleNo == 20) { try { powerPlan = Bench.ActivePowerPlan(); } catch { } }
+            s.GameIoMBs = double.NaN;
+            if (procs != null)
+            {
+                s.Top = procs.Sample(GamePid, gameImage, out double gameIo);
+                s.GameIoMBs = gameIo;
+                if (!double.IsNaN(procs.SelfCpu)) { selfCpuSum += procs.SelfCpu; selfCpuN++; }
+            }
+            s.Unfocused = SessionCulprits.ForegroundPid() != GamePid;
+            s.VramGb = g != null && !double.IsNaN(g.MemUsed) ? g.MemUsed / 1024 : 0;
+            var pings = net?.Internet.Snapshot();
+            s.PingMs = pings is { Length: > 0 } && !double.IsNaN(pings[^1]) ? pings[^1] : 0;
+            gpuProbe?.Tick(GamePid, StartedAt);
+        }
+        catch (Exception ex) { Log.Error("запись сессии: доп. замер", ex); }
+        finally { extraCost.Stop(); }
+    }
+
+    /// <summary>
     /// В момент просадки при нехватке памяти запоминаем, кто её занимал: после игры этого уже не узнать.
     /// Перебор процессов идёт в фоне и не чаще раза в 15 секунд.
     /// </summary>
@@ -474,7 +662,7 @@ public sealed class SessionRecorder
         if (recentFps.Count < 10 || probing || (DateTime.Now - lastMemoryProbe).TotalSeconds < 15) return;
         double median = recentFps.OrderBy(x => x).ElementAt(recentFps.Count / 2);
         bool dip = median >= 40 && s.Fps < 0.65 * median;
-        bool memoryTight = s.RamAvail < 1.2 || s.PagesIn >= 300;
+        bool memoryTight = (s.RamAvail > 0 && s.RamAvail < 1.2) || SessionAnalysis.MemoryShort(s.RamAvail, s.PagesIn, SessionAnalysis.TotalRamGb(), 300);
         if (!dip || !memoryTight) return;
 
         int index = samples.Count - 1, pid = GamePid, gen;
@@ -510,7 +698,19 @@ public sealed class SessionRecorder
             AvgPowerW = powerCount > 0 ? powerSum / powerCount : 0,
             AvgFanPct = fan.Count > 0 ? fan.Average() : null, MaxFanPct = fan.Count > 0 ? fan.Max() : null,
             CpuSeries = Downsample(cpu, 240), GpuSeries = Downsample(gpu, 240), TempSeries = Downsample(temp, 240),
+            Driver = driver, PowerPlan = string.IsNullOrEmpty(powerPlan) ? null : powerPlan,
+            StartFreeRamGb = double.IsNaN(startFreeRam) ? null : Math.Round(startFreeRam, 2),
+            AppCpuPct = selfCpuN > 0 ? Math.Round(selfCpuSum / selfCpuN, 2) : null,
+            Cautious = cautious?.Cautious, CautiousBy = cautious?.By, FramesFrom = framesFrom,
+            AntiCheat = cautious?.AntiCheat?.Name, AntiCheatKernel = cautious?.AntiCheat?.Kernel,
         };
+        cautious = null; gamePath = null;
+        CautiousMode.SetCurrent(null, 0);
+        var activity = procs; var probe = gpuProbe;
+        procs = null; gpuProbe = null;
+        activity?.Dispose();      // буфер опроса больше не нужен; счётчики стоимости остаются для журнала
+        double tickMs = extraCost.Elapsed.TotalMilliseconds;
+        int ticks = Math.Max(1, sampleNo);
 
         if (net != null && netMark != null)
         {
@@ -527,6 +727,10 @@ public sealed class SessionRecorder
         var capture = fps;
         var watcher = gameNet;
         var recorded = samples.ToList();
+        // Запись кадров остановилась посреди игры (осторожный режим): FPS сессии не сохраняется — и просадки FPS по отдельным
+        // замерам тоже не ищутся, иначе отчёт говорил бы «FPS не записывался» и тут же показывал просадки FPS.
+        if (framesDropped && cautious?.Cautious == true)
+            for (int i = 0; i < recorded.Count; i++) { var x = recorded[i]; x.Fps = double.NaN; recorded[i] = x; }
         Dictionary<int, string> memory;
         lock (memoryAt) memory = new Dictionary<int, string>(memoryAt);
         double baseGhz = CpuBaseGhz;
@@ -550,6 +754,26 @@ public sealed class SessionRecorder
             }
             try { SessionAnalysis.Apply(session, recorded, baseGhz, memory, netStats?.GapTimes); }
             catch (Exception ex) { Log.Error("разбор сессии " + session.Game, ex); }
+            try { SessionAnalysis.ApplyFrames(session, result, recorded); }
+            catch (Exception ex) { Log.Error("время кадров " + session.Game, ex); }
+            try { SessionCulprits.Apply(session, recorded, result); }
+            catch (Exception ex) { Log.Error("виновники и отметки " + session.Game, ex); }
+            try
+            {
+                if (probe?.Result() is { } used)
+                {
+                    session.GpuUsed = used.Used; session.GpuUsedIntegrated = used.Integrated;
+                    session.GpuIdle = used.Discrete; session.GpuHybrid = IsLaptop();
+                }
+            }
+            catch (Exception ex) { Log.Error("видеоадаптер игры " + session.Game, ex); }
+            try
+            {
+                // Нагрузка самой записи — в журнал: сколько стоил такт и редкие опросы адаптера.
+                Log.Info($"запись {session.Game}: {ticks} замеров, доп. работа {tickMs / ticks:0.00} мс на замер (процессы {activity?.CostMs / Math.Max(1, activity?.Calls ?? 1):0.00} мс), " +
+                         $"адаптер {probe?.WorkMs:0} мс за {probe?.Probes} опросов, программа с PresentMon в среднем {session.AppCpuPct:0.00} % процессора");
+            }
+            catch { }
             session.Notes = BuildNotes(session);
             session.SaveError = SessionStore.Add(session);
             if (session.SaveError != null)
@@ -599,12 +823,34 @@ public sealed class SessionRecorder
         });
     }
 
-    private static List<string> BuildNotes(GameSession s)
+    /// <summary>
+    /// Ноутбук (там встроенная графика при отдельной — схема с переключением, а не кабель в плате). Общий признак LaptopCheck.Applies
+    /// (мобильная платформа, корпус ноутбука или батарея; батарея ИБП не в счёт).
+    /// Флаги «гибридной» графики у видеокарт для этого не годятся: Windows ставит их и настольным видеокартам.
+    /// </summary>
+    private static bool IsLaptop() => LaptopCheck.Applies;
+
+    internal static List<string> BuildNotes(GameSession s)
     {
         var notes = new List<string>();
+        if (s.GpuUsedIntegrated == true && !string.IsNullOrEmpty(s.GpuIdle))
+            notes.Add(L.F("Игра шла на встроенной графике ({0}), хотя в компьютере есть {1}. Отсюда низкий FPS — как переключить, написано вверху отчёта.", s.GpuUsed, s.GpuIdle));
+        if (s.Smoothness is double sm && sm < 70 && s.StutterKinds is { Count: > 0 })
+        {
+            var main = s.StutterKinds.FirstOrDefault(g => g.Kind != "other") ?? s.StutterKinds[0];
+            // «Чаще всего — …» только если этот вид и правда самый частый: 10 рывков из-за диска при 190 «без видимой причины» — не «чаще всего».
+            int unexplained = s.StutterKinds.Where(g => g.Kind == "other").Sum(g => g.Count);
+            if (main.Kind != "other" && main.Count < unexplained) main = s.StutterKinds.First(g => g.Kind == "other");
+            notes.Add(main.Kind == "other"
+                ? L.F("Плавность {0:0} из 100 (рывков в минуту: {1:0.#}). Подробности — в «Виде рывков».", sm, s.StutterPerMin)
+                : L.F("Плавность {0:0} из 100 (рывков в минуту: {1:0.#}), чаще всего — {2}. Подробности — в «Виде рывков».", sm, s.StutterPerMin, SessionAnalysis.StutterTitle(main.Kind)));
+        }
+        int resets = s.Events?.Count(e => e.Kind == "driver") ?? 0;
+        if (resets > 0)
+            notes.Add(L.F("Драйвер видеокарты сбрасывался во время игры ({0}): экран на секунду гас, игра могла вылететь. Если это повторяется — смотрите раздел «Драйвер» на вкладке «Система».", SessionAnalysis.Times(resets)));
         if (s.AvgFps > 0 && s.Low1Fps > 0 && s.Low1Fps < 0.5 * s.AvgFps)
             notes.Add(L.F("Сильные просадки: в среднем {0:0} FPS, а в худшие моменты — {1:0} FPS. Игра шла рывками.", s.AvgFps, s.Low1Fps));
-        if (s.MinRamGb > 0 && s.MinRamGb < 1.0)
+        if (s.MinRamGb > 0 && s.MinRamGb < SessionAnalysis.LowRamGb)
             notes.Add(L.F("Не хватало памяти: в худший момент свободно было {0:0.0} ГБ. Перед игрой закрывайте тяжёлые программы.", s.MinRamGb));
         if (s.Dips is { Count: > 0 })
         {
@@ -623,27 +869,66 @@ public sealed class SessionRecorder
             else if (s.AvgGpu > 0 && s.AvgGpu < 75 && s.AvgCpu >= 40)
                 notes.Add(L.F("Игра упиралась в процессор: видеокарта была загружена в среднем на {0:0} %. Настройки графики на FPS почти не влияют.", s.AvgGpu));
         }
+        bool coolingTipShown = false;
         if (s.GpuThermalLimitPct >= 5)
-            notes.Add(L.F("{0:0} % времени под нагрузкой видеокарта сбрасывала частоту из-за нагрева. Почистите радиатор и проверьте обдув.", s.GpuThermalLimitPct));
+        {
+            // Предел температуры ниже 80 °C — не перегрев: так его задаёт ноутбук (тихий режим) или программа разгона.
+            double t = s.GpuThermalTempC ?? s.MaxTemp;
+            if (t > 0 && t < SessionAnalysis.TempLimitHotC(IsLaptop()))
+                notes.Add(IsLaptop()
+                    ? L.F("{0:0} % времени под нагрузкой видеокарта держалась у предела температуры, который задаёт ноутбук (около {1:0} °C), и снижала частоту. Это не перегрев. Если нужен FPS — включите режим «Производительность» или «Турбо» (раздел «Ноутбук» на вкладке «Система»).", s.GpuThermalLimitPct, t)
+                    : L.F("{0:0} % времени под нагрузкой видеокарта держалась у своего предела температуры (около {1:0} °C) и снижала частоту. Это не перегрев: проверьте, не занижен ли предел температуры в MSI Afterburner или похожей программе.", s.GpuThermalLimitPct, t));
+            else
+                notes.Add(IsLaptop()
+                    ? L.F("{0:0} % времени под нагрузкой видеокарта сбрасывала частоту из-за нагрева.", s.GpuThermalLimitPct) + " " + CoolingTipOnce(ref coolingTipShown)
+                    : L.F("{0:0} % времени под нагрузкой видеокарта сбрасывала частоту из-за нагрева. Почистите радиатор и проверьте обдув.", s.GpuThermalLimitPct));
+        }
         if (s.GpuHardLimitPct >= 5)
-            notes.Add(L.F("{0:0} % времени видеокарта аварийно снижала частоту по сигналу от блока питания или платы. Проверьте, плотно ли вставлен разъём питания видеокарты.", s.GpuHardLimitPct));
-        if (s.CpuSlowPct >= 10)
-            notes.Add(L.F("{0:0} % времени под нагрузкой процессор работал ниже базовой частоты — скорее всего, из-за перегрева или ограничения питания. Проверьте кулер процессора.", s.CpuSlowPct));
-        if (s.MaxPagesIn >= 1000 && !(s.MinRamGb > 0 && s.MinRamGb < 1.0))
+            notes.Add(IsLaptop()
+                ? L.F("{0:0} % времени видеокарта аварийно снижала частоту по сигналу питания. Играйте от зарядки родным адаптером: от батареи или слабого адаптера ноутбуку не хватает мощности.", s.GpuHardLimitPct)
+                : L.F("{0:0} % времени видеокарта аварийно снижала частоту по сигналу от блока питания или платы. Проверьте, плотно ли вставлен разъём питания видеокарты.", s.GpuHardLimitPct));
+        if (s.CpuSlowPct >= 15)
+            notes.Add(IsLaptop()
+                ? L.F("{0:0} % времени под нагрузкой процессор работал ниже базовой частоты — скорее всего, из-за перегрева или ограничения питания. Играйте от зарядки и не закрывайте отверстия снизу ноутбука.", s.CpuSlowPct)
+                :L.F("{0:0} % времени под нагрузкой процессор работал ниже базовой частоты — скорее всего, из-за перегрева или ограничения питания. Проверьте кулер процессора.", s.CpuSlowPct));
+        // Подкачка — только если в те же моменты и свободной памяти было мало: много подгружаемых страниц при достатке памяти — это игра
+        // читает свои файлы (SessionAnalysis.PagingHurt). Меньше 1 ГБ — уже сказано выше «не хватало памяти».
+        if (s.MinRamGb >= SessionAnalysis.LowRamGb && SessionAnalysis.PagingHurt(s))
             notes.Add(L.T("Windows часто обращалась к файлу подкачки: игре не хватало памяти, отсюда рывки."));
         if (s.NetGaps >= 3)
             notes.Add(L.F("Связь с сервером игры прерывалась {0} (самый долгий обрыв — {1:0.0} с). Отсюда «телепорты» и запоздалые действия.", SessionAnalysis.Times(s.NetGaps.Value), s.NetMaxGapSec));
-        if (s.MaxTemp >= 83)
-            notes.Add(L.F("Видеокарта нагревалась до {0:0} °C. Проверьте обдув корпуса.", s.MaxTemp));
-        if (s.VramTotalGb > 0 && s.MaxVramGb >= 0.92 * s.VramTotalGb)
+        // Горячо — если так было заметную часть игры (от 5 % графика температуры), а не один короткий пик.
+        if (s.MaxTemp >= SessionAnalysis.HotMaxTempC(IsLaptop()) && SessionAnalysis.HotLong(s.TempSeries, SessionAnalysis.HotMaxTempC(IsLaptop())))   // у ноутбуков видеокарта рассчитана на 87 °C
+            notes.Add(IsLaptop()
+                ? L.F("Видеокарта нагревалась до {0:0} °C.", s.MaxTemp) + " " + CoolingTipOnce(ref coolingTipShown)
+                :L.F("Видеокарта нагревалась до {0:0} °C. Проверьте обдув корпуса.", s.MaxTemp));
+        if (s.VramTotalGb > 0 && s.MaxVramGb >= 0.92 * s.VramTotalGb && VramHurt(s))
             notes.Add(L.F("Видеопамять была заполнена почти полностью ({0:0.0} из {1:0.0} ГБ). Снизьте качество текстур.", s.MaxVramGb, s.VramTotalGb));
         if (s.LossPct >= 1)
             notes.Add(L.F("Терялось {0:0.0} % пакетов — в сетевой игре это «телепорты» и рывки.", s.LossPct));
         if (s.JitterMs >= 15)
             notes.Add(L.F("Пинг «гулял»: разброс {0:0} мс при среднем {1:0} мс.", s.JitterMs, s.AvgPingMs));
         if (notes.Count == 0)
-            notes.Add(L.T("Замечаний нет: температура, память и загрузка были в норме."));
+            notes.Add(L.T("Замечаний нет: в записанных показателях проблем не найдено."));
         return notes;
+    }
+
+    /// <summary>
+    /// Мешала ли заполненная видеопамять. Многие игры нарочно занимают почти всю видеопамять под запас, и само по себе это не беда —
+    /// вывод нужен, только если были рывки из-за видеопамяти. Без замера кадров (старые сессии, нет прав) — только при 98 % и выше.
+    /// </summary>
+    /// <summary>
+    /// Видеопамять мешала — только если рывки разобраны как нехватка видеопамяти. Без записи кадров (нет прав, осторожный режим)
+    /// доказательств нет: игры занимают почти всю видеопамять нарочно, а замер — по всей видеокарте, а не по игре.
+    /// </summary>
+    private static bool VramHurt(GameSession s) => s.StutterKinds != null && s.StutterKinds.Any(k => k.Kind == "vram");
+
+    /// <summary>Совет по охлаждению ноутбука — один раз на отчёт.</summary>
+    private static string CoolingTipOnce(ref bool shown)
+    {
+        if (shown) return "";
+        shown = true;
+        return LaptopCheck.CoolingTip();
     }
 
     private static double Avg(List<double> v) { var ok = v.Where(x => !double.IsNaN(x)).ToList(); return ok.Count > 0 ? ok.Average() : 0; }
@@ -700,7 +985,7 @@ public static class SessionStore
             try
             {
                 var list = AtomicFile.Read(SessionsFile, text => JsonSerializer.Deserialize<List<GameSession>>(text, Json));
-                if (list != null) return list;
+                if (list != null) { RepairOld(list); return list; }
                 foreach (var path in new[] { SessionsFile, SessionsFile + ".bak" })
                 {
                     if (!File.Exists(path)) continue;
@@ -717,6 +1002,34 @@ public static class SessionStore
             }
             catch (Exception ex) { KeepBroken(); Health.Fail("Запись сессий", L.F("чтение сессий: {0}", ex.Message)); }
             return new List<GameSession>();
+        }
+    }
+
+    /// <summary>
+    /// Сессии, записанные до 1.5.1, могли содержать ложные выводы («не хватало памяти» при достатке свободной, «нагрев» при 70 °C
+    /// или по сигналу питания). Исправляем их при чтении (в памяти; файл перезапишется при следующей записи сессии).
+    /// </summary>
+    private static void RepairOld(List<GameSession> list)
+    {
+        // Пустые записи («null» в файле, правка вручную) отчёт и списки не переварили бы — их просто нет.
+        list.RemoveAll(s => s == null);
+        foreach (var s in list)
+        {
+            try
+            {
+                s.Dips?.RemoveAll(d => d == null);
+                s.StutterKinds?.RemoveAll(k => k == null);
+                s.Events?.RemoveAll(e => e == null);
+                s.Notes?.RemoveAll(n => n == null);
+                bool notesWrong = s.Notes != null && (s.Notes.Any(n => n.Contains("файлу подкачки") || n.Contains("page file"))
+                                  && !(s.MinRamGb > 0 && s.MinRamGb < SessionAnalysis.TightRamGb(SessionAnalysis.TotalRamGb())));
+                bool heatWrong = s.GpuThermalLimitPct >= 5 && (s.GpuThermalTempC ?? s.MaxTemp) is double t && t > 0 && t < SessionAnalysis.TempLimitHotC(LaptopCheck.Applies);
+                // Замечания — чистая функция сохранённых полей, поэтому у сессий с подробными замерами (MaxPagesIn есть с 1.2)
+                // они пересобираются всегда: так к старым отчётам применяются исправленные правила и язык интерфейса.
+                if (SessionAnalysis.RepairOld(s) || notesWrong || heatWrong || s.MaxPagesIn != null)
+                    s.Notes = SessionRecorder.BuildNotes(s);
+            }
+            catch (Exception ex) { Log.Error("исправление старой сессии", ex); }
         }
     }
 
@@ -761,6 +1074,35 @@ public static class SessionStore
         }
         return all;
     }
+
+    /// <summary>
+    /// Записать заметку к сессии (найдена по началу и игре). Возвращает причину ошибки или null. Заметка не длиннее 500 знаков.
+    /// </summary>
+    public static string SetNote(DateTime start, string game, string note)
+    {
+        lock (AtomicFile.LockFor(SessionsFile))
+        {
+            try
+            {
+                var all = LoadForWrite();
+                var s = all.FirstOrDefault(x => x.Start == start && x.Game == game);
+                if (s == null) return L.T("сессия не найдена в файле");
+                note = note?.Trim();
+                s.UserNote = string.IsNullOrEmpty(note) ? null : note.Length > 500 ? note[..500] : note;
+                AtomicFile.WriteAllText(SessionsFile, JsonSerializer.Serialize(all, Json));
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("заметка к сессии", ex);
+                return Services.Installer.Reason(ex);
+            }
+        }
+    }
+
+    /// <summary>Разобрать сессии из текста JSON (для самопроверки чтения старых файлов).</summary>
+    public static List<GameSession> Parse(string json) => JsonSerializer.Deserialize<List<GameSession>>(json, Json);
+    public static string Serialize(List<GameSession> list) => JsonSerializer.Serialize(list, Json);
 
     /// <summary>Удалить из файла сессии, подходящие под условие. Возвращает, сколько удалено, и причину ошибки (null — всё в порядке).</summary>
     public static (int Removed, string Error) Remove(Func<GameSession, bool> match)

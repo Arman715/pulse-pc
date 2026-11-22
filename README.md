@@ -1,210 +1,252 @@
+<p align="right"><b>English</b>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="README.ru.md">Русский</a></p>
+
 <p align="center">
-  <b>Русский</b>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="README.en.md">English</a>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/v15/en/dark/hero.png">
+  <img src="docs/v15/en/light/hero.png" alt="Pulse PC — your gaming PC: measure, understand, fix" width="100%">
+</picture>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Arman715/pulse-pc/raw/main/docs/PulsePC-video.mp4"><img src="docs/video-preview.webp" alt="Ролик о программе «Пульс ПК»" width="100%"></a>
-  <br>
-  <sub><a href="https://github.com/Arman715/pulse-pc/raw/main/docs/PulsePC-video.mp4">▶&nbsp;Ролик со звуком</a> · MP4, 24&nbsp;секунды, 19,6&nbsp;МБ</sub>
-</p>
-<p align="center">
-  <img src="docs/banner.png" alt="Пульс ПК — игровой ПК: измерить, понять, исправить" width="100%">
-</p>
-
-<p align="center">
-  <a href="https://github.com/Arman715/pulse-pc/releases/latest"><img src="https://img.shields.io/github/v/release/Arman715/pulse-pc?label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=C23B22&style=flat-square" alt="версия"></a>
-  <a href="https://github.com/Arman715/pulse-pc/releases"><img src="https://img.shields.io/github/downloads/Arman715/pulse-pc/total?label=%D1%81%D0%BA%D0%B0%D1%87%D0%B0%D0%BB%D0%B8&color=1A1917&style=flat-square" alt="скачали"></a>
-  <img src="https://img.shields.io/badge/Windows-10%20%C2%B7%2011-45423C?style=flat-square" alt="Windows 10 и 11">
-  <img src="https://img.shields.io/badge/%D1%86%D0%B5%D0%BD%D0%B0-%D0%B1%D0%B5%D1%81%D0%BF%D0%BB%D0%B0%D1%82%D0%BD%D0%BE-6F6A60?style=flat-square" alt="бесплатно">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/%D0%BA%D0%BE%D0%B4-%D0%BE%D1%82%D0%BA%D1%80%D1%8B%D1%82%20%C2%B7%20GPL--3.0-1A1917?style=flat-square" alt="открытый код, GPL-3.0"></a>
-  <a href="https://www.virustotal.com/gui/file/af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2"><img src="https://img.shields.io/badge/VirusTotal-0%2F69%20%C2%B7%201.4.3-3D6B3A?style=flat-square&logo=virustotal&logoColor=white" alt="VirusTotal: 0 из 69"></a>
-  <a href="https://www.instagram.com/pulsepc_official/"><img src="https://img.shields.io/badge/Instagram-%40pulsepc__official-C23B22?style=flat-square&logo=instagram&logoColor=white" alt="Instagram @pulsepc_official"></a>
+  <a href="https://github.com/Arman715/pulse-pc/releases/latest"><img src="https://img.shields.io/github/v/release/Arman715/pulse-pc?label=version&color=C23B22&style=flat-square" alt="version"></a>
+  <a href="https://github.com/Arman715/pulse-pc/releases"><img src="https://img.shields.io/github/downloads/Arman715/pulse-pc/total?label=downloads&color=1A1917&style=flat-square" alt="downloads"></a>
+  <img src="https://img.shields.io/badge/Windows-10%20%C2%B7%2011-45423C?style=flat-square" alt="Windows 10 · 11">
+  <img src="https://img.shields.io/badge/price-free-6F6A60?style=flat-square" alt="free">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/code-open%20%C2%B7%20GPL--3.0-1A1917?style=flat-square" alt="GPL-3.0"></a>
+  <a href="https://www.virustotal.com/gui/file/af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2"><img src="https://img.shields.io/badge/VirusTotal-0%2F69%20%C2%B7%201.4.3-3D6B3A?style=flat-square&logo=virustotal&logoColor=white" alt="VirusTotal: 0 of 69"></a>
 </p>
 
 <h3 align="center">
-  <a href="https://github.com/Arman715/pulse-pc/releases/latest">⬇&nbsp;Скачать установщик</a>
+  <a href="https://github.com/Arman715/pulse-pc/releases/latest">⬇&nbsp;&nbsp;Download for Windows</a>
   &nbsp;&nbsp;·&nbsp;&nbsp;
-  <a href="docs/guide.md">📖&nbsp;Инструкция</a>
+  <a href="docs/guide.en.md">User guide</a>
   &nbsp;&nbsp;·&nbsp;&nbsp;
-  <a href="https://www.instagram.com/pulsepc_official/">📷&nbsp;Instagram</a>
+  <a href="https://www.instagram.com/pulsepc_official/">Instagram</a>
 </h3>
 
 <p align="center">
-  Программа следит за компьютером, пока вы играете, и после игры объясняет простыми словами:<br>
-  что ограничивало FPS, откуда взялись рывки и что с этим сделать. Каждое изменение можно отменить.<br>
-  Бесплатно, с <a href="#открытый-исходный-код">открытым исходным кодом</a>. Интерфейс — на русском и английском.
+  Pulse PC watches your computer while you play. After the game it tells you in plain words<br>
+  what held your FPS back, where every stutter came from and what to do about it.<br>
+  Every change can be undone. Free and <a href="#open-source">open source</a>, in English and Russian.
 </p>
 
----
+<br>
 
-## Начать за три шага
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/v15/en/dark/new.png">
+  <img src="docs/v15/en/light/new.png" alt="New in 1.5: in-game overlay, device battery, a report after every game" width="100%">
+</picture>
 
-| № | Что сделать | Как |
-|:-:|---|---|
-| **1** | **Скачайте и установите** | [PulsePC-Setup.exe](https://github.com/Arman715/pulse-pc/releases/latest) → «Установить». Отметьте «Запускать вместе с Windows» — тогда ни одна игра не пропадёт. |
-| **2** | **Просто играйте** | Программа сама заметит игру и начнёт запись. Окно можно закрыть — она работает у часов. |
-| **3** | **Откройте отчёт** | После игры придёт уведомление «Сессия записана». Вкладка «Сессии» покажет FPS, рывки и их причины — и что с этим сделать. |
+**Also in 1.5:** cautious mode for games with a strict anti-cheat (VALORANT, Call of Duty, Genshin Impact and others) — frame and game-server recording is off there;
+all your games found by themselves — from stores, from folders and by behavior; memory and XMP/EXPO checks with a risk warning, blue screens in plain words,
+WHEA errors and game crashes; Wi‑Fi and ping under load; a **Laptop** section; **Why is it slow right now**; **PC health**; **Installed programs**;
+optional automatic updates and a portable version; every problem from the Windows logs comes with **Details and what to do** — the entries in plain words, a step-by-step plan and a button that opens exactly these entries in Event Viewer.
 
-Подробно, с картинками и словарём терминов, — в **[инструкции](docs/guide.md)**. В самой программе справка открывается кнопкой **«?»** или клавишей **F1**.
+## A report after every game
 
-### Кому пригодится
+Recording starts by itself when a game starts and stops when it closes. You can close the window — the app keeps working in the tray.
 
-- **Игра лагает, а почему — непонятно.** Программа покажет, что упирается: видеокарта, процессор, память, диск или сеть.
-- **Хотите выжать FPS, но боитесь «сломать Windows».** Каждая настройка объяснена, у каждой есть «Вернуть как было».
-- **Думаете об апгрейде.** Совет строится по вашим играм: что купить, а что менять незачем.
-
----
-
-## Компьютер — как чертёж
-
-<img src="docs/overview.png" alt="Обзор: чертёж системного блока" align="right" width="46%">
-
-Главный экран — чертёж вашего системного блока, нарисованный по тому, что стоит внутри: процессор, видеокарта, все планки памяти и все диски.
-Нажмите на деталь — она разберётся на части, и у каждой будет подписано, как она работает сейчас.
-
-- Загрузка, частоты, температура видеокарты и память — вживую.
-- Здоровье дисков, ошибки драйвера, сбои Windows — на вкладке «Диагностика».
-- Отчёт о том, сколько места можно освободить, и очистка с понятным списком.
-
-<br clear="right">
-
-## Отчёт после каждой игры
-
-<p align="center"><img src="docs/session.png" alt="Отчёт о сессии" width="88%"></p>
-
-Запись начинается сама, когда запускается игра, и заканчивается, когда она закрыта. В отчёте:
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/v15/en/dark/sessions.png">
+  <img src="docs/v15/en/light/sessions.png" alt="Sessions tab: the list of games and the report">
+</picture>
 
 | | |
 |---|---|
-| **FPS** | средний, худший 1 % и 0,1 % кадров, график всей сессии |
-| **Что ограничивало FPS** | видеокарта, процессор или лимит — и что поможет именно в этом случае |
-| **Просадки** | когда случились и почему: не хватило памяти, диск, сброс частоты, нагрев |
-| **Сеть** | пинг до сервера игры, разброс и потери |
-| **Сравнение** | та же игра от сессии к сессии |
+| **FPS and frame time** | average, 1% and 0.1% low, a smoothness score out of 100 and every stutter on the timeline |
+| **Why it stuttered** | each drop explained: memory, drive, CPU load, heat, power — taken from the sensors at that very second |
+| **What limited FPS** | the graphics card, the CPU or a cap — and what will actually help in this case |
+| **Network** | ping to the game server, jitter, packet loss and connection gaps |
+| **Comparison** | this session next to any earlier one, and the conditions your smoothest game had |
 
-## Настройки, которые раньше прятались по углам Windows
+<details>
+<summary><b>See a full report</b></summary>
+<br>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/v15/en/dark/report.png">
+  <img src="docs/v15/en/light/report.png" alt="A full session report" width="760">
+</picture>
+</details>
+
+## Overlay and device battery
 
 <table>
 <tr>
-<td width="50%"><img src="docs/fans.png" alt="Вентиляторы видеокарты"></td>
-<td width="50%"><img src="docs/monitor.png" alt="Монитор"></td>
+<td width="50%"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/v15/en/dark/overlay.png">
+  <img src="docs/v15/en/light/overlay.png" alt="Overlay settings">
+</picture></td>
+<td width="50%"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/v15/en/dark/battery.png">
+  <img src="docs/v15/en/light/battery.png" alt="Device battery">
+</picture></td>
 </tr>
 <tr>
-<td><b>Вентиляторы видеокарты.</b> Своя кривая скорости, тише или прохладнее, статистика за неделю и напоминание почистить от пыли. От&nbsp;84&nbsp;°C — всегда полная скорость.</td>
-<td><b>Монитор.</b> Работает ли он на своей частоте — 144 или 165&nbsp;Гц, а не на 60. G-SYNC, HDR, разъём. Если частота сбросится, программа предупредит.</td>
-</tr>
-<tr>
-<td width="50%"><img src="docs/upgrade.png" alt="Совет по апгрейду"></td>
-<td width="50%"><img src="docs/power.png" alt="Электричество"></td>
-</tr>
-<tr>
-<td><b>Совет по апгрейду.</b> По вашим играм, а не по чужим тестам: что даст пользу, что докупить и что менять не нужно.</td>
-<td><b>Электричество.</b> Сколько стоит час игры и месяц работы компьютера по вашему тарифу.</td>
+<td valign="top"><b>Overlay.</b> A small panel on top of the game: FPS, 1% low, graphics card, CPU, VRAM, ping, time and device battery. It's a separate window, so nothing is injected into the game. Visible in "Borderless" and "Fullscreen windowed" modes; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> hides it.</td>
+<td valign="top"><b>Device battery.</b> Mice, headsets, keyboards and controllers — Logitech, HyperX, SteelSeries, Corsair, Razer, Xbox, PlayStation, Bluetooth devices and more. The app reads the charge by itself with read-only requests and reminds you before a game if something is about to run out.</td>
 </tr>
 </table>
 
-А ещё: схема питания на время игры, обновления Windows не мешают играм, память перед игрой, частота опроса мыши, звук, настройки NVIDIA по играм,
-файл подкачки, автозагрузка, панель на телефоне в домашней сети и замер «до и после».
+## Get started in three steps
 
-## Под вас
+| # | What to do | How |
+|:-:|---|---|
+| **1** | **Download and install** | [PulsePC-Setup.exe](https://github.com/Arman715/pulse-pc/releases/latest) → **Install**. Tick **Start with Windows, minimized to the tray** so no game is ever missed. |
+| **2** | **Just play** | The app notices the game and starts recording on its own. You can close the window — it keeps working in the tray. |
+| **3** | **Open the report** | After the game you get a **Session recorded** notification. The **Sessions** tab shows FPS, stutters, their causes — and what to do about them. |
 
-- **Русский и английский, светлая и тёмная тема** — маленькие кнопки «EN» и «луна» в заголовке окна. По умолчанию — как в Windows.
-- **Окно под ваш экран:** от ноутбука 1366×768 до большого монитора; учитывается «Размер текста» Windows, а размер и место окна запоминаются.
-- **Своя игра:** если программа не нашла игру сама, добавьте её файл .exe на вкладке «Сессии».
-- **Сообщить о проблеме или оставить отзыв** — кнопка в заголовке окна: описание, снимки экрана и сведения о программе уходят письмом из вашей же почты.
+The full walkthrough, with pictures and a glossary, is in the **[user guide](docs/guide.en.md)**. Inside the app, help opens with the **?** button or **F1**.
 
-Нравится программа? Поставьте ей ⭐ на GitHub — так её проще найти другим игрокам.
+### Who it's for
 
-## Установка
+- **The game lags and you don't know why.** Pulse PC shows what holds it back: graphics card, processor, memory, drive or network.
+- **You want more FPS but are afraid of "breaking Windows".** Every setting is explained, and every one has **Restore previous**.
+- **You're thinking about an upgrade.** The advice is based on your own games: what to buy and what isn't worth replacing.
 
-1. Скачайте `PulsePC-Setup-<версия>.exe` из [последнего выпуска](https://github.com/Arman715/pulse-pc/releases/latest).
-2. Запустите и нажмите «Установить». Программе нужны права администратора: без них Windows не даёт читать датчики и менять настройки.
-3. Дальше «Пульс ПК» обновляется сам: «Система» → «Новые версии» → «Обновить».
+## Settings that used to hide in the corners of Windows
 
-Что делать дальше — в **[инструкции](docs/guide.md)**: первый запуск, как читать отчёт, подготовка к игре, очистка, все разделы «Системы».
+<table>
+<tr>
+<td width="50%"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/v15/en/dark/fans.png">
+  <img src="docs/v15/en/light/fans.png" alt="Graphics card fans">
+</picture></td>
+<td width="50%"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/v15/en/dark/monitor.png">
+  <img src="docs/v15/en/light/monitor.png" alt="Monitor">
+</picture></td>
+</tr>
+<tr>
+<td valign="top"><b>Graphics card fans.</b> Your own speed curve, quieter or cooler, weekly stats and a dust reminder. From 84&nbsp;°C — always full speed.</td>
+<td valign="top"><b>Monitor.</b> Is it really running at 144 or 165&nbsp;Hz and not 60? G-SYNC, HDR, the cable. If the refresh rate drops, the app warns you.</td>
+</tr>
+<tr>
+<td width="50%"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/v15/en/dark/upgrade.png">
+  <img src="docs/v15/en/light/upgrade.png" alt="Upgrade advice">
+</picture></td>
+<td width="50%"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/v15/en/dark/power.png">
+  <img src="docs/v15/en/light/power.png" alt="Power plan">
+</picture></td>
+</tr>
+<tr>
+<td valign="top"><b>Upgrade advice.</b> Based on your games, not someone else's benchmarks: what will help, what to buy and what isn't worth changing.</td>
+<td valign="top"><b>Power.</b> Full speed only while you play — the app switches the power plan by itself and puts the old one back afterwards.</td>
+</tr>
+</table>
+
+Also: Windows updates that don't get in the way of games, memory before a game, mouse polling rate, sound, per-game NVIDIA settings,
+the page file, startup apps, a panel on your phone over the home network and a before/after benchmark.
+
+## Made to fit you
+
+- **English and Russian, light and dark theme** — the small **EN** and moon buttons in the title bar. By default it follows Windows.
+- **A window that fits your screen:** from a 1366×768 laptop to a large monitor. Windows' text size is respected, and the window remembers its size and position.
+- **Your own game:** if the app didn't find a game, add its .exe on the **Sessions** tab.
+- **Report a problem or leave a review** — a button in the title bar: a description, screenshots and app details go out as an email from your own mailbox.
+
+Like the app? Give it a ⭐ on GitHub — it helps other players find it.
+
+## Installation
+
+1. Download `PulsePC-Setup-<version>.exe` from the [latest release](https://github.com/Arman715/pulse-pc/releases/latest).
+2. Run it and click **Install**. The app needs administrator rights: without them Windows doesn't let it read the sensors or change settings.
+3. After that, Pulse PC updates itself: **System** → **Updates (app)** → **Update** — or automatically, outside games, if you turn that on there.
+
+What to do next is in the **[user guide](docs/guide.en.md)**: the first launch, how to read a report, getting ready for a game, cleanup and every section of **System**.
 
 > [!NOTE]
-> Установщик не подписан сертификатом, поэтому SmartScreen может показать «Windows защитила ваш компьютер».
-> Нажмите «Подробнее» → «Выполнить в любом случае». Контрольная сумма SHA-256 лежит рядом с установщиком в файле `.sha256`;
-> при обновлении программа сверяет её сама.
+> The installer is not signed with a paid certificate, so SmartScreen may say "Windows protected your PC".
+> Click **More info** → **Run anyway**. The SHA-256 checksum sits next to the installer in a `.sha256` file;
+> when updating, the app checks it by itself.
 
-## Проверено антивирусами
+## Scanned by antivirus engines
 
-Установщик версии 1.4.3 проверен на VirusTotal: **ни один из 69 антивирусов не нашёл угроз** — [открыть отчёт](https://www.virustotal.com/gui/file/af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2).
+The 1.4.3 installer was scanned on VirusTotal: **none of the 69 antivirus engines found a threat** — [open the report](https://www.virustotal.com/gui/file/af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2).
 
-Убедиться, что у вас тот же самый файл, можно за секунду. В PowerShell, в папке со скачанным установщиком:
+You can check that you have exactly the same file in a second. In PowerShell, in the folder with the downloaded installer:
 
 ```powershell
 Get-FileHash .\PulsePC-Setup-1.4.3.exe
 ```
 
-Сумма должна совпасть с отчётом VirusTotal и с файлом `.sha256` в выпуске: `af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2`.
+The hash must match the VirusTotal report and the `.sha256` file in the release: `af24e27fa1aff39391233dce420760c4271ba27b3cf68323c7eb6093f1059ac2`.
 
-Что ещё говорит в пользу программы:
+What else speaks for the app:
 
-- **Весь код открыт** — папка [`src`](src). Любой может прочитать, что программа делает с системой, и собрать её сам.
-- **Обновления подписаны ключом автора.** Программа ставит новую версию, только если подпись верна, — подменить обновление нельзя.
-- **«Безопасность Windows» программа не трогает:** защитник, брандмауэр, SmartScreen и контроль учётных записей остаются как были.
-- **О вас ничего не отправляется.** В интернет программа обращается только за номером свежего драйвера NVIDIA и за новыми версиями в этом репозитории.
+- **All the code is open** — the [`src`](src) folder. Anyone can read what the app does to the system and build it themselves.
+- **Updates are signed with the author's key.** The app installs a new version only if the signature is valid, so an update can't be swapped.
+- **The app doesn't touch Windows Security:** Defender, the firewall, SmartScreen and User Account Control stay as they were.
+- **Nothing about you is sent anywhere.** The app only goes online to ask for the latest NVIDIA driver version and to check this repository for new versions.
 
-## Частые вопросы
+## FAQ
 
 <details>
-<summary><b>Не забанят ли меня в игре?</b></summary>
+<summary><b>Can I get banned in a game?</b></summary>
 
-Программа ничего не рисует поверх игры и не встраивается в неё. FPS она считает официальным инструментом Intel PresentMon — так же,
-как это делают CapFrameX и NVIDIA FrameView. В играх с античитом уровня ядра (VALORANT, League of Legends) запись кадров выключена совсем, на всякий случай.
+The app doesn't inject anything into the game. The overlay (optional) is a separate app window on top of the game, not something inserted into it.
+It measures FPS with Intel's official PresentMon tool — the same way CapFrameX and NVIDIA FrameView do.
+Games with a strict anti-cheat (VALORANT, Call of Duty, Genshin Impact and others) get cautious mode: frame and game-server recording is off.
+In games with EasyAntiCheat and BattlEye recording is full by default, and you can turn cautious mode on for any game yourself.
 </details>
 
 <details>
-<summary><b>Что, если какая-то настройка сделает хуже?</b></summary>
+<summary><b>What if a setting makes things worse?</b></summary>
 
-У каждого изменения есть кнопка «Вернуть как было»: программа сохраняет прежние значения перед тем, как что-то менять.
-Настройки безопасности Windows — защитник, брандмауэр, SmartScreen, контроль учётных записей — программа не трогает вообще.
+Every change has a **Restore previous** button: the app saves the old values before it changes anything.
+Windows security settings — Defender, the firewall, SmartScreen, User Account Control — the app doesn't touch at all.
 </details>
 
 <details>
-<summary><b>Подойдёт ли моё железо?</b></summary>
+<summary><b>Will it work with my hardware?</b></summary>
 
-Да: видеокарты NVIDIA, AMD и Intel, процессоры Intel и AMD, ноутбуки и настольные компьютеры. Некоторые функции есть только у NVIDIA —
-например, управление вентиляторами видеокарты и настройки драйвера по играм. Там, где функция недоступна, программа так и пишет и подсказывает, где это сделать.
+Yes: NVIDIA, AMD and Intel graphics cards, Intel and AMD processors, laptops and desktops. Some features are NVIDIA-only —
+for example, GPU fan control and per-game driver settings. Where a feature isn't available, the app says so and tells you where to do it instead.
 </details>
 
 <details>
-<summary><b>Что программа отправляет в интернет?</b></summary>
+<summary><b>What does the app send to the internet?</b></summary>
 
-Ничего о вас. Она спрашивает у NVIDIA номер последнего драйвера для вашей модели видеокарты и проверяет новые версии в этом репозитории. Всё остальное остаётся на компьютере.
-Это можно проверить: весь код программы лежит в папке [`src`](src). Отчёт о проблеме или отзыв программа сама не отправляет — она открывает письмо в вашей почте, и вы видите, что в нём.
+Nothing about you. It asks NVIDIA for the latest driver version for your graphics card model and checks this repository for new versions. Everything else stays on your PC.
+You can verify it: all of the app's code is in the [`src`](src) folder. The app never sends a problem report or a review by itself — it opens an email in your own mail, and you see what's in it.
 </details>
 
-## Открытый исходный код
+<details>
+<summary><b>Is there a video?</b></summary>
 
-Весь код «Пульс ПК» лежит в папке [`src`](src): программа для Windows (C#, WPF, .NET 10) и панель для iPhone ([`src/ios/PulsePhone`](src/ios/PulsePhone), Swift).
-Можно прочитать, что именно программа делает с системой, собрать её самому и предложить исправление.
+Yes — a 24-second <a href="https://github.com/Arman715/pulse-pc/raw/main/docs/PulsePC-video.mp4">video about the app</a> (MP4, 19.6 MB). The voice-over is in Russian, but the pictures speak for themselves.
+</details>
 
-**Собрать из исходников.** Нужны Windows 10/11 и [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+## Open source
+
+All of Pulse PC's code is in the [`src`](src) folder: the Windows app (C#, WPF, .NET 10) and the iPhone panel ([`src/ios/PulsePhone`](src/ios/PulsePhone), Swift).
+You can read exactly what the app does to your system, build it yourself and suggest a fix.
+
+**Build from source.** You need Windows 10/11 and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 ```powershell
 git clone https://github.com/Arman715/pulse-pc.git
 cd pulse-pc\src
-.\build.ps1 -Preview   # версия для просмотра без прав администратора: ничего не меняет в системе
-.\build.ps1            # полная версия в папку src\app (запускается с правами администратора)
+.\build.ps1 -Preview   # preview build without administrator rights: changes nothing in the system
+.\build.ps1            # full build into src\app (runs with administrator rights)
 ```
 
-Самопроверка кода (откат настроек, удаление файлов, разбор данных) запускается без изменений в системе: `PulsePC.exe --selftest`.
+The self-test (setting rollbacks, file deletion, data parsing) runs without changing the system: `PulsePC.exe --selftest`.
 
-**Официальные выпуски** собираются скриптом [`build-release.ps1`](src/build-release.ps1) и подписываются ключом автора.
-Программа устанавливает обновление, только если подпись верна, — поэтому копия, собранная кем-то другим, не сможет выдать себя за обновление «Пульс ПК».
+**Official releases** are built with [`build-release.ps1`](src/build-release.ps1) and signed with the author's key.
+The app installs an update only if the signature is valid — so a copy built by someone else can't pass itself off as a Pulse PC update.
 
-**Нашли ошибку или есть идея?** Напишите в [Issues](https://github.com/Arman715/pulse-pc/issues) — приложите отчёт из «Система» → «Состояние программы» → «Скопировать отчёт».
-Исправления присылайте через pull request: опишите, что меняется и как вы это проверили. Писать можно по-русски или по-английски.
+**Found a bug or have an idea?** Open an [issue](https://github.com/Arman715/pulse-pc/issues) — attach the report from **System** → **App status** → **Copy report**.
+Send fixes as a pull request: describe what changes and how you tested it. Issues in English or Russian are both welcome.
 
-**Лицензия — [GPL-3.0](LICENSE).** Код можно использовать, изменять и распространять, в том числе свои версии,
-при условии что они тоже выходят под GPL-3.0 с открытым кодом и с указанием автора. Закрыть код в своей копии нельзя.
+**License — [GPL-3.0](LICENSE).** You may use, modify and distribute the code, including your own versions,
+as long as they are also released under GPL-3.0 with open source code and credit to the author. You can't close the code in your copy.
 
 ---
 
-Новости, разборы «почему тормозит игра» и ответы на вопросы — в Instagram **[@pulsepc_official](https://www.instagram.com/pulsepc_official/)**.
+News, "why does my game stutter" breakdowns and answers to questions — on Instagram **[@pulsepc_official](https://www.instagram.com/pulsepc_official/)**.
 
-<sub>© 2026 Arman715. Код распространяется по лицензии <a href="LICENSE">GPL-3.0</a>.
-Встроен <a href="https://github.com/GameTechDev/PresentMon">PresentMon</a> от Intel (лицензия MIT, текст — в <a href="src/third-party/PresentMon/LICENSE.txt">src/third-party/PresentMon</a>). Требуется Windows 10 или 11, 64 бита.</sub>
+<sub>© 2026 Arman715. The code is distributed under the <a href="LICENSE">GPL-3.0</a> license.
+Includes Intel's <a href="https://github.com/GameTechDev/PresentMon">PresentMon</a> (MIT license, text in <a href="src/third-party/PresentMon/LICENSE.txt">src/third-party/PresentMon</a>). Requires 64-bit Windows 10 or 11.</sub>

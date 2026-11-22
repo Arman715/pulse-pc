@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using PulsePC.Panels;
 using PulsePC.Services;
@@ -43,6 +43,7 @@ public partial class MainWindow
             Live = () => live,
             Sessions = () => sessionSnapshot,
             Hardware = () => hw,
+            GameFeed = () => recorder.LiveFeed(),
             Ui = OnUi,
             Open = target => OnUi(() => OpenTarget(target)),
         };
@@ -98,6 +99,9 @@ public partial class MainWindow
     /// Перейти по ссылке внутри программы: «tab:Очистка», «tab:Оптимизация», «tab:Диагностика»,
     /// «sys:&lt;раздел «Системы»&gt;», «clean:&lt;пункт очистки&gt;» — «Очистка», где отмечен только этот пункт.
     /// </summary>
+    /// <summary>Переход для служебных снимков окна (Panels.WindowShots).</summary>
+    internal void ShotTarget(string target) => OpenTarget(target);
+
     private void OpenTarget(string target)
     {
         if (string.IsNullOrEmpty(target)) return;
@@ -149,7 +153,7 @@ public partial class MainWindow
 /// <summary>Состав вкладки «Система». Новые разделы добавляются сюда.</summary>
 public static class SystemSections
 {
-    public static List<MainWindow.SystemSection> Build() => new()
+    public static List<MainWindow.SystemSection> Build() => new List<MainWindow.SystemSection>
     {
         Section("ИГРА", "Питание", "PowerPanel"),
         Section("ИГРА", "Обновления Windows", "UpdatesPanel"),
@@ -157,28 +161,50 @@ public static class SystemSections
         Section("ИГРА", "Монитор", "DisplayPanel"),
         Section("ИГРА", "Клавиатура и мышь", "InputPanel"),
         Section("ИГРА", "Звук", "SoundPanel"),
+        Section("ИГРА", "Оверлей", "OverlayPanel"),
+        Section("ИГРА", "Заряд устройств", "DeviceBatteryPanel"),
         Section("ВИДЕОКАРТА", "Драйвер", "GpuDriverPanel"),
         Section("ВИДЕОКАРТА", GpuVendors.SectionTitle(GpuVendors.MainVendor), "NvidiaPanel"),
         Section("ВИДЕОКАРТА", "Вентиляторы", "FansPanel"),
         Section("WINDOWS", "Оформление", "VisualPanel"),
         Section("WINDOWS", "Файл подкачки", "PagefilePanel"),
         Section("WINDOWS", "Новые версии", "VersionsPanel"),
+        Section("WINDOWS", "Установленные программы", "ProgramsPanel"),
+        Section("ПРИБОРЫ", "Ноутбук", "LaptopPanel", onlyIf: "LaptopCheck"),
         Section("ПРИБОРЫ", "Совет по апгрейду", "UpgradePanel"),
         Section("ПРИБОРЫ", "Электричество", "PowerCostPanel"),
         Section("ПРИБОРЫ", "Панель на телефоне", "PhonePanel"),
         Section("ПРИБОРЫ", "Замер до и после", "BenchPanel"),
         Section("ПРОЧЕЕ", "Язык · Language", "LanguagePanel"),
         Section("ПРОЧЕЕ", "Состояние программы", "StatusPanel"),
-    };
+    }.Where(s => s != null).ToList();
 
     private static readonly string[] Services =
     {
         "PowerAuto", "UpdateGuard", "MemoryBoost", "DisplayCheck", "InputTuning", "AudioDevices", "GpuDriver", "NvidiaProfiles", "FanControl",
         "VisualFx", "Pagefile", "VersionCheck", "UpgradeAdvisor", "PowerCost", "PhoneServer", "Bench",
+        // Версия 1.5: службы подключаются по имени, отсутствующая просто пропускается.
+        "HardwareChecks", "StabilityChecks", "LaptopCheck", "ProgramsList", "GameFinder", "HealthScore", "NetDiag",
+        "Overlay", "DeviceBattery",
     };
 
     // Пока разделы пишутся, они подключаются по имени: отсутствующий раздел показывает заглушку, а не ломает сборку.
-    private static MainWindow.SystemSection Section(string group, string title, string panel) => new()
+    // onlyIf — служба со статическим свойством bool Applies: раздел показывается, только если оно true (например, «Ноутбук»).
+    private static MainWindow.SystemSection Section(string group, string title, string panel, string onlyIf = null)
+    {
+        if (onlyIf != null)
+        {
+            try
+            {
+                var svc = typeof(SystemSections).Assembly.GetType("PulsePC.Services." + onlyIf);
+                if (svc?.GetProperty("Applies")?.GetValue(null) is not true) return null;
+            }
+            catch { return null; }
+        }
+        return Make(group, title, panel);
+    }
+
+    private static MainWindow.SystemSection Make(string group, string title, string panel) => new()
     {
         Group = group, Title = title,
         Create = () =>

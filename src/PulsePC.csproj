@@ -10,12 +10,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>PulsePC</AssemblyName>
     <RootNamespace>PulsePC</RootNamespace>
-    <Version>1.4.3</Version>
+    <Version>1.5.0</Version>
     <SatelliteResourceLanguages>ru</SatelliteResourceLanguages>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <!-- Обычная сборка требует прав администратора (нужны для дисков, служб и очистки).
          Сборка с -p:NoElevate=true запускается без них: только просмотр, для проверки интерфейса. -->
     <ApplicationManifest Condition="'$(NoElevate)' != 'true'">app.manifest</ApplicationManifest>
+    <!-- Рабочие папки рядом с кодом (ролики, макеты, готовые сборки, iPhone) в программу не входят. В promo лежат ссылки
+         node_modules на папки, которые видны не из каждого окна Windows: из-за них сборка не могла перебрать файлы проекта. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);promo\**;design\**;dist\**;app\**;ios\**;screenshots\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

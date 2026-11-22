@@ -72,7 +72,8 @@ internal static partial class Scenes
                 for (int c = 0; c < 4; c++)
                     d.RoundRectOn(psu.Right, 18 + c * 30, 16 + r * 24, 22, 12, 2, Shade.Recess, Ink.Fine);
         });
-        d.TextOn(psu.Front, "650 W", 30, 58, 9, bold: true, fine: true);
+        // Мощность — только указанная человеком: Windows не знает, какой блок питания стоит.
+        if (!string.IsNullOrEmpty(BlueprintLabels.Psu)) d.TextOn(psu.Front, BlueprintLabels.Psu, 30, 58, 9, bold: true, fine: true);
         d.Anchor("pc.psu", P(70, 60, 184), -1);
 
         d.Part = Part.None;
@@ -177,17 +178,30 @@ internal static partial class Scenes
         // ═════════ накопители ═════════
         d.Group = 2;
         d.Part = Part.Storage;
+        // Рисуются только те виды накопителей, что стоят в компьютере (список ещё не прочитан — оба, как обычно бывает).
+        var kinds = BlueprintLabels.Drives;
+        bool hasNvme = kinds.Count == 0 || kinds.Any(k => k.Kind == DriveKind.Nvme);
+        bool hasSata = kinds.Count == 0 || kinds.Any(k => k.Kind == DriveKind.Sata25);
+        // Только жёсткие диски: на кожухе — 3,5" диск с надписью HDD (иначе на общем виде не было бы ни одного накопителя).
+        bool onlyHdd = !hasNvme && !hasSata && kinds.Any(k => k.Kind == DriveKind.Hdd35);
         // NVMe 2280 в нижнем слоте M.2
         BB(d, 56, 266, 62, 288, 5, Ink.Detail);                     // разъём
-        var nvme = d.Box(P(BX(62), BY(288), BS + 3), P(BX(142), BY(266), BS + 3.8), ink: Ink.Detail);
-        d.Batch(() => { for (double u = 1; u < 6; u += 0.9) d.LineOn(nvme.Front, u, 3, u, 19, Ink.Fine); });
-        NvmeChips(d, BX(62), BY(288), BS + 3.8);
+        if (hasNvme)
+        {
+            var nvme = d.Box(P(BX(62), BY(288), BS + 3), P(BX(142), BY(266), BS + 3.8), ink: Ink.Detail);
+            d.Batch(() => { for (double u = 1; u < 6; u += 0.9) d.LineOn(nvme.Front, u, 3, u, 19, Ink.Fine); });
+            NvmeChips(d, BX(62), BY(288), BS + 3.8);
+        }
         d.Cyl(P(BX(144), BY(277), BS), P(0, 0, 4.6), 2.6, 16, ink: Ink.Detail);  // стойка с винтом
         // 2,5" SSD на кожухе БП
-        var ssd = d.Box(P(300, 100, 112), P(400, 107, 182), ink: Ink.Outline);
-        d.RectOn(ssd.Top, 10, 10, 64, 50, Shade.None, Ink.Detail);
-        d.TextOn(ssd.Top, "SSD", 42, 35, 9, bold: true, center: true, fine: true);
-        d.Anchor("pc.storage", P(BX(96), BY(277), BS + 3.8), -1);
+        if (hasSata || onlyHdd)
+        {
+            var ssd = d.Box(P(300, 100, 112), P(400, onlyHdd ? 118 : 107, 182), ink: Ink.Outline);
+            d.RectOn(ssd.Top, 10, 10, 64, 50, Shade.None, Ink.Detail);
+            d.TextOn(ssd.Top, onlyHdd ? "HDD" : "SSD", 42, 35, 9, bold: true, center: true, fine: true);
+        }
+        // Выноска «Диски» — к тому накопителю, что нарисован: NVMe в слоте или диск на кожухе.
+        d.Anchor("pc.storage", hasNvme ? P(BX(96), BY(277), BS + 3.8) : P(350, onlyHdd ? 118 : 107, 147), -1);
 
         // ═════════ память ═════════
         d.Group = 2;

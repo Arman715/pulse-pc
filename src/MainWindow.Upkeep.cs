@@ -151,7 +151,7 @@ public partial class MainWindow
                 tuning = false;
                 tunes = found;
                 TuneList.ItemsSource = tunes;
-                TuneEmpty.Text = tunes.Count == 0 ? L.T("Установленных игр не найдено (Steam, Epic, Riot, Astrum Play, Minecraft).") : "";
+                TuneEmpty.Text = tunes.Count == 0 ? L.T("Установленных игр не найдено. Программа ищет их в магазинах (Steam, Epic, GOG, Xbox и других) и на дисках; игру, которой нет в списке, можно добавить вручную на вкладке «Сессии».") : "";
                 TuneEmpty.Visibility = tunes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                 TuneList.SelectedItem = tunes.FirstOrDefault(t => t.Game == keep) ?? tunes.FirstOrDefault();
                 if (tuneMessage != null) { TuneResult.Text = tuneMessage; tuneMessage = null; }

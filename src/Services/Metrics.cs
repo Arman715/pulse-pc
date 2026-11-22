@@ -65,6 +65,8 @@ public class PhysDisk
         return "";
     }
     public double? Temp, Wear, Hours, ReadErrors;
+    /// <summary>Предельная температура по данным диска (MSFT_StorageReliabilityCounter.TemperatureMax), °C; null — не сообщает.</summary>
+    public double? TempMax;
 }
 
 /// <summary>Показатели в реальном времени: процессор, память, видеокарта, диски.</summary>
@@ -799,7 +801,7 @@ public sealed class Metrics : IDisposable
             "$n = -1; [void][int]::TryParse(\"$($_.DeviceId)\", [ref]$n); " +
             "$l = @(if ($n -ge 0) { Get-Partition -DiskNumber $n -ErrorAction SilentlyContinue | Where-Object { \"$($_.DriveLetter)\" -match '^[A-Za-z]$' } | ForEach-Object { \"$($_.DriveLetter)\" } }); " +
             "[pscustomobject]@{ Name=$_.FriendlyName; Media=\"$($_.MediaType)\"; Bus=\"$($_.BusType)\"; Number=$n; Letters=$l; Health=\"$($_.HealthStatus)\"; SizeGb=[math]::Round($_.Size/1GB); " +
-            "Temp=$r.Temperature; Wear=$r.Wear; Hours=$r.PowerOnHours; ReadErrors=$r.ReadErrorsUncorrected } } | ConvertTo-Json -Compress -Depth 3";
+            "Temp=$r.Temperature; TempMax=$r.TemperatureMax; Wear=$r.Wear; Hours=$r.PowerOnHours; ReadErrors=$r.ReadErrorsUncorrected } } | ConvertTo-Json -Compress -Depth 3";
         var (code, output) = Shell.PowerShell(script, 60000);
         var list = new List<PhysDisk>();
         if (code != 0 || string.IsNullOrWhiteSpace(output)) return list;
@@ -833,6 +835,7 @@ public sealed class Metrics : IDisposable
                 Wear = Opt(e, "Wear"),
                 Hours = Opt(e, "Hours"),
                 ReadErrors = Opt(e, "ReadErrors"),
+                TempMax = Opt(e, "TempMax"),
             });
         }
         return list;

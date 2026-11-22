@@ -317,9 +317,21 @@ public partial class FeedbackWindow : Window
             if (s == Feedback.Service.App) b.ToolTip = L.T("Outlook, Thunderbird, «Почта» Windows — если письма вы отправляете из программы на компьютере");
             b.Click += (_, _) =>
             {
-                Feedback.Open(s, result);
+                // Текст письма — сразу в буфер обмена: длинный текст в ссылку целиком не помещается (см. Feedback.ComposeUrl).
+                bool copied = false;
+                try { Clipboard.SetText(result?.Body ?? ""); copied = true; } catch { }
+                try { Feedback.Open(s, result); }
+                catch (Exception ex)
+                {
+                    Log.Error("обратная связь: открыть письмо", ex);
+                    CopyNote.Text = L.T("Не удалось открыть письмо. Скопируйте адрес и текст кнопками ниже и вставьте их в почту.");
+                    Motion.Reveal(CopyNote, 0, 4);
+                    return;
+                }
                 if (settings != null) { settings.Set("feedback.mail", s.ToString()); settings.Save(); }
-                CopyNote.Text = L.F("Открываю: {0}. Если письмо не появилось — войдите в почту и нажмите ещё раз или скопируйте адрес и текст кнопками ниже.", Feedback.ServiceName(s));
+                CopyNote.Text = copied
+                    ? L.F("Открываю: {0}. Текст письма уже в буфере обмена — если в письме он обрезан, выделите текст и вставьте Ctrl+V. Если письмо не появилось — войдите в почту и нажмите ещё раз.", Feedback.ServiceName(s))
+                    : L.F("Открываю: {0}. Если письмо не появилось — войдите в почту и нажмите ещё раз или скопируйте адрес и текст кнопками ниже.", Feedback.ServiceName(s));
                 Motion.Reveal(CopyNote, 0, 4);
             };
             MailServices.Children.Add(b);

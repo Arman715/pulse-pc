@@ -24,6 +24,8 @@ public sealed class ScanFinding
     public string TargetSection { get; set; } = "";
     /// <summary>Шаг осмотра, на котором найдено.</summary>
     public string Step { get; set; } = "";
+    /// <summary>Вид записей журнала (LogMarks) для «Подробнее и что делать»; пусто — разбора нет.</summary>
+    public string Kind { get; set; } = "";
     public string PageName => TargetSection != "" ? TargetSection : SystemScan.PageName(TargetPage);
 }
 
@@ -67,9 +69,9 @@ public sealed class ScanGpu
 
 public sealed class ScanRamModule
 {
-    public string Slot = "", Maker = "", Part = "";
+    public string Slot = "", Maker = "", Part = "", Bank = "";
     public long Bytes;
-    public int RatedMhz, ConfiguredMhz, PartMhz, Type, FormFactor;
+    public int RatedMhz, ConfiguredMhz, PartMhz, Type, FormFactor, Ranks;
 }
 
 public sealed class ScanDisk
@@ -210,6 +212,8 @@ public static class SystemScan
         }
 
         var r = ctx.R;
+        // Железо (версия 1.5): кабель монитора в плате, шина видеокарты, TRIM, игры на HDD, блок питания — важное попадает и в осмотр.
+        if (!cancel.IsCancellationRequested) { try { HardwareChecks.AddToScan(r); } catch { } }
         var ordered = r.Findings.Select((f, n) => (f, n)).OrderBy(x => x.f.Severity).ThenBy(x => x.n).Select(x => x.f).ToList();
         r.Findings.Clear();
         r.Findings.AddRange(ordered);
@@ -257,6 +261,9 @@ public static class SystemScan
         public void AddSection(Severity s, string title, string detail, string section) =>
             R.Findings.Add(new ScanFinding { Severity = s, Title = title, Detail = detail, TargetPage = 7, TargetSection = section, Step = Step });
 
+        /// <summary>Последнему замечанию — разбор записей журнала этого вида («Подробнее и что делать»).</summary>
+        public void LogKind(string kind) { if (R.Findings.Count > 0) R.Findings[^1].Kind = kind; }
+
         public void Passport(string label, string value) =>
             R.Passport.Add(new PassportLine { Label = label, Value = string.IsNullOrWhiteSpace(value) ? L.T("нет данных") : value.Trim() });
 
@@ -295,7 +302,7 @@ public static class SystemScan
         "Cpu=@($p | ForEach-Object { [pscustomobject]@{ Name=\"$($_.Name)\".Trim(); Cores=[int]$_.NumberOfCores; Threads=[int]$_.NumberOfLogicalProcessors; Mhz=[int]$_.MaxClockSpeed } }); " +
         "Gpu=@($v | ForEach-Object { [pscustomobject]@{ Name=\"$($_.Name)\".Trim(); Driver=\"$($_.DriverVersion)\"; Date=(D $_.DriverDate); Ram=[double]$_.AdapterRAM; Pnp=\"$($_.PNPDeviceID)\" } }); " +
         "Ram=@($m | ForEach-Object { [pscustomobject]@{ Slot=\"$($_.DeviceLocator)\"; Maker=\"$($_.Manufacturer)\".Trim(); Part=\"$($_.PartNumber)\".Trim(); Bytes=[double]$_.Capacity; " +
-        "Speed=[int]$_.Speed; Conf=[int]$_.ConfiguredClockSpeed; Type=[int]$_.SMBIOSMemoryType; Form=[int]$_.FormFactor } }); " +
+        "Speed=[int]$_.Speed; Conf=[int]$_.ConfiguredClockSpeed; Type=[int]$_.SMBIOSMemoryType; Form=[int]$_.FormFactor; Bank=\"$($_.BankLabel)\"; Rank=[int]$_.Attributes } }); " +
         "Board=\"$($b.Product)\".Trim(); BoardMaker=\"$($b.Manufacturer)\".Trim(); Bios=\"$($bi.SMBIOSBIOSVersion)\".Trim(); BiosDate=(D $bi.ReleaseDate); " +
         "CsMaker=\"$($cs.Manufacturer)\".Trim(); CsModel=\"$($cs.Model)\".Trim(); PcType=[int]$cs.PCSystemType; Battery=[int]$bat; " +
         "Os=\"$($os.Caption)\".Trim(); Build=\"$($os.BuildNumber)\"; " +
@@ -420,14 +427,8 @@ public static class SystemScan
     /// <summary>«12th Gen Intel(R) Core(TM) i5-12400F» → «Intel Core i5-12400F»; «AMD Ryzen 7 5800X3D 8-Core Processor» → «AMD Ryzen 7 5800X3D».</summary>
     public static string CpuShort(string name)
     {
-        string s = Tidy(name);
-        s = Regex.Replace(s, @"^\d+th Gen\s+", "", RegexOptions.IgnoreCase);
-        s = Regex.Replace(s, @"\s+CPU\b", "", RegexOptions.IgnoreCase);
-        s = Regex.Replace(s, @"\s*@\s*[\d.]+\s*GHz", "", RegexOptions.IgnoreCase);
-        s = Regex.Replace(s, @"\s+\d+-Core Processor", "", RegexOptions.IgnoreCase);
-        s = Regex.Replace(s, @"\s+with Radeon.*$", "", RegexOptions.IgnoreCase);
-        s = Regex.Replace(s, @"\s+Processor$", "", RegexOptions.IgnoreCase);
-        return s.Trim() == "" ? L.T("процессор") : s.Trim();
+        string s = HardwareInfo.ShortCpu(Tidy(name), withVendor: true);
+        return s == "" ? L.T("процессор") : s;
     }
 
     // ───────────────────────────── 2. Видеокарта ─────────────────────────────
@@ -551,11 +552,9 @@ public static class SystemScan
     {
         var r = c.R;
         var hw = c.HwData;
-        // Батарея — по Windows (BatteryInfo): ИБП у настольного компьютера Win32_Battery тоже показывает батареей,
-        // и компьютер с ИБП назывался «ноутбуком», а замечания для него смягчались.
-        bool battery = false;
-        try { battery = BatteryInfo.Read().HasBattery; } catch { }
-        r.IsLaptop = hw is JsonElement h && N(h, "PcType") == 2 || battery;
+        // Общий признак ноутбука (LaptopCheck): мобильная платформа (то же, что PCSystemType = 2), корпус ноутбука или батарея по Windows —
+        // ИБП у настольного компьютера Win32_Battery тоже показывает батареей, поэтому Win32_Battery здесь не используется.
+        r.IsLaptop = LaptopCheck.Applies;
 
         foreach (var m in Arr(hw, "Ram"))
         {
@@ -563,12 +562,13 @@ public static class SystemScan
             {
                 Slot = S(m, "Slot"), Maker = Clean(S(m, "Maker")), Part = Clean(S(m, "Part")), Bytes = (long)N(m, "Bytes"),
                 RatedMhz = (int)N(m, "Speed"), ConfiguredMhz = (int)N(m, "Conf"), Type = (int)N(m, "Type"), FormFactor = (int)N(m, "Form"),
+                Bank = S(m, "Bank"), Ranks = (int)N(m, "Rank") is int rk and > 0 and <= 8 ? rk : 0,
             };
             if (mod.Bytes <= 0) continue;
             // Старые платы с DDR3 отдают настроенную частоту в МГц, а не в МТ/с.
             if (mod.Type <= 24 && mod.ConfiguredMhz > 0 && mod.RatedMhz > 0 && Math.Abs(mod.ConfiguredMhz * 2 - mod.RatedMhz) <= mod.RatedMhz * 0.03)
                 mod.ConfiguredMhz *= 2;
-            mod.PartMhz = PartSpeed(mod.Part);
+            mod.PartMhz = Math.Max(PartSpeed(mod.Part), MemoryProfile.PartSpeed(mod.Part));
             r.RamModules.Add(mod);
         }
 
@@ -576,7 +576,6 @@ public static class SystemScan
         r.RamTotalGb = r.RamModules.Count > 0 ? r.RamModules.Sum(m => m.Bytes) / Fmt.Gib : Math.Round(osTotal);
         int type = r.RamModules.Select(m => m.Type).FirstOrDefault(t => t > 0);
         r.RamType = type switch { 20 => "DDR", 21 => "DDR2", 24 => "DDR3", 26 => "DDR4", 27 => "LPDDR", 28 => "LPDDR2", 29 => "LPDDR3", 30 => "LPDDR4", 34 => "DDR5", 35 => "LPDDR5", _ => "" };
-        bool lp = r.RamType.StartsWith("LP");
         int conf = r.RamModules.Where(m => m.ConfiguredMhz > 0).Select(m => m.ConfiguredMhz).DefaultIfEmpty(0).Min();
         int rated = r.RamModules.Select(m => m.RatedMhz).DefaultIfEmpty(0).Max();
         int partMhz = r.RamModules.Select(m => m.PartMhz).DefaultIfEmpty(0).Max();
@@ -586,7 +585,7 @@ public static class SystemScan
             : r.RamModules.GroupBy(m => Math.Round(m.Bytes / Fmt.Gib)).Count() == 1
                 ? $" · {r.RamModules.Count} × {GbText(r.RamModules[0].Bytes / Fmt.Gib)}"
                 : " · " + string.Join(" + ", r.RamModules.Select(m => GbText(m.Bytes / Fmt.Gib)));
-        string speed = conf > 0 ? L.F("{0} МГц", conf) + (evidence > conf + 100 ? " " + L.F("(планки рассчитаны на {0})", evidence) : "") : "";
+        string speed = conf > 0 ? MemoryProfile.Mts(conf) + (evidence > conf + 100 ? " " + L.F("(планки рассчитаны на {0})", evidence) : "") : "";
         string makers = string.Join(", ", r.RamModules.Select(m => m.Maker).Where(x => x != "" && !Regex.IsMatch(x, @"^[0-9A-F]{4,}$")).Distinct().Take(2));
         c.Passport(L.T("Память"), $"{GbText(r.RamTotalGb)} {r.RamType}{layout}".Trim() + "\n" + string.Join(" · ", new[] { speed, makers }.Where(x => x != "")));
 
@@ -599,25 +598,27 @@ public static class SystemScan
             c.Add(Severity.Warn, L.F("Памяти {0} — меньше, чем просят игры", GbText(r.RamTotalGb)),
                 L.T("Современным играм нужно 16 ГБ. Пока памяти мало, перед игрой закрывайте браузер и другие тяжёлые программы."));
 
-        // Каналы
-        if (!lp && r.RamModules.Count == 1)
-            c.Add(Severity.Warn, L.T("Одна планка памяти"),
-                L.T("Память работает в одноканальном режиме, и в играх, где много считает процессор, это заметно снижает FPS. Вторая такая же планка включит двухканальный режим."));
-        else if (!lp && r.RamModules.Count >= 2 && r.RamModules.Select(m => m.Bytes).Distinct().Count() > 1)
-            c.Add(Severity.Info, L.T("Планки памяти разного объёма"),
-                L.T("Часть памяти может работать в одноканальном режиме. Лучше всего ставить одинаковые планки парами."));
-
-        // XMP / EXPO
-        if (!lp && conf > 0 && evidence >= conf + 200)
-            c.Add(Severity.Warn, L.T("Профиль XMP/EXPO не включён"),
-                L.F("Планки рассчитаны на {0} МГц, а работают на {1} МГц. Включите в BIOS профиль XMP (Intel) или EXPO/DOCP (AMD): память заработает на своей частоте, если её поддерживают плата и процессор.", evidence, conf));
-        else if (!lp && !r.IsLaptop && conf > 0 && ((r.RamType == "DDR4" && conf <= 2666) || (r.RamType == "DDR5" && conf <= 4800)))
-            c.Add(Severity.Info, L.F("Память работает на базовой частоте {0} МГц", conf),
-                L.F("Это стандартная частота {0} без разгона. Если на планках или в их характеристиках указано больше (например, {1}), включите в BIOS профиль XMP или EXPO.",
-                    r.RamType, r.RamType == "DDR4" ? L.T("3200 или 3600") : "6000"));
+        // Каналы, частота и XMP/EXPO — общий вывод MemoryProfile (тот же в «Совете по апгрейду» и «Диагностике»).
+        // Про XMP судим только по штатной скорости памяти для этого процессора; ноутбуку профиль не советуем.
+        var setup = new MemSetup
+        {
+            Cpu = r.CpuName, Laptop = r.IsLaptop, Type = r.RamType,
+            Sticks = r.RamModules.Select(m => new MemStick
+            {
+                Slot = m.Slot, Bank = m.Bank, Maker = m.Maker, Part = m.Part, SizeGb = m.Bytes / Fmt.Gib, Mts = m.ConfiguredMhz > 0 ? HardwareInfo.RamMts(m.Type, m.ConfiguredMhz, 0) : 0,
+                RatedMts = Math.Max(HardwareInfo.RamMts(m.Type, m.RatedMhz, 0), m.PartMhz), Ranks = m.Ranks, FormFactor = m.FormFactor,
+            }).ToList(),
+        };
+        if (MemoryProfile.TestRam() is RamInfo fakeRam) setup = MemoryProfile.FromRam(fakeRam, MemoryProfile.TestCpu ?? r.CpuName);   // подмена для снимков
+        var channels = MemoryProfile.Channels(setup);
+        if (channels.Kind is ChannelKind.OneStick or ChannelKind.SameChannel or ChannelKind.MixedSizes)
+            c.AddSection(channels.Level, L.T(channels.Title), channels.Full, "Совет по апгрейду");
+        var memSpeed = MemoryProfile.Speed(setup);
+        if (memSpeed.ForScan)
+            c.AddSection(memSpeed.Level, L.T(memSpeed.Title), memSpeed.Full, "Совет по апгрейду");
 
         string sum = $"{GbText(r.RamTotalGb)} {r.RamType}".Trim();
-        return conf > 0 ? sum + " · " + L.F("{0} МГц", conf) : sum;
+        return conf > 0 ? sum + " · " + MemoryProfile.Mts(conf) : sum;
     }
 
     /// <summary>Частота из маркировки планки (у популярных производителей она зашита в номер). 0 — не распознано.</summary>
@@ -752,11 +753,17 @@ public static class SystemScan
         foreach (var d in r.Disks)
         {
             if (d.Health != "" && !d.Health.Equals("Healthy", StringComparison.OrdinalIgnoreCase))
+            {
                 c.Add(Severity.Bad, L.F("Диск {0} сообщает о неисправности", d.Name),
                     L.F("Состояние — «{0}». Скопируйте важные данные на другой диск как можно скорее.", d.Health), 4);
+                c.LogKind(LogMarks.Disk);
+            }
             else if (d.ReadErrors > 0)
+            {
                 c.Add(Severity.Warn, L.F("Диск {0}: ошибки чтения", d.Name),
-                    L.F("Неисправленных ошибок чтения: {0:0}. Не храните на нём единственную копию важного.", d.ReadErrors), 4);
+                    L.F("Неисправленных ошибок чтения: {0:0}. Не храните на нём единственную копию важного и не дефрагментируйте его.", d.ReadErrors), 4);
+                c.LogKind(LogMarks.Disk);
+            }
             else if (d.Wear >= 80)
                 c.Add(Severity.Warn, L.F("Диск {0} изношен на {1:0} %", d.Name, d.Wear), L.T("Ресурс записи подходит к концу. Сделайте копию важных данных и присмотрите замену."), 4);
         }
@@ -1028,10 +1035,11 @@ public static class SystemScan
 
     private static string Describe(string processName, int pid)
     {
+        if (CautiousMode.Protects(pid)) return processName;     // игра в осторожном режиме: её модули не читаются
         try
         {
-            using var p = Process.GetProcessById(pid);
-            string file = p.MainModule?.FileName;
+            // Путь — с минимальными правами (MainModule открывал бы процесс на чтение памяти — так нельзя с играми под античитом).
+            string file = GameFinder.ProcessPath(pid);
             if (!string.IsNullOrEmpty(file))
             {
                 string desc = FileVersionInfo.GetVersionInfo(file).FileDescription?.Trim();
@@ -1254,23 +1262,43 @@ public static class SystemScan
         string Days(string kind) => LogMarks.SeenWithin(kind, LogDays) is DateTime seen ? LogMarks.SeenText(seen) : L.F("за {0} дней", LogDays);
         string days = L.F("за {0} дней", LogDays);
         if (r.Bsods > 0)
+        {
             c.Add(Severity.Bad, L.F("Синие экраны: {0} {1}", r.Bsods, Days(LogMarks.Bsod)),
                 L.T("Windows аварийно останавливалась. Обычно виноваты драйвер, нестабильный разгон или память. Подробности — на вкладке «Диагностика»."), 4);
+            c.LogKind(LogMarks.Bsod);
+        }
+        // WHEA: тот же вывод, что в «Диагностике» (вид ошибки и совет — StabilityChecks), здесь только заголовок свой.
+        string wheaText = r.Whea > 0 || r.WheaCorrected > 0 ? StabilityChecks.WheaScanText(LogDays) : null;
         if (r.Whea > 0)
+        {
             c.Add(Severity.Bad, L.F("Аппаратные ошибки: {0} {1}", r.Whea, Days(LogMarks.Whea)),
-                L.T("Процессор, память или шина PCIe сообщили об ошибке. Если включён разгон или XMP — проверьте стабильность без него."), 4);
+                wheaText ?? L.T("Процессор, память или шина PCIe сообщили об ошибке. Если включён разгон или XMP — проверьте стабильность без него."), 4);
+            c.LogKind(LogMarks.Whea);
+        }
         if (r.UnexpectedShutdowns > 0)
+        {
             c.Add(Severity.Warn, L.F("Аварийные выключения: {0} {1}", r.UnexpectedShutdowns, Days(LogMarks.Shutdown)),
                 L.T("Компьютер выключался без завершения работы: зависание, сбой питания или выключение кнопкой. Если выключали не вы — проверьте блок питания и охлаждение."), 4);
+            c.LogKind(LogMarks.Shutdown);
+        }
         if (r.DisplayDriverErrors > 0)
+        {
             c.AddSection(Severity.Warn, L.F("Сбои драйвера видеокарты: {0} {1}", r.DisplayDriverErrors, Days(LogMarks.Gpu)),
                 L.T("Драйвер видеокарты сообщал о сбоях. Что это за записи, были ли они во время игр и что делать — на вкладке «Система», раздел «Драйвер»."), "Драйвер");
+            c.LogKind(LogMarks.Gpu);
+        }
         if (r.DiskErrors > 0)
+        {
             c.Add(Severity.Bad, L.F("Ошибки дисков в журнале: {0} {1}", r.DiskErrors, Days(LogMarks.Disk)),
                 L.T("Windows не смогла прочитать или записать данные. Сделайте копию важного и проверьте диски на вкладке «Диагностика»."), 4);
+            c.LogKind(LogMarks.Disk);
+        }
         if (r.WheaCorrected > 0 && r.Whea == 0)
+        {
             c.Add(Severity.Info, L.F("Исправленные аппаратные ошибки: {0} {1}", r.WheaCorrected, Days(LogMarks.Whea)),
-                L.T("Оборудование само исправило ошибки, на работу это не повлияло. Если их сотни — проверьте разгон и обновите BIOS."), 4);
+                wheaText ?? L.T("Оборудование само исправило ошибки, на работу это не повлияло. Если их сотни — проверьте разгон и обновите BIOS."), 4);
+            c.LogKind(LogMarks.Whea);
+        }
 
         int serious = r.Bsods + r.Whea + r.UnexpectedShutdowns + r.DisplayDriverErrors + r.DiskErrors;
         if (serious == 0) return r.HiddenKinds > 0 ? L.T("новых сбоев после отметки нет") : L.F("сбоев нет {0}", days);
@@ -1310,7 +1338,7 @@ public static class SystemScan
         sb.AppendLine();
         sb.AppendLine("ПОДРОБНО");
         foreach (var g in r.Gpus) sb.AppendLine($"  GPU: {g.Name} · {g.Vendor} · {(g.Discrete ? "дискретная" : "встроенная")} · VRAM {g.VramBytes / Fmt.Gib:0.0} ГБ · драйвер {g.Driver} ({g.DriverShort}) от {g.DriverDate:dd.MM.yyyy}");
-        foreach (var m in r.RamModules) sb.AppendLine($"  RAM: {m.Slot} · {m.Maker} {m.Part} · {m.Bytes / Fmt.Gib:0} ГБ · тип {m.Type} · заявлено {m.RatedMhz} · работает {m.ConfiguredMhz} · по маркировке {m.PartMhz}");
+        foreach (var m in r.RamModules) sb.AppendLine($"  RAM: {m.Slot} [{m.Bank}] · {m.Maker} {m.Part} · {m.Bytes / Fmt.Gib:0} ГБ · тип {m.Type} · заявлено {m.RatedMhz} · работает {m.ConfiguredMhz} · по маркировке {m.PartMhz} · рангов {m.Ranks}");
         foreach (var d in r.Disks) sb.AppendLine($"  Диск {d.Number}: {d.Name} · {d.Kind} ({d.Media}/{d.Bus}) · {DiskSize(d.Bytes)} · {d.Health} · системный {d.IsSystem} · {string.Join(" ", d.Letters)} · темп {d.Temp?.ToString() ?? "—"} износ {d.Wear?.ToString() ?? "—"} ошибки {d.ReadErrors?.ToString() ?? "—"}");
         foreach (var m in r.Monitors) sb.AppendLine($"  Монитор {m.Device}: {m.Name} · {m.Width}×{m.Height} @ {m.Hz} (макс. {m.MaxHz}) · родное {m.NativeWidth}×{m.NativeHeight} · основной {m.Primary}");
         sb.AppendLine($"  Сеть: {(r.Net.WiFi ? "Wi-Fi" : "кабель")} · {r.Net.Adapter} · {r.Net.SpeedBps / 1e6:0} Мбит/с · шлюз {r.Net.Gateway} · роутер {r.Net.RouterAvg:0.0}/{r.Net.RouterJitter:0.0}/{r.Net.RouterLoss:0}% · {r.Net.InternetHost} {r.Net.InternetAvg:0.0}/{r.Net.InternetJitter:0.0}/{r.Net.InternetLoss:0}%");

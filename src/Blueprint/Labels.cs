@@ -1,4 +1,4 @@
-namespace PulsePC.Blueprint;
+﻿namespace PulsePC.Blueprint;
 
 /// <summary>
 /// Надписи на деталях чертежа (модель процессора, видеокарты, платы, памяти). Берутся из паспорта компьютера,
@@ -11,6 +11,15 @@ public static class BlueprintLabels
     /// <summary>Надпись на кожухе видеокарты: «GEFORCE RTX», «RADEON», «ARC».</summary>
     public static string GpuBrand { get; set; } = "";
     public static string Board { get; set; } = "";
+    /// <summary>
+    /// Мощность блока питания на наклейке («650 W»). Windows её не знает: надпись — только если человек сам указал мощность
+    /// («Система» → «Электричество»). Пусто — наклейка без числа.
+    /// </summary>
+    public static string Psu { get; set; } = "";
+
+    /// <summary>Надпись для наклейки блока питания из настройки hw.psu.watts.</summary>
+    public static string PsuLabel(string saved) =>
+        int.TryParse(saved, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int w) && w > 0 ? w + " W" : "";
     public static string RamType { get; set; } = "DDR";
     /// <summary>Например «3200 MHz  8 GB».</summary>
     public static string RamSpec { get; set; } = "";
