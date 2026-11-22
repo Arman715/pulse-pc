@@ -48,6 +48,9 @@ const T = {
     bFaq: "❓ Частые вопросы",
     bReport: "✉ Сообщить об ошибке",
     bChannel: "Канал",
+    bSubscribe: "📢 Подписаться на канал",
+    subLine: "\n\n📢 Подпишитесь на канал @pulsepc_official — там новые версии, разборы «почему тормозит игра» и советы.",
+    nudge: "Хотите первыми узнавать о новых версиях и советах? Подпишитесь на канал — больше напоминать не буду.",
     bGithub: "GitHub",
     bBack: "← Все вопросы",
     bMenu: "← Меню",
@@ -197,6 +200,9 @@ const T = {
     bFaq: "❓ Common questions",
     bReport: "✉ Report a problem",
     bChannel: "Channel (RU)",
+    bSubscribe: "📢 Join the channel (RU)",
+    subLine: "\n\n📢 Join the channel @pulsepc_official (in Russian) — new versions, stutter breakdowns and tips.",
+    nudge: "Want to hear about new versions and tips first? Join the channel — I won't remind you again.",
     bGithub: "GitHub",
     bBack: "← All questions",
     bMenu: "← Menu",
@@ -443,8 +449,8 @@ async function handleUpdate(env, u) {
   if (isAdmin && m.reply_to_message && !cmd) return adminReply(env, m);
 
   if (cmd === "start" && arg === "report") return startReport(env, chat, t);
-  if (cmd === "start" || cmd === "menu") { await setMode(env, chat, null); return send(env, chat, t.welcome, menu(t)); }
-  if (cmd === "download") return sendDownload(env, chat, t);
+  if (cmd === "start" || cmd === "menu") { await setMode(env, chat, null); return sendWelcome(env, chat, m.from.id, t); }
+  if (cmd === "download") return sendDownload(env, chat, t, m.from.id);
   if (cmd === "help" || cmd === "faq") return send(env, chat, t.faqTitle, faqMenu(t));
   if (cmd === "report") return startReport(env, chat, t);
   if (cmd === "cancel") { await setMode(env, chat, null); return send(env, chat, t.reportCancel, menu(t)); }
@@ -462,39 +468,68 @@ async function handleCallback(env, q) {
   const chat = msg.chat.id;
   const data = q.data || "";
 
-  if (data === "menu") return edit(env, msg, t.welcome, menu(t));
+  if (data === "menu") {
+    const sub = await isSubscribed(env, q.from.id);
+    return edit(env, msg, t.welcome + (sub ? "" : t.subLine), menu(t, sub));
+  }
   if (data === "faq") return edit(env, msg, t.faqTitle, faqMenu(t));
   if (data.startsWith("q:")) {
     const item = t.faq.find((f) => f.k === data.slice(2));
     if (item) return edit(env, msg, item.a, { inline_keyboard: [[{ text: t.bBack, callback_data: "faq" }], [{ text: t.bReport, callback_data: "rep" }]] });
     return;
   }
-  if (data === "dl") return sendDownload(env, chat, t);
+  if (data === "dl") return sendDownload(env, chat, t, q.from.id);
   if (data === "rep") return startReport(env, chat, t);
   if (data === "cancel") { await setMode(env, chat, null); return edit(env, msg, t.reportCancel, menu(t)); }
 }
 
-function menu(t) {
+// Неподписанным первой идёт кнопка «Подписаться на канал»; ничего не блокируется.
+function menu(t, subscribed = true) {
   return {
     inline_keyboard: [
+      ...(subscribed ? [] : [[{ text: t.bSubscribe, url: LINKS.channel }]]),
       [{ text: t.bDownload, callback_data: "dl" }, { text: t.bFaq, callback_data: "faq" }],
       [{ text: t.bReport, callback_data: "rep" }],
-      [{ text: t.bChannel, url: LINKS.channel }, { text: t.bGithub, url: LINKS.github }],
+      subscribed ? [{ text: t.bChannel, url: LINKS.channel }, { text: t.bGithub, url: LINKS.github }] : [{ text: t.bGithub, url: LINKS.github }],
     ],
   };
+}
+
+async function sendWelcome(env, chat, userId, t) {
+  const sub = await isSubscribed(env, userId);
+  return send(env, chat, t.welcome + (sub ? "" : t.subLine), menu(t, sub));
+}
+
+// Подписан ли человек на канал. Если Telegram не ответил — считаем, что подписан: лучше не напомнить, чем надоесть.
+async function isSubscribed(env, userId) {
+  if (!userId) return true;
+  const r = await tg(env, "getChatMember", { chat_id: (env.CHANNEL || DEFAULT_CHANNEL).trim(), user_id: userId });
+  if (!r.ok || !r.result) return true;
+  const st = r.result.status;
+  return st === "creator" || st === "administrator" || st === "member" || (st === "restricted" && !!r.result.is_member);
+}
+
+// Одно напоминание о канале на человека (после «Скачать» или отправленного сообщения), только неподписанным.
+async function subscribeNudge(env, chat, userId, t) {
+  if (!env.BOT_KV || (await kvGet(env, `n:${chat}`))) return;
+  if (await isSubscribed(env, userId)) return;
+  if (!(await kvPut(env, `n:${chat}`, "1", 60 * 60 * 24 * 180))) return;
+  return send(env, chat, t.nudge, { inline_keyboard: [[{ text: t.bSubscribe, url: LINKS.channel }]] });
 }
 
 function faqMenu(t) {
   return { inline_keyboard: [...t.faq.map((f) => [{ text: f.q, callback_data: "q:" + f.k }]), [{ text: t.bMenu, callback_data: "menu" }]] };
 }
 
-async function sendDownload(env, chat, t) {
+async function sendDownload(env, chat, t, userId) {
   let r;
   try { r = await latestRelease(env, false); } catch (e) { console.log("download info failed", e && e.message); }
   if (!r) return send(env, chat, t.downloadFail);
-  return send(env, chat, t.download(r), {
+  const res = await send(env, chat, t.download(r), {
     inline_keyboard: [[{ text: t.bRelease, url: releaseUrl(r.version) }], [{ text: t.bMenu, callback_data: "menu" }]],
   });
+  await subscribeNudge(env, chat, userId, t);
+  return res;
 }
 
 // ─────────────────────────────── сообщения об ошибках ───────────────────────────────
@@ -536,7 +571,9 @@ async function forwardReport(env, m, t) {
   await kvPut(env, `r:${copy.result.message_id}`, JSON.stringify({ chat, lang: langOf(f) }), REPLY_LINK_SEC);
   if (group) return; // остальные снимки альбома: без повторных заголовков, счётчика и «Отправлено»
   await kvPut(env, countKey, String(count + 1), 60 * 60 * 48);
-  return send(env, chat, t.reportSent);
+  const res = await send(env, chat, t.reportSent);
+  await subscribeNudge(env, chat, f.id, t);
+  return res;
 }
 
 async function adminReply(env, m) {

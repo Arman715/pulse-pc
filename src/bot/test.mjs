@@ -17,6 +17,7 @@ let calls = [];
 let tgFail = {};          // метод → описание ошибки
 let msgId = 1000;
 let githubOverride = null; // (url) => Response | null
+let memberStatus = "member"; // что Telegram ответит на getChatMember
 globalThis.fetch = async (url, init) => {
   url = String(url);
   if (url.startsWith("https://api.telegram.org/")) {
@@ -24,6 +25,7 @@ globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body);
     calls.push({ method, body });
     if (tgFail[method]) return Response.json({ ok: false, description: tgFail[method] });
+    if (method === "getChatMember") return Response.json({ ok: true, result: { status: memberStatus, user: { id: body.user_id } } });
     if (method === "sendMessage" || method === "copyMessage") { calls[calls.length - 1].id = ++msgId; return Response.json({ ok: true, result: { message_id: msgId } }); }
     return Response.json({ ok: true, result: true });
   }
@@ -181,7 +183,7 @@ console.log("Сообщения об ошибках");
   ok(last() && last().method === "sendMessage" && last().body.reply_markup, "KV сломан — /start всё равно отвечает меню");
   calls = [];
   await post(eB, cb("dl"));
-  ok(last() && last().body.text.includes("SHA-256"), "KV сломан — «Скачать» всё равно работает");
+  ok(sent("sendMessage").some((c) => c.body.text.includes("SHA-256")), "KV сломан — «Скачать» всё равно работает");
   // /start не тратит удаления KV, если удалять нечего
   const eD = env(); let dels = 0; const kvD = eD.BOT_KV; const origDel = kvD.delete.bind(kvD); kvD.delete = async (k) => { dels++; return origDel(k); };
   await post(eD, msg("/start")); await post(eD, msg("/start"));
@@ -259,6 +261,48 @@ console.log("Автопост о новой версии");
   ok(sent("sendMessage").filter((c) => c.body.chat_id === "@pulsepc_official").length === 1, "KV не записал «posted» — пост всё равно один, без повторов");
 
   ok(_test.cmpVersion("1.10.0", "1.9.9") > 0 && _test.cmpVersion("1.5.0", "1.5.0") === 0 && _test.cmpVersion("1.4.3", "1.5.0") < 0, "сравнение версий");
+}
+
+// ── 4б. мягкая подписка на канал ──
+console.log("Предложение подписаться на канал");
+{
+  const e = env();
+  memberStatus = "left";
+  calls = [];
+  await post(e, msg("/start", user("ru", 900)));
+  let w = sent("sendMessage").find((c) => c.body.chat_id === 900);
+  ok(w.body.reply_markup.inline_keyboard[0][0].text.includes("Подписаться") && w.body.text.includes("@pulsepc_official"), "неподписанному — первая кнопка «Подписаться на канал»");
+  ok(w.body.reply_markup.inline_keyboard.flat().some((b) => b.callback_data === "dl") && w.body.reply_markup.inline_keyboard.flat().some((b) => b.callback_data === "rep"), "ничего не закрыто: «Скачать» и «Сообщить об ошибке» на месте");
+  calls = [];
+  await post(e, cb("dl", user("ru", 900)));
+  ok(sent("sendMessage").length === 2 && sent("sendMessage")[1].body.text.includes("Подпишитесь"), "после «Скачать» — одно напоминание о канале");
+  calls = [];
+  await post(e, cb("dl", user("ru", 900)));
+  ok(sent("sendMessage").length === 1, "второй раз не напоминает");
+  // после отправленного сообщения об ошибке — другой человек
+  await post(e, msg("/report", user("ru", 901)));
+  calls = [];
+  await post(e, msg("не работает", user("ru", 901)));
+  const toUser = sent("sendMessage").filter((c) => c.body.chat_id === 901).map((c) => c.body.text);
+  ok(toUser.length === 2 && toUser[0].includes("Отправлено") && toUser[1].includes("Подпишитесь"), "после «Отправлено» — напоминание о канале");
+  memberStatus = "member";
+  calls = [];
+  await post(e, msg("/start", user("ru", 902)));
+  w = sent("sendMessage").find((c) => c.body.chat_id === 902);
+  ok(!w.body.text.includes("Подпишитесь") && !w.body.reply_markup.inline_keyboard[0][0].text.includes("Подписаться"), "подписчику — без напоминаний");
+  calls = [];
+  await post(e, cb("dl", user("ru", 902)));
+  ok(sent("sendMessage").length === 1, "подписчику после «Скачать» — без напоминания");
+  tgFail = { getChatMember: "Bad Request: member list is inaccessible" };
+  calls = [];
+  await post(e, msg("/start", user("ru", 903)));
+  ok(!sent("sendMessage")[0].body.text.includes("Подпишитесь"), "Telegram не ответил о подписке — не напоминаем");
+  tgFail = {};
+  memberStatus = "left";
+  calls = [];
+  await post(e, msg("/start", user("en", 904)));
+  ok(sent("sendMessage")[0].body.reply_markup.inline_keyboard[0][0].text.includes("Join"), "по-английски — «Join the channel»");
+  memberStatus = "member";
 }
 
 // ── 5. посты по расписанию ──
