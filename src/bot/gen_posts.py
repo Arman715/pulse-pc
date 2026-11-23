@@ -2,7 +2,7 @@ import io, re, json, sys
 root = sys.argv[1]
 md = io.open(root + '/promo/telegram/КАНАЛ.md', encoding='utf-8').read()
 blocks = re.findall(r"^### Пост (\d+) · ([^\n]+)\n```\n(.*?)```", md, re.S | re.M)
-assert len(blocks) == 9, len(blocks)
+assert len(blocks) == 10, len(blocks)
 def html(t):
     t = t.rstrip('\n').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', t)
@@ -16,8 +16,11 @@ plan = {
  7: ('photo', 'vernut.png',   '2026-12-02T16:00:00Z'),
  8: ('text',  None,           '2026-12-04T16:00:00Z'),
  9: ('text',  None,           '2026-12-07T16:00:00Z'),
+ 10: ('video', 'plany.mp4',   '2026-11-23T14:00:00Z'),
 }
 out = []
+# бот публикует строго по порядку и ждёт первый пост из будущего — поэтому список идёт по времени
+blocks = sorted(blocks, key=lambda b: plan[int(b[0])][2])
 for n, title, body in blocks:
     kind, media, at = plan[int(n)]
     item = {'id': 'p' + n, 'at': at, 'kind': kind, 'title': title.strip()}
