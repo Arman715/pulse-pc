@@ -127,7 +127,9 @@ public static class GameFinder
         EnsureLoaded();
         lock (Gate)
         {
-            var list = scanned.Concat(behavior).Where(g => !IsRejected(g.Source == "behavior" ? g.Exe : g.Dir)).ToList();
+            // Найденные по поведению раньше, чем программа узнала, что это не игра (Razer Cortex до 1.6), тоже не показываются.
+            var list = scanned.Concat(behavior).Where(g => !IsRejected(g.Source == "behavior" ? g.Exe : g.Dir)
+                                                         && !(g.Source == "behavior" && NotGameReason(g.Exe) != null)).ToList();
             return list.Select(Copy).ToList();
         }
     }
@@ -799,6 +801,16 @@ public static class GameFinder
         // Удалённый доступ на весь экран (картинку чужого экрана рисует он), медиацентры и презентации LibreOffice.
         "anydesk", "teamviewer", "rustdesk", "kodi", "plex", "plex htpc", "jellyfin media player", "stremio", "mpc-qt", "soffice",
         "floorp", "zen", "atom", "maxthon", "palemoon", "whale",
+        // Программы производителей железа и «ускорители игр»: окно на весь экран и нагрузка на видеокарту, но это не игры (1.6: Razer Cortex).
+        "razercortex", "razer cortex", "razer synapse", "razersynapse", "razer central", "msiafterburner", "msi center", "armourycrate",
+        "lghub", "steelseriesgg", "icue", "nzxt cam", "ngenuity", "rtss", "gamebar", "xboxgamebar",
+    };
+
+    /// <summary>Папки программ производителей мыши, клавиатуры, гарнитуры и платы: всё, что запущено оттуда, — не игра.</summary>
+    private static readonly string[] VendorToolFolders =
+    {
+        @"\Razer\", @"\Razer Chroma SDK\", @"\Logitech\", @"\LGHUB\", @"\SteelSeries\", @"\Corsair\", @"\NZXT CAM\", @"\HyperX\",
+        @"\MSI\MSI Center\", @"\MSI Afterburner\", @"\ASUS\ARMOURY CRATE", @"\RivaTuner Statistics Server\",
     };
 
     /// <summary>Причина, по которой процесс не может быть игрой по поведению, или null.</summary>
@@ -812,6 +824,7 @@ public static class GameFinder
         string win = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         if (path.StartsWith(win, StringComparison.OrdinalIgnoreCase)) return "файл Windows";
         if (path.Contains(@"\WindowsApps\Microsoft.", StringComparison.OrdinalIgnoreCase)) return "приложение Windows";
+        if (VendorToolFolders.Any(f => path.Contains(f, StringComparison.OrdinalIgnoreCase))) return "программа производителя устройств";
         lock (Gate) if (IsRejected(path)) return "отмечено «Это не игра»";
         return null;
     }
@@ -1073,6 +1086,9 @@ public static class GameFinder
                                       && NotGameReason(@"C:\Users\x\AppData\Local\AnthropicClaude\claude.exe") != null
                                       && NotGameReason(@"C:\Program Files\Microsoft VS Code\Code.exe") != null
                                       && NotGameReason(@"E:\Games\Some Launcher\SomeLauncher.exe") != null
+                                      && NotGameReason(@"C:\Program Files (x86)\Razer\Razer Cortex\RazerCortex.exe") != null
+                                      && NotGameReason(@"D:\Apps\Cortex\RazerCortex.exe") != null
+                                      && NotGameReason(@"C:\Program Files\LGHUB\lghub.exe") != null
                                       && NotGameReason(@"E:\Games\Hollow\hollow_knight.exe") == null);
 
         // --- учёт по поведению

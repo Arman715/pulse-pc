@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using PulsePC.Panels;
@@ -30,6 +31,12 @@ public sealed class GpuLink
 {
     public string Name = "", Vendor = "";
     public int CurWidth, MaxWidth;
+    /// <summary>
+    /// Ширина шины, замеренная во время игры под нагрузкой (0 — замера ещё не было). В простое видеокарта сужает шину ради
+    /// экономии энергии, поэтому «x4 вместо x16» по замеру в простое — не неисправность (отчёт пользователя, 1.6).
+    /// </summary>
+    public int LoadWidth;
+    public DateTime LoadAt;
     /// <summary>NVIDIA: максимум, о котором договорились плата и карта; максимум карты; максимум платы. 0 — не читается.</summary>
     public int Gen, GpuMaxGen, HostMaxGen;
     /// <summary>Окно BAR1, МиБ (NVIDIA); больше 256 — Resizable BAR включён. 0 — не читается.</summary>
@@ -140,12 +147,29 @@ public static class HardwareChecks
         var list = new List<HwFinding>();
         if (isLaptop || g == null) return list;
         string name = HardwareInfo.ShortGpu(g.Name);
-        if (g.CurWidth > 0 && g.MaxWidth > 0 && g.CurWidth < g.MaxWidth)
+        // Узкая шина — неисправность, только если она узкая под нагрузкой: в простое видеокарта сама сужает её ради экономии энергии.
+        int load = g.LoadWidth > 0 && g.MaxWidth > 0 ? Math.Min(g.LoadWidth, g.MaxWidth) : 0;
+        if (load > 0 && load < g.MaxWidth)
             list.Add(new HwFinding
             {
                 Level = Severity.Warn, Important = true, Step = "Видеокарта",
-                Title = L.F("Видеокарта работает на x{0} вместо x{1}", g.CurWidth, g.MaxWidth),
-                Detail = L.F("{0} умеет работать по {1} линиям PCI Express, а подключена по {2}. Так бывает, если она стоит в нижнем слоте, подключена через райзер или удлинитель, или слот делит линии с разъёмом M.2. Проверьте, что видеокарта стоит в верхнем длинном слоте (ближе к процессору) и вставлена до щелчка; если используется райзер — попробуйте без него.", name, g.MaxWidth, g.CurWidth),
+                Title = L.F("Видеокарта работает на x{0} вместо x{1}", load, g.MaxWidth),
+                Detail = L.F("{0} умеет работать по {1} линиям PCI Express, а в игре, под нагрузкой, работала по {2}. Так бывает, если она стоит в нижнем слоте, подключена через райзер или удлинитель, или слот делит линии с разъёмом M.2. Проверьте, что видеокарта стоит в верхнем длинном слоте (ближе к процессору) и вставлена до щелчка; если используется райзер — попробуйте без него.", name, g.MaxWidth, load),
+            });
+        else if (load > 0)
+            list.Add(new HwFinding
+            {
+                Level = Severity.Ok, Step = "Видеокарта", Title = L.F("Шина видеокарты: x{0}", load),
+                Detail = g.CurWidth > 0 && g.CurWidth < load
+                    ? L.F("в игре — все {0} линий PCI Express; сейчас x{1}: в простое видеокарта сужает шину ради экономии энергии, это нормально", g.MaxWidth, g.CurWidth)
+                    : L.F("все {0} линий PCI Express (проверено в игре)", g.MaxWidth),
+            });
+        else if (g.CurWidth > 0 && g.MaxWidth > 0 && g.CurWidth < g.MaxWidth)
+            list.Add(new HwFinding
+            {
+                Level = Severity.Info, Step = "Видеокарта",
+                Title = L.F("Шина видеокарты сейчас x{0} из x{1}", g.CurWidth, g.MaxWidth),
+                Detail = L.T("В простое видеокарта сужает шину ради экономии энергии — это нормально. Программа проверит ширину шины во время игры и предупредит, только если она узкая и под нагрузкой."),
             });
         else if (g.CurWidth > 0 && g.MaxWidth > 0)
             list.Add(new HwFinding { Level = Severity.Ok, Step = "Видеокарта", Title = L.F("Шина видеокарты: x{0}", g.CurWidth), Detail = L.F("все {0} линий PCI Express", g.MaxWidth) });
@@ -181,9 +205,9 @@ public static class HardwareChecks
     private static DateTime pciAt;
 
     /// <summary>Видеокарты и NVMe-контроллеры на шине PCI Express по сведениям Windows (SetupAPI, без прав). Только чтение.</summary>
-    public static List<PciLink> ReadPci()
+    public static List<PciLink> ReadPci(bool fresh = false)
     {
-        if (pciCache != null && DateTime.Now - pciAt < TimeSpan.FromMinutes(10)) return pciCache;
+        if (!fresh && pciCache != null && DateTime.Now - pciAt < TimeSpan.FromMinutes(10)) return pciCache;
         var list = new List<PciLink>();
         IntPtr set = SetupDiGetClassDevsW(IntPtr.Zero, "PCI", IntPtr.Zero, 0x2 | 0x4);
         if (set == IntPtr.Zero || set == new IntPtr(-1)) return list;
@@ -213,15 +237,55 @@ public static class HardwareChecks
     }
 
     /// <summary>Шина главной видеокарты: Windows (ширина) + nvidia-smi (поколение, Resizable BAR). laptop — nvidia-smi не будит отдельную видеокарту ноутбука.</summary>
-    public static GpuLink ReadGpuLink(bool isLaptop)
+    /// <summary>Главная (отдельная) видеокарта: имя, производитель и её запись PCI. false — отдельной видеокарты нет.</summary>
+    private static bool MainGpuPci(bool fresh, out string name, out string vendor, out PciLink pci)
     {
+        name = vendor = ""; pci = null;
         var adapters = Kmt.Enumerate();
         var main = adapters.Where(a => !GpuVendors.IsVirtual(a.Name)).Select(a => (K: a, A: a.ToAdapter())).OrderBy(x => x.A.Integrated ? 1 : 0).ThenByDescending(x => x.A.VramGb).FirstOrDefault();
-        if (main.K == null || main.A.Integrated) return null;
-        var g = new GpuLink { Name = main.K.Name, Vendor = main.K.Vendor };
+        if (main.K == null || main.A.Integrated) return false;
+        name = main.K.Name; vendor = main.K.Vendor;
         string ven = main.K.VendorId.ToString("X4"), dev = main.K.DeviceId.ToString("X4");
-        var pci = ReadPci().FirstOrDefault(p => p.BaseClass == 3 && p.Instance.Contains("VEN_" + ven, StringComparison.OrdinalIgnoreCase) && p.Instance.Contains("DEV_" + dev, StringComparison.OrdinalIgnoreCase));
-        if (pci != null) { g.CurWidth = pci.CurWidth; g.MaxWidth = pci.MaxWidth; }
+        pci = ReadPci(fresh).FirstOrDefault(p => p.BaseClass == 3 && p.Instance.Contains("VEN_" + ven, StringComparison.OrdinalIgnoreCase) && p.Instance.Contains("DEV_" + dev, StringComparison.OrdinalIgnoreCase));
+        return true;
+    }
+
+    private sealed class LinkUnderLoad { public string Instance { get; set; } = ""; public int Width { get; set; } public int Max { get; set; } public DateTime At { get; set; } }
+    private static string LinkFile => Path.Combine(SessionStore.Folder, "gpu-link.json");
+
+    /// <summary>
+    /// Замер ширины шины во время игры (запись сессии зовёт один раз за игру, когда видеокарта загружена): Windows отдаёт
+    /// ширину, о которой видеокарта договорилась с платой сейчас, — под нагрузкой это настоящая ширина. Только чтение.
+    /// </summary>
+    public static void RecordLinkUnderLoad()
+    {
+        try
+        {
+            if (!MainGpuPci(true, out _, out _, out var pci) || pci == null || pci.CurWidth <= 0 || pci.MaxWidth <= 0) return;
+            var rec = new LinkUnderLoad { Instance = pci.Instance, Width = pci.CurWidth, Max = pci.MaxWidth, At = DateTime.Now };
+            File.WriteAllText(LinkFile, JsonSerializer.Serialize(rec));
+            Log.Info($"шина видеокарты в игре: x{pci.CurWidth} из x{pci.MaxWidth}");
+        }
+        catch (Exception ex) { Log.Error("шина видеокарты в игре", ex); }
+    }
+
+    private static LinkUnderLoad ReadLinkUnderLoad()
+    {
+        try { return File.Exists(LinkFile) ? JsonSerializer.Deserialize<LinkUnderLoad>(File.ReadAllText(LinkFile)) : null; }
+        catch { return null; }
+    }
+
+    public static GpuLink ReadGpuLink(bool isLaptop)
+    {
+        if (!MainGpuPci(false, out string gpuName, out string gpuVendor, out var pci)) return null;
+        var g = new GpuLink { Name = gpuName, Vendor = gpuVendor };
+        if (pci != null)
+        {
+            g.CurWidth = pci.CurWidth; g.MaxWidth = pci.MaxWidth;
+            // Замер в игре — той же видеокарты в том же слоте (у переставленной другой номер устройства в Windows).
+            var seen = ReadLinkUnderLoad();
+            if (seen != null && seen.Width > 0 && string.Equals(seen.Instance, pci.Instance, StringComparison.OrdinalIgnoreCase)) { g.LoadWidth = seen.Width; g.LoadAt = seen.At; }
+        }
         if (g.Vendor == "NVIDIA" && !isLaptop)
         {
             var (code, outp) = Shell.Run("nvidia-smi", "--query-gpu=pcie.link.gen.max,pcie.link.gen.gpumax,pcie.link.gen.hostmax,pcie.link.width.current,pcie.link.width.max --format=csv,noheader,nounits", 8000);
@@ -672,8 +736,15 @@ public static class HardwareChecks
         Check("нет отдельной видеокарты — молчим", MonitorFinding(false, false, "", new List<Screen> { new() { Primary = true, OnIntegrated = true } }) == null);
 
         // --- шина видеокарты
-        var x4 = GpuLinkFindings(false, new GpuLink { Name = "NVIDIA GeForce RTX 3070", Vendor = "NVIDIA", CurWidth = 4, MaxWidth = 16, Gen = 4, GpuMaxGen = 4, HostMaxGen = 4, Bar1Mb = 8192 });
-        Check("x4 при x16 — совет проверить слот и райзер", x4.Any(f => f.Level == Severity.Warn && f.Important && (en || f.Detail.Contains("райзер"))));
+        var x4 = GpuLinkFindings(false, new GpuLink { Name = "NVIDIA GeForce RTX 3070", Vendor = "NVIDIA", CurWidth = 4, MaxWidth = 16, LoadWidth = 4, Gen = 4, GpuMaxGen = 4, HostMaxGen = 4, Bar1Mb = 8192 });
+        Check("x4 под нагрузкой при x16 — совет проверить слот и райзер", x4.Any(f => f.Level == Severity.Warn && f.Important && (en || f.Detail.Contains("райзер"))));
+        // Отчёт пользователя 23.11.2026 (RTX 3080, MSI PRO H610M-G): в простое шина x4, в игре x16 — предупреждать нельзя.
+        var idle = GpuLinkFindings(false, new GpuLink { Name = "NVIDIA GeForce RTX 3080", Vendor = "NVIDIA", CurWidth = 4, MaxWidth = 16 });
+        Check("x4 в простое без замера в игре — к сведению, не предупреждение", idle.Any(f => f.Level == Severity.Info) && !idle.Any(f => f.Level <= Severity.Warn || f.Important));
+        var idleOk = GpuLinkFindings(false, new GpuLink { Name = "NVIDIA GeForce RTX 3080", Vendor = "NVIDIA", CurWidth = 4, MaxWidth = 16, LoadWidth = 16 });
+        Check("x4 в простое, x16 в игре — шина в порядке", idleOk.Any(f => f.Level == Severity.Ok && (en || f.Title == "Шина видеокарты: x16")) && !idleOk.Any(f => f.Level <= Severity.Warn));
+        var x8load = GpuLinkFindings(false, new GpuLink { Name = "NVIDIA GeForce RTX 3080", Vendor = "NVIDIA", CurWidth = 16, MaxWidth = 16, LoadWidth = 8 });
+        Check("x8 в игре при x16 — предупреждение, даже если сейчас x16", x8load.Any(f => f.Level == Severity.Warn && (en || f.Title.Contains("x8 вместо x16"))));
         var gen3 = GpuLinkFindings(false, new GpuLink { Name = "NVIDIA GeForce RTX 4060 Ti", Vendor = "NVIDIA", CurWidth = 8, MaxWidth = 8, Gen = 3, GpuMaxGen = 4, HostMaxGen = 3, Bar1Mb = 256 });
         Check("x8-карта на плате PCIe 3.0 — к сведению, про видеопамять; ReBAR выключен — с оговоркой про CSM",
             gen3.Any(f => f.Level == Severity.Info && (en || f.Detail.Contains("видеопамять"))) && gen3.Any(f => (en || f.Title == "Resizable BAR выключен") && (en || f.Detail.Contains("CSM"))) && !gen3.Any(f => f.Level <= Severity.Warn));

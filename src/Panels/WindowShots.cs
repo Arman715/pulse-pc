@@ -53,6 +53,14 @@ public static class WindowShots
                     extra = new LogDetailsWindow(window, target[4..], target[4..], PulsePC.Severity.Warn, null, null) { Width = 760, Height = 1400, ShowActivated = false };
                     extra.Show();
                 }
+                // «feedback:done» — итог окна «Сообщить о проблеме» (Telegram и почта) с подставным архивом; ничего не отправляет.
+                else if (target == "feedback:done")
+                {
+                    var fw = new FeedbackWindow(Services.Feedback.Kind.Problem, window, false) { ShowActivated = false };
+                    fw.Show();
+                    fw.ShowDoneForShot();
+                    extra = fw;
+                }
                 else window.ShotTarget(target);
                 await Task.Delay(extra != null ? 9000 : 3500);
                 var visual = extra != null ? extra.Content as FrameworkElement : element != null ? window.FindName(element) as FrameworkElement : window.Content as FrameworkElement;

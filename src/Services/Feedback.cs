@@ -18,6 +18,9 @@ public static class Feedback
 
     public const string RepoUrl = "https://github.com/Arman715/pulse-pc";
 
+    /// <summary>Бот в Telegram: сразу передаёт сообщение и файлы разработчику (по /start report включает режим «сообщить о проблеме»).</summary>
+    public const string TelegramUrl = "https://t.me/pulsepc_official_bot?start=report";
+
     public const int MaxImages = 6;
 
     public enum Kind { Problem, Review }
@@ -224,6 +227,8 @@ public static class Feedback
     }
 
     public static void OpenRepo() => GameLibrary.OpenAsUser(RepoUrl);
+
+    public static void OpenTelegram() => GameLibrary.OpenAsUser(TelegramUrl);
 
     /// <summary>Картинка в PNG (снимки окна, экрана, из буфера и из файлов).</summary>
     public static byte[] Png(BitmapSource image)

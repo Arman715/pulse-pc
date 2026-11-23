@@ -288,12 +288,12 @@ public partial class FeedbackWindow : Window
         BtnCancel.Style = (Style)FindResource("Primary");
         Footer.Text = "";
         bool archive = result.Archive != null;
-        DoneTitle.Text = Feedback.HasAddress ? L.T("Письмо готово — где у вас почта?") : L.T("Архив сохранён");
+        DoneTitle.Text = Feedback.HasAddress ? L.T("Готово — как отправить?") : L.T("Архив сохранён");
         DoneText.Text = Feedback.HasAddress
             ? (archive
-                ? L.F("Нажмите свою почту — откроется новое письмо с адресом и текстом. Рядом откроется папка с архивом {0}: перетащите его в письмо и нажмите «Отправить».", Path.GetFileName(result.Archive))
-                : L.T("Нажмите свою почту — откроется новое письмо с адресом и текстом. Проверьте его и нажмите «Отправить»."))
-            : L.F("Архив {0} лежит в папке «{1}». Адрес разработчика появится в одной из следующих версий.", Path.GetFileName(result.Archive ?? ""), Feedback.Folder);
+                ? L.F("Быстрее всего — в Telegram: нажмите «Написать в Telegram», вставьте текст (он будет в буфере обмена) и перетащите в чат архив {0} из открывшейся папки. Или нажмите свою почту ниже — откроется новое письмо с адресом и текстом, архив перетащите в него.", Path.GetFileName(result.Archive))
+                : L.T("Быстрее всего — в Telegram: нажмите «Написать в Telegram» и вставьте текст — он будет в буфере обмена. Или нажмите свою почту ниже — откроется новое письмо с адресом и текстом."))
+            : L.F("Архив {0} лежит в папке «{1}». Отправить его можно в Telegram — кнопкой ниже.", Path.GetFileName(result.Archive ?? ""), Feedback.Folder);
         BuildMailButtons();
         BtnOpenFolder.Visibility = archive ? Visibility.Visible : Visibility.Collapsed;
         BtnCopyAddress.Visibility = Feedback.HasAddress ? Visibility.Visible : Visibility.Collapsed;
@@ -338,6 +338,27 @@ public partial class FeedbackWindow : Window
         }
     }
 
+    /// <summary>Telegram: текст — в буфер обмена, папка с архивом — рядом, чат с ботом — в Telegram (или в браузере, если его нет).</summary>
+    private void Telegram_Click(object sender, RoutedEventArgs e)
+    {
+        bool copied = false;
+        try { Clipboard.SetText(result?.Body ?? ""); copied = !string.IsNullOrEmpty(result?.Body); } catch { }
+        if (result?.Archive != null) Feedback.ShowInFolder(result.Archive);
+        try { Feedback.OpenTelegram(); }
+        catch (Exception ex)
+        {
+            Log.Error("обратная связь: открыть Telegram", ex);
+            CopyNote.Text = L.T("Не удалось открыть Telegram. Найдите в нём бота @pulsepc_official_bot и отправьте сообщение туда.");
+            Motion.Reveal(CopyNote, 0, 4);
+            return;
+        }
+        string archive = result?.Archive != null ? Path.GetFileName(result.Archive) : null;
+        CopyNote.Text = (copied ? L.T("Открываю Telegram. Текст уже в буфере обмена — вставьте его в чат с ботом (Ctrl+V).") : L.T("Открываю Telegram."))
+            + (archive != null ? " " + L.F("Затем перетащите в чат архив {0} из открывшейся папки.", archive) : "")
+            + " " + L.T("Если чат не открылся — найдите в Telegram бота @pulsepc_official_bot.");
+        Motion.Reveal(CopyNote, 0, 4);
+    }
+
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
     {
         if (result?.Archive != null) Feedback.ShowInFolder(result.Archive);
@@ -358,4 +379,11 @@ public partial class FeedbackWindow : Window
     private void Star_Click(object sender, RoutedEventArgs e) => Feedback.OpenRepo();
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>Снимок для проверки (WindowShots, цель «feedback:done»): итог с подставным архивом — без файлов, почты и Telegram.</summary>
+    internal void ShowDoneForShot()
+    {
+        result = new Feedback.Result { Archive = Path.Combine(Feedback.Folder, "PulsePC-report-20261123-141401.zip"), Subject = "Пульс ПК", Body = "Пульс ПК 1.6.0" };
+        ShowDone(new Feedback.Draft { Kind = kind });
+    }
 }

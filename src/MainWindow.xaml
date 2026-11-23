@@ -857,7 +857,7 @@
                                 <!-- Просадки FPS: номер совпадает с отметкой на графике кадров -->
                                 <StackPanel x:Name="SessDipsBlock" Visibility="Collapsed">
                                     <local:TrackedText Source="ПРОСАДКИ" Style="{StaticResource Label}" Margin="0,22,0,4"/>
-                                    <TextBlock x:Name="SessDipsNone" Style="{StaticResource Caption}" Visibility="Collapsed"
+                                    <TextBlock x:Name="SessDipsNone" Style="{StaticResource Caption}" Visibility="Collapsed" MaxWidth="660" HorizontalAlignment="Left"
                                                Text="Резких просадок не было: FPS держался ровно."/>
                                     <ItemsControl x:Name="SessDips">
                                         <ItemsControl.ItemTemplate>
@@ -1707,6 +1707,17 @@
                                     <StackPanel x:Name="TuneDetail" Grid.Column="2" Visibility="Collapsed">
                                         <TextBlock x:Name="TuneGame" Style="{StaticResource Verdict}"/>
                                         <TextBlock x:Name="TunePath" Style="{StaticResource Caption}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                        <!-- Упор для этой игры (1.6): больше FPS — баланс — качество картинки. Слева у переключателя разделитель; у первого его срезает рамка -->
+                                        <Border x:Name="TuneModeBlock" ClipToBounds="True" Margin="0,14,0,0" HorizontalAlignment="Left">
+                                            <StackPanel Orientation="Horizontal" Margin="-12,0,0,0">
+                                                <RadioButton x:Name="TuneModeFps" Style="{StaticResource Range}" GroupName="TuneMode" Content="Больше FPS" Checked="TuneMode_Checked"
+                                                             ToolTip="Снизить тяжёлые настройки графики до средних, даже если запас есть"/>
+                                                <RadioButton x:Name="TuneModeBalance" Style="{StaticResource Range}" GroupName="TuneMode" Content="Баланс" Checked="TuneMode_Checked"
+                                                             ToolTip="Снижать только то, во что упирался FPS в ваших сессиях"/>
+                                                <RadioButton x:Name="TuneModeQuality" Style="{StaticResource Range}" GroupName="TuneMode" Content="Качество картинки" Checked="TuneMode_Checked"
+                                                             ToolTip="Графику не снижать; если в сессиях был запас — предложить поднять"/>
+                                            </StackPanel>
+                                        </Border>
                                         <TextBlock x:Name="TuneBasis" Style="{StaticResource Body}" Margin="0,12,0,0" MaxWidth="720" HorizontalAlignment="Left"/>
                                         <ItemsControl x:Name="TuneChanges" Margin="0,12,0,0">
                                             <ItemsControl.ItemTemplate>

@@ -391,6 +391,8 @@ public sealed class SessionRecorder
     private string gameImage, driver, powerPlan;
     private double startFreeRam = double.NaN, selfCpuSum;
     private int sampleNo, selfCpuN;
+    /// <summary>Ширина шины видеокарты в этой игре уже замерена (один раз за игру, под нагрузкой).</summary>
+    private bool linkProbed;
     private readonly Stopwatch extraCost = new();
     private readonly Dictionary<int, string> memoryAt = new();   // номер замера → кто занимал память в момент просадки
     private readonly List<double> recentFps = new();
@@ -604,6 +606,13 @@ public sealed class SessionRecorder
         s.LimitPower = g?.LimitPower ?? false; s.LimitThermal = g?.LimitThermal ?? false; s.LimitHardware = g?.LimitHardware ?? false;
         samples.Add(s);
         ProbeMemoryOnDip(s);
+        // Ширина шины видеокарты — один раз за игру, когда видеокарта загружена: в простое она сужает шину сама,
+        // и «x4 вместо x16» по замеру в простое было ложным (HardwareChecks.GpuLinkFindings). Только чтение, в фоне.
+        if (!linkProbed && s.Gpu >= 60 && !s.Unfocused && samples.Count >= 20)
+        {
+            linkProbed = true;
+            ThreadPool.QueueUserWorkItem(_ => HardwareChecks.RecordLinkUnderLoad());
+        }
 
         cpu.Add(cpuLoad);
         gpu.Add(g?.Load ?? double.NaN);

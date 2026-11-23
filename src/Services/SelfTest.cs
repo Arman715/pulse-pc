@@ -238,6 +238,27 @@ public static class SelfTest
             GameTuning.Restore(again);
             Check("откат вернул файл байт в байт", File.ReadAllBytes(ini).SequenceEqual(before));
 
+            // Упор (1.6): «больше FPS» снижает тяжёлое до среднего и без сессий; «качество» не снижает, а при запасе — поднимает.
+            string ini2 = Path.Combine(dir, "Modes.ini");
+            File.WriteAllText(ini2, "[ScalabilityGroups]\r\nsg.ViewDistanceQuality=3\r\nsg.ShadowQuality=2\r\nsg.PostProcessQuality=3\r\nsg.TextureQuality=1\r\n", Encoding.Unicode);
+            string Sg(GameTune g, string key) => g.Changes.FirstOrDefault(c => c.Key == key)?.To ?? "-";
+            var fps = GameTuning.ForFile("selftest-tune", "ini", ini2, null, GameTuning.Performance);
+            Check($"«Больше FPS» без сессий: дальность {Sg(fps, "sg.ViewDistanceQuality")}, тени {Sg(fps, "sg.ShadowQuality")}, постобработка {Sg(fps, "sg.PostProcessQuality")} (ожидалось 1, 1, 1; текстуры не трогаются)",
+                Sg(fps, "sg.ViewDistanceQuality") == "1" && Sg(fps, "sg.ShadowQuality") == "1" && Sg(fps, "sg.PostProcessQuality") == "1" && Sg(fps, "sg.TextureQuality") == "-");
+            var calm = new GameProfile { Sessions = 4, CpuBound = 10, GpuBound = 15 };
+            var qual = GameTuning.ForFile("selftest-tune", "ini", ini2, calm, GameTuning.Quality);
+            Check($"«Качество» при запасе: тени {Sg(qual, "sg.ShadowQuality")}, текстуры {Sg(qual, "sg.TextureQuality")} (ожидалось 3, 3), ничего не снижается",
+                Sg(qual, "sg.ShadowQuality") == "3" && Sg(qual, "sg.TextureQuality") == "3" && qual.Changes.All(c => c.To == "3"));
+            var qualBusy = GameTuning.ForFile("selftest-tune", "ini", ini2, new GameProfile { Sessions = 4, CpuBound = 10, GpuBound = 80 }, GameTuning.Quality);
+            var balBusy = GameTuning.ForFile("selftest-tune", "ini", ini2, new GameProfile { Sessions = 4, CpuBound = 10, GpuBound = 80 }, GameTuning.Balance);
+            Check($"упор в видеокарту: «Качество» не меняет графику ({qualBusy.Changes.Count}), «Баланс» снижает постобработку до {Sg(balBusy, "sg.PostProcessQuality")}",
+                qualBusy.Changes.Count == 0 && Sg(balBusy, "sg.PostProcessQuality") == "2");
+            var qualNoData = GameTuning.ForFile("selftest-tune", "ini", ini2, null, GameTuning.Quality);
+            Check("«Качество» без сессий — ничего не поднимает", qualNoData.Changes.Count == 0);
+            GameTuning.Recompute(qualNoData, GameTuning.Performance);
+            Check("смена упора пересчитывает рекомендации", qualNoData.Mode == GameTuning.Performance && Sg(qualNoData, "sg.ViewDistanceQuality") == "1");
+            Check("упор из настроек: «0» → больше FPS, мусор → баланс", GameTuning.ParseMode("0") == GameTuning.Performance && GameTuning.ParseMode("x") == GameTuning.Balance && GameTuning.ParseMode("") == GameTuning.Balance);
+
             // Source 2: размытие и синхронизация.
             string kv = Path.Combine(dir, "video.txt");
             File.WriteAllText(kv, "\"video.cfg\"\n{\n\t\"setting.mat_vsync\"\t\t\"1\"\n\t\"setting.r_citadel_motion_blur\"\t\t\"1\"\n\t\"setting.r_low_latency\"\t\t\"1\"\n}\n");

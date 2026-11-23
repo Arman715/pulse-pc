@@ -62,6 +62,12 @@ public partial class MainWindow
         }
         SessDipsBlock.Visibility = Visibility.Visible;
         SessDipsNone.Visibility = s.Dips.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        // Просадка — FPS упал и держался низким хотя бы секунду; фриз на долю секунды FPS за секунду почти не меняет и
+        // считается рывком. «Просадок не было» при рывках читалось как «программа фризов не видит» (вопрос пользователя, 1.6).
+        int stutters = s.Frames?.Median?.Length >= 2 ? s.Stutters ?? 0 : 0;
+        SessDipsNone.Text = stutters > 0
+            ? L.F("Долгих просадок не было: FPS за секунду держался ровно. Но были короткие рывки — {0}: замирание на долю секунды почти не меняет FPS за секунду, поэтому их видно выше, на графике «Время кадра» (отметки рывков).", stutters)
+            : L.T("Резких просадок не было: FPS держался ровно.");
         // График кадров растянут на всю запись от начала до конца по часам (точки идут подряд, без вырезанного сна), и время
         // просадки (d.At) тоже по часам — доля считается от End − Start, а не от Duration (там только реально записанное время).
         double total = Math.Max(1, (s.End - s.Start).TotalSeconds);

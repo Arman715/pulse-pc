@@ -144,7 +144,7 @@ public partial class MainWindow
         Task.Run(() =>
         {
             List<GameTune> found;
-            try { found = GameTuning.Scan(GameLibrary.Load(), GameTuning.Profiles(snapshot)); }
+            try { found = GameTuning.Scan(GameLibrary.Load(), GameTuning.Profiles(snapshot), game => GameTuning.ParseMode(settings.Get(GameTuning.ModeKey(game)))); }
             catch { found = new List<GameTune>(); }
             OnUi(() =>
             {
@@ -189,6 +189,11 @@ public partial class MainWindow
         TuneGame.Text = t.Game;
         TunePath.Text = t.ConfigPath != null ? $"{t.Engine} · {t.ConfigPath}" : t.Engine;
         TunePath.ToolTip = t.ConfigPath;
+        // Упор — только там, где программа меняет файл игры; переключатель ставится без пересчёта.
+        TuneModeBlock.Visibility = t.CanEdit ? Visibility.Visible : Visibility.Collapsed;
+        settingTuneMode = true;
+        (t.Mode == GameTuning.Performance ? TuneModeFps : t.Mode == GameTuning.Quality ? TuneModeQuality : TuneModeBalance).IsChecked = true;
+        settingTuneMode = false;
         TuneBasis.Text = t.CanEdit ? t.Basis : "";
         TuneBasis.Visibility = t.CanEdit ? Visibility.Visible : Visibility.Collapsed;
         TuneChanges.ItemsSource = t.Changes;
@@ -200,6 +205,23 @@ public partial class MainWindow
         TuneButtons.Visibility = BtnTuneApply.Visibility == Visibility.Visible || t.HasBackup ? Visibility.Visible : Visibility.Collapsed;
         TuneResult.Text = "";
         Motion.Reveal(TuneDetail, 0, 6);
+    }
+
+    private bool settingTuneMode;
+
+    /// <summary>Упор для выбранной игры: запомнить и пересчитать рекомендации (файл игры только читается).</summary>
+    private void TuneMode_Checked(object sender, RoutedEventArgs e)
+    {
+        if (settingTuneMode || TuneList.SelectedItem is not GameTune t) return;
+        int mode = sender == TuneModeFps ? GameTuning.Performance : sender == TuneModeQuality ? GameTuning.Quality : GameTuning.Balance;
+        if (mode == t.Mode) return;
+        settings.Set(GameTuning.ModeKey(t.Game), mode == GameTuning.Balance ? null : mode.ToString());
+        settings.Save();
+        try { GameTuning.Recompute(t, mode); }
+        catch (Exception ex) { Log.Error("настройки игр: смена упора", ex); }
+        TuneList.Items.Refresh();
+        TuneList.SelectedItem = t;
+        ShowTune(t);
     }
 
     private async void BtnTuneApply_Click(object sender, RoutedEventArgs e)
