@@ -243,7 +243,7 @@ cd pulse-pc\src
 
 The self-test (setting rollbacks, file deletion, data parsing) runs without changing the system: `PulsePC.exe --selftest`.
 
-**Official releases** are built with [`build-release.ps1`](src/build-release.ps1) and signed with the author's key.
+**Official releases** are built from this repository by GitHub Actions ([`build.yml`](.github/workflows/build.yml) runs [`build-release.ps1`](src/build-release.ps1) and the self-test), and the update is signed with the author's key.
 The app installs an update only if the signature is valid — so a copy built by someone else can't pass itself off as a Pulse PC update.
 
 **Found a bug or have an idea?** Open an [issue](https://github.com/Arman715/pulse-pc/issues) — attach the report from **System** → **App status** → **Copy report**.
@@ -252,6 +252,23 @@ Send fixes as a pull request: describe what changes and how you tested it. Issue
 
 **License — [GPL-3.0](LICENSE).** You may use, modify and distribute the code, including your own versions,
 as long as they are also released under GPL-3.0 with open source code and credit to the author. You can't close the code in your copy.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [Arman715](https://github.com/Arman715)
+- Approvers: [Arman715](https://github.com/Arman715)
+
+Every release is built from this repository by GitHub Actions and is signed only after manual approval.
+
+## Privacy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+The only automatic requests are the update checks, once a day (turn them off in **System** → **Updates (app)** → **Check automatically once a day**):
+GitHub, to look for a new version of Pulse PC, and NVIDIA's driver service, which receives only the graphics card model code and the Windows version.
+Network tests contact only the servers the user chooses to test. The iPhone panel works only inside your home network and only when you turn it on.
+Problem reports are saved as a file on your PC and are sent only by you.
 
 ---
 
