@@ -1,0 +1,82 @@
+# Сборка «Пульс ПК» из открытого кода: установщик, переносная версия, update.json.
+# Build of Pulse PC from source: installer, portable zip, update.json.
+#
+# Ключ подписи обновлений сюда не попадает: готовую сборку подписывает владелец у себя (src\publish-release.ps1).
+# The update-signing key never reaches CI: the owner signs the finished build locally (src\publish-release.ps1).
+
+name: Сборка
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'src/**'
+      - '!src/bot/**'
+      - '.github/workflows/build.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - '!src/bot/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Версия / version
+        id: ver
+        shell: powershell
+        run: |
+          $v = ([xml](Get-Content src\PulsePC.csproj -Raw -Encoding UTF8)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ('${{ github.ref_type }}' -eq 'tag' -and '${{ github.ref_name }}' -ne "v$v") { throw "Метка ${{ github.ref_name }} не совпадает с версией v$v в PulsePC.csproj" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Сборка / build
+        shell: powershell
+        run: .\src\build-release.ps1 -Out "$env:RUNNER_TEMP\out"
+
+      - name: Самопроверка / self-test
+        shell: powershell
+        timeout-minutes: 15
+        run: |
+          $out = "$env:RUNNER_TEMP\out"
+          $dir = "$env:RUNNER_TEMP\selftest"
+          Expand-Archive "$out\PulsePC-Portable-${{ steps.ver.outputs.version }}.zip" $dir -Force
+          $report = "$env:RUNNER_TEMP\selftest.txt"
+          $p = Start-Process "$dir\PulsePC-Portable\PulsePC.exe" -ArgumentList '--selftest', "`"$report`"" -Wait -PassThru
+          if (Test-Path $report) { Get-Content $report -Encoding UTF8 | Select-Object -First 60 }
+          if ($p.ExitCode -ne 0) { throw "Самопроверка не пройдена (код $($p.ExitCode)) — полный отчёт в файлах сборки" }
+
+      - name: Отчёт самопроверки / self-test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-${{ steps.ver.outputs.version }}
+          path: ${{ runner.temp }}/selftest.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Файлы сборки / build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: PulsePC-${{ steps.ver.outputs.version }}
+          path: ${{ runner.temp }}/out/*
+          if-no-files-found: error
+          retention-days: 30

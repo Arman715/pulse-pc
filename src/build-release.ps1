@@ -16,11 +16,13 @@
 #   .\build-release.ps1 -NoElevate -Out C:\temp\pulse -ReadyToRun   - проверить, что даёт ReadyToRun
 #   .\build-release.ps1 -Notes 'Первое изменение', 'Второе'           - что нового (иначе строки из release-notes.txt рядом со скриптом)
 #   .\build-release.ps1 -NewSigningKey                                - ОДИН РАЗ: создать ключ подписи и вписать открытую часть в Services\VersionCheck.cs
+#   .\build-release.ps1 -Out <папка>                                  - сборка без ключа подписи (так собирает GitHub Actions, .github\workflows\build.yml)
+#   .\build-release.ps1 -SignDir <папка>                              - подписать готовую сборку из GitHub Actions (без пересборки): .sig и подпись в update.json
 #
 # Подпись. Закрытый ключ ECDSA P-256 лежит вне репозитория: %USERPROFILE%\.pulsepc\release-signing.key (другое место — -SigningKey).
 # Подписывается текст «PulsePC-Setup\n<версия из 4 частей>\n<sha256 установщика>»; подпись (64 байта r||s, Base64) — в <файл>.sig.
 # Программа новее 1.4.2 без верной подписи не обновляется. Выкладывать в выпуск GitHub все четыре файла: .exe, .exe.sha256, .exe.sig, update.json.
-param([switch]$NoElevate, [string]$Out, [switch]$ReadyToRun, [string[]]$Notes, [switch]$NewSigningKey,
+param([switch]$NoElevate, [string]$Out, [switch]$ReadyToRun, [string[]]$Notes, [switch]$NewSigningKey, [string]$SignDir,
       [string]$SigningKey = (Join-Path $env:USERPROFILE '.pulsepc\release-signing.key'))
 
 $ErrorActionPreference = 'Stop'
@@ -91,12 +93,64 @@ if ($NewSigningKey) {
     return
 }
 
+# Подпись обновления: текст «PulsePC-Setup\n<версия из 4 частей>\n<sha256>», проверка встроенным в программу ключом. Base64 подписи.
+function Sign-Setup($key, $embedded, [string]$version4, [string]$hash) {
+    $message = [Text.Encoding]::UTF8.GetBytes("PulsePC-Setup`n$version4`n$hash")
+    $sig = $key.Ecdsa.SignData($message, [System.Security.Cryptography.HashAlgorithmName]::SHA256)
+    if ($sig.Length -ne 64) { throw "Подпись неожиданной длины ($($sig.Length) байт вместо 64)." }
+    # Проверка открытым ключом, встроенным в программу, — так же, как её проверит программа.
+    $pub = New-Object System.Security.Cryptography.ECParameters
+    $pub.Curve = [System.Security.Cryptography.ECCurve+NamedCurves]::nistP256
+    $pq = New-Object System.Security.Cryptography.ECPoint
+    $pq.X = [Convert]::FromBase64String($embedded.X); $pq.Y = [Convert]::FromBase64String($embedded.Y)
+    $pub.Q = $pq
+    $verifier = [System.Security.Cryptography.ECDsa]::Create($pub)
+    if (-not $verifier.VerifyData($message, $sig, [System.Security.Cryptography.HashAlgorithmName]::SHA256)) { throw 'Подпись не проходит проверку встроенным ключом.' }
+    return [Convert]::ToBase64String($sig)
+}
+
+function Version4([string]$ver) {
+    $v = [version]$ver
+    return '{0}.{1}.{2}.{3}' -f $v.Major, $v.Minor, [Math]::Max($v.Build, 0), [Math]::Max($v.Revision, 0)
+}
+
+# ------------------------------------------------------------------ подпись сборки из GitHub Actions
+# Программу собирает GitHub из открытого кода; ключ подписи обновлений туда не попадает и остаётся на этом компьютере.
+if ($SignDir) {
+    $dir = [IO.Path]::GetFullPath($SignDir)
+    $manifestPath = Join-Path $dir 'update.json'
+    if (-not (Test-Path $manifestPath)) { throw "Нет $manifestPath — это не папка сборки." }
+    $m = Get-Content $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ("$($m.url)" -notmatch '^PulsePC-Setup-[0-9][0-9.]*\.exe$') { throw "Неожиданное имя установщика в update.json: $($m.url)" }
+    $target = Join-Path $dir $m.url
+    $hash = (Get-FileHash $target -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($hash -ne "$($m.sha256)".ToLowerInvariant()) { throw "SHA-256 установщика не совпадает с update.json." }
+    $sumLine = (Get-Content "$target.sha256" -Raw -Encoding UTF8).Trim()
+    if (-not $sumLine.StartsWith($hash)) { throw "SHA-256 установщика не совпадает с $($m.url).sha256." }
+    $portable = Join-Path $dir "PulsePC-Portable-$($m.version).zip"
+    if (-not (Test-Path $portable)) { throw "Нет переносной версии $portable." }
+    $pSum = (Get-Content "$portable.sha256" -Raw -Encoding UTF8).Trim()
+    if (-not $pSum.StartsWith((Get-FileHash $portable -Algorithm SHA256).Hash.ToLowerInvariant())) { throw "SHA-256 переносной версии не совпадает с .sha256." }
+
+    Assert-KeyOutsideRepo $SigningKey
+    $key = Read-SigningKey $SigningKey
+    if (-not $key) { throw "Нет ключа подписи $SigningKey." }
+    $embedded = Get-EmbeddedKey
+    if ($embedded.X -ne $key.X -or $embedded.Y -ne $key.Y) { throw "Открытый ключ в Services\VersionCheck.cs не совпадает с $SigningKey." }
+
+    $sigB64 = Sign-Setup $key $embedded (Version4 $m.version) $hash
+    [IO.File]::WriteAllText("$target.sig", "$sigB64`n", $utf8)
+    $manifest = [ordered]@{ version = "$($m.version)"; url = "$($m.url)"; sha256 = $hash; date = "$($m.date)"; notes = @($m.notes); sig = $sigB64 }
+    [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 3), $utf8)
+    Write-Host "Подписано: $($m.url) (версия $(Version4 $m.version)), подпись — в $($m.url).sig и update.json"
+    return
+}
+
 # ------------------------------------------------------------------ сборка
 
 $version = ([xml](Get-Content $proj -Raw -Encoding UTF8)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
 if (-not $version) { throw 'В PulsePC.csproj не указана версия (<Version>).' }
-$v = [version]$version
-$version4 = '{0}.{1}.{2}.{3}' -f $v.Major, $v.Minor, [Math]::Max($v.Build, 0), [Math]::Max($v.Revision, 0)
+$version4 = Version4 $version
 
 # Подпись: для дистрибутива обязательна, ключ должен совпадать со встроенным в программу.
 Assert-KeyOutsideRepo $SigningKey
@@ -187,18 +241,7 @@ $hash = (Get-FileHash $target -Algorithm SHA256).Hash.ToLowerInvariant()
 
 $sigB64 = $null
 if ($key) {
-    $message = [Text.Encoding]::UTF8.GetBytes("PulsePC-Setup`n$version4`n$hash")
-    $sig = $key.Ecdsa.SignData($message, [System.Security.Cryptography.HashAlgorithmName]::SHA256)
-    if ($sig.Length -ne 64) { throw "Подпись неожиданной длины ($($sig.Length) байт вместо 64)." }
-    # Проверка открытым ключом, встроенным в программу, — так же, как её проверит программа.
-    $pub = New-Object System.Security.Cryptography.ECParameters
-    $pub.Curve = [System.Security.Cryptography.ECCurve+NamedCurves]::nistP256
-    $pq = New-Object System.Security.Cryptography.ECPoint
-    $pq.X = [Convert]::FromBase64String($embedded.X); $pq.Y = [Convert]::FromBase64String($embedded.Y)
-    $pub.Q = $pq
-    $verifier = [System.Security.Cryptography.ECDsa]::Create($pub)
-    if (-not $verifier.VerifyData($message, $sig, [System.Security.Cryptography.HashAlgorithmName]::SHA256)) { throw 'Подпись не проходит проверку встроенным ключом.' }
-    $sigB64 = [Convert]::ToBase64String($sig)
+    $sigB64 = Sign-Setup $key $embedded $version4 $hash
     [IO.File]::WriteAllText("$target.sig", "$sigB64`n", $utf8)
     Write-Host "Подпись: $name.sig (версия $version4)"
 } else {
