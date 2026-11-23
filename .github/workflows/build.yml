@@ -42,7 +42,7 @@ jobs:
 
       - name: Версия / version
         id: ver
-        shell: powershell
+        shell: pwsh
         run: |
           $v = ([xml](Get-Content src\PulsePC.csproj -Raw -Encoding UTF8)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
           if ('${{ github.ref_type }}' -eq 'tag' -and '${{ github.ref_name }}' -ne "v$v") { throw "Метка ${{ github.ref_name }} не совпадает с версией v$v в PulsePC.csproj" }
@@ -53,7 +53,7 @@ jobs:
         run: .\src\build-release.ps1 -Out "$env:RUNNER_TEMP\out"
 
       - name: Самопроверка / self-test
-        shell: powershell
+        shell: pwsh
         timeout-minutes: 15
         run: |
           $out = "$env:RUNNER_TEMP\out"
