@@ -359,6 +359,9 @@ console.log("Посты канала по расписанию");
   ok(plans.map((c) => c.method).join() === "sendVideo" && plans[0].body.video.endsWith("/media/plany.mp4"), "23 ноября в 17:00 МСК — видео «Что делаем и как защищаем»");
   ok(plans[0].body.caption.includes("@pulsepc_official_bot") && plans[0].body.reply_markup, "в нём ссылка на бота и кнопки под постом");
   calls = [];
+  await worker.scheduled({ scheduledTime: Date.parse("2026-11-23T14:30:00Z") }, e, {});
+  ok(toChannel().length === 0, "видео вышло один раз — повтора нет");
+  calls = [];
   await worker.scheduled({ scheduledTime: Date.parse("2026-11-25T16:00:00Z") }, e, {});
   ok(toChannel().map((c) => c.method).join() === "sendPhoto", "25 ноября в 19:00 МСК — один пост «Почему тормозит»");
   // сбой на посте 5: отметка снимается, разработчику — один раз, пост 6 ждёт
@@ -588,6 +591,16 @@ console.log("Статистика для разработчика");
   calls = [];
   await post(e, msg("/stats", user("ru", 400)));
   ok(!last().body.text.includes("Статистика"), "/stats видит только разработчик");
+  // /publish — выложить сейчас посты, время которых пришло; только разработчику
+  const eP = env({ CHANNEL: "@pulsepc_official" });
+  await eP.BOT_KV.put("origin", "https://bot.example.workers.dev");
+  const toCh = () => calls.filter((c) => c.body.chat_id === "@pulsepc_official" && /^send(Photo|Video|Message)$/.test(c.method));
+  calls = [];
+  await post(eP, msg("/publish", user("ru", 400)));
+  ok(toCh().length === 0, "/publish от обычного человека ничего не публикует");
+  calls = [];
+  await post(eP, msg("/publish", admin));
+  ok(toCh().length === 3 && last().body.text === "Опубликовано в канале: 3.", "/publish от разработчика — сразу выходят посты, чьё время пришло (не больше трёх)");
   // лимит записей: после STATS_CAP событий в день счёт останавливается
   const key = "st:" + new Date().toISOString().slice(0, 10);
   await e.BOT_KV.put(key, JSON.stringify({ start: 300 }));

@@ -523,6 +523,11 @@ async function handleUpdate(env, u, ctx) {
   if (cmd === "cancel") { await setMode(env, chat, null); return send(env, chat, t.reportCancel, menu(t)); }
   if (cmd === "id") return send(env, chat, t.id(m.from.id));
   if (cmd === "stats" && isAdmin) return sendStats(env, chat);
+  // Только разработчику: выложить сейчас посты, время которых уже пришло (не ждать расписания раз в 30 минут).
+  if (cmd === "publish" && isAdmin) {
+    const n = await publishPosts(env, Date.now());
+    return send(env, chat, n > 0 ? `Опубликовано в канале: ${n}.` : "Новых постов, чьё время пришло, нет (или не получилось — подробности придут отдельным сообщением).");
+  }
 
   const mode = cmd ? null : await getMode(env, chat);
   if (mode === "report") return forwardReport(env, m, t, ctx);
@@ -1092,9 +1097,9 @@ const POST_BUTTONS = {
 
 async function publishPosts(env, now) {
   const kv = env.BOT_KV;
-  if (!kv) return;
+  if (!kv) return 0;
   const origin = await kv.get("origin");
-  if (!origin) return; // /setup ещё не открывали
+  if (!origin) return 0; // /setup ещё не открывали
   const channel = (env.CHANNEL || DEFAULT_CHANNEL).trim();
   let sent = 0;
   for (const p of POSTS) {
@@ -1128,7 +1133,7 @@ async function publishPosts(env, now) {
       await send(env, env.ADMIN_ID, `Не получилось опубликовать пост «${esc(p.title)}» в ${esc(channel)}: ${esc(res.description || "ошибка Telegram")}. Бот попробует снова через 30 минут.`);
     }
     break;
-  }
+  }  return sent;
 }
 
 // ─────────────────────────────── выпуски ───────────────────────────────
