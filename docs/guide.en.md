@@ -181,7 +181,7 @@ Individual settings live here. The list is on the left, the selected section on 
 | **Page file** | whether it's set up correctly |
 | **Updates (app)** | the driver, the BIOS and the app itself |
 | **Upgrade advice** | what will actually help in your games |
-| **Electricity** | what an hour of gaming and a month of use cost — enter your own rate |
+| **Electricity** | what an hour of gaming and a month of use cost: enter your own rate, time-of-day zones too (night, peak) |
 | **Phone panel** | FPS and temperature on your phone's screen, on your home network |
 | **Before/after test** | check whether your changes helped |
 

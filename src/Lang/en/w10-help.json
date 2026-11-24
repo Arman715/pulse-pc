@@ -157,7 +157,7 @@
   "драйвер видеокарты, BIOS и сама программа; можно разрешить ставить обновления самим": "graphics driver, BIOS and the app itself; you can let updates install by themselves",
   "все программы и игры, поиск, сортировка и удаление деинсталлятором самой программы": "all programs and games, search, sorting and removal with the program's own uninstaller",
   "батарея, режим питания и фирменная программа производителя — раздел есть только на ноутбуке": "battery, power mode and the maker's own app — the section exists only on a laptop",
-  "сколько стоит час игры и месяц работы — впишите свой тариф и мощность блока питания": "what an hour of gaming and a month of use cost — enter your rate and the power supply wattage",
+  "сколько стоит час игры и месяц работы: впишите свой тариф (можно по зонам суток) и мощность блока питания": "what an hour of gaming and a month of use cost: enter your rate (time-of-day zones too) and the power supply wattage",
   "Раздел вкладки «Система»: то же, что «Параметры → Приложения», но с поиском, сортировкой и пометками.": "A section of the System tab: the same as Settings → Apps, but with search, sorting and marks.",
   "название, издатель, версия, дата установки и размер. Системные компоненты и обновления Windows скрыты": "name, publisher, version, install date and size. System components and Windows updates are hidden",
   "приложения из магазина — только для просмотра, удаляют их в «Параметрах → Приложения»": "apps from the store — view only; they are removed in Settings → Apps",

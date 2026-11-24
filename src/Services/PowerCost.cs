@@ -19,11 +19,26 @@ public sealed class PowerMode
     /// <summary>Сколько часов в сутки компьютер в этом состоянии (NaN — неизвестно).</summary>
     public double HoursPerDay = double.NaN;
 
+    /// <summary>Средняя цена киловатт-часа в этом состоянии с учётом зон тарифа (NaN, если тариф не задан).</summary>
+    public double Price = double.NaN;
+
     /// <summary>Без блока питания и монитора.</summary>
     public double DcW => GpuW + CpuW + BaseW;
     /// <summary>Из розетки, Вт (оценка, если хоть одна часть оценена).</summary>
     public double TotalW => DcW + LossW + MonitorW;
     public double KwhPerDay => double.IsNaN(HoursPerDay) || double.IsNaN(TotalW) ? double.NaN : TotalW * HoursPerDay / 1000;
+    public double RubPerDay => KwhPerDay * Price;
+}
+
+/// <summary>Зона тарифа: своя цена в свои часы по времени этого компьютера («ночь 23–7», «пик 7–10, 17–21»).</summary>
+public sealed class TariffZone
+{
+    public string Name = "";
+    public double Price = double.NaN;
+    /// <summary>Отрезки в минутах от полуночи, конец не входит. From больше To, если отрезок идёт через полночь.</summary>
+    public List<(int From, int To)> Hours = new();
+
+    public bool Covers(int minute) => Hours.Any(h => h.From < h.To ? minute >= h.From && minute < h.To : minute >= h.From || minute < h.To);
 }
 
 /// <summary>Расход по одной игре за последние 30 дней.</summary>
@@ -33,8 +48,12 @@ public sealed class GameCost
     public int Sessions;
     public double Hours;
     public double GpuW = double.NaN, CpuLoad = double.NaN, TotalW = double.NaN;
+    /// <summary>Средняя цена киловатт-часа по времени сессий этой игры.</summary>
+    public double Price = double.NaN;
     public double KwhPerHour => TotalW / 1000;
     public double Kwh => TotalW * Hours / 1000;
+    public double Rub => Kwh * Price;
+    public double RubPerHour => KwhPerHour * Price;
 }
 
 /// <summary>Сводка «Электричество».</summary>
@@ -44,8 +63,13 @@ public sealed class PowerReport
     public string CpuName = "";
     public int Tdp = PowerCost.DefaultTdp;
     public bool TdpKnown;
-    /// <summary>Тариф, ₽ за кВт·ч (NaN — не задан).</summary>
+    /// <summary>Тариф, ₽ за кВт·ч (NaN, если не задан). При зонах это основная цена: она действует в часы, не занятые зонами.</summary>
     public double Tariff = double.NaN;
+    public string TariffName = "";
+    /// <summary>Зоны со своей ценой и часами; пусто, если цена одна на все часы.</summary>
+    public List<TariffZone> Zones = new();
+    /// <summary>Доля времени работы в каждой зоне (основная первой); только при зонах.</summary>
+    public List<(string Name, double Share)> ZoneShares = new();
     /// <summary>Монитор, Вт (0 — не учитывается).</summary>
     public double MonitorW;
     /// <summary>По скольким дням посчитано время работы (0 — данных нет).</summary>
@@ -57,7 +81,19 @@ public sealed class PowerReport
     public double KwhDay => (double.IsNaN(Game.KwhPerDay) ? 0 : Game.KwhPerDay) + (IdleKnown && !double.IsNaN(Idle.KwhPerDay) ? Idle.KwhPerDay : 0);
     public bool HasForecast => Days > 0 && (!double.IsNaN(Game.KwhPerDay) || IdleKnown && !double.IsNaN(Idle.KwhPerDay)) && KwhDay > 0;
     public bool HasTariff => !double.IsNaN(Tariff);
-    public double Rub(double kwh) => HasTariff ? kwh * Tariff : double.NaN;
+    public bool HasZones => Zones.Count > 0;
+    /// <summary>Рубли в сутки: игры и простой, каждый по своей средней цене.</summary>
+    public double RubDay => HasTariff
+        ? (double.IsNaN(Game.KwhPerDay) ? 0 : Game.RubPerDay) + (IdleKnown && !double.IsNaN(Idle.KwhPerDay) ? Idle.RubPerDay : 0)
+        : double.NaN;
+
+    public TariffZone ZoneAt(DateTime t)
+    {
+        int minute = t.Hour * 60 + t.Minute;
+        return Zones.FirstOrDefault(z => z.Covers(minute));
+    }
+
+    public double PriceAt(DateTime t) => HasTariff ? ZoneAt(t)?.Price ?? Tariff : double.NaN;
 }
 
 /// <summary>
@@ -69,7 +105,7 @@ public sealed class PowerReport
 /// </summary>
 public static class PowerCost
 {
-    public const string KTariff = "power.tariff", KMonitor = "power.monitor";
+    public const string KTariff = "power.tariff", KMonitor = "power.monitor", KTariffName = "power.tariff.name", KZones = "power.zones";
     public const int DefaultTdp = 65;
     /// <summary>Плата, память, диски, вентиляторы, подсветка — середина обычных 40–60 Вт.</summary>
     public const double BaseW = 50;
@@ -110,6 +146,79 @@ public static class PowerCost
 
     public static double Tariff(AppSettings s) => TryParseTariff(s.Get(KTariff), out double t) ? t : double.NaN;
     public static double Monitor(AppSettings s) => TryParseMonitor(s.Get(KMonitor), out double w) ? w : 0;
+
+    /// <summary>Название основной цены; пока его не меняли, это «День» на языке программы.</summary>
+    public static string TariffName(AppSettings s) => s.Get(KTariffName) is { Length: > 0 } n ? n : L.T("День");
+    public static List<TariffZone> Zones(AppSettings s) => ParseZones(s.Get(KZones));
+
+    // ================================================================== зоны тарифа
+    private static readonly Regex Span = new(@"^\s*([0-9]{1,2})(?:[:.]([0-9]{2}))?\s*[-\u2013\u2014]\s*([0-9]{1,2})(?:[:.]([0-9]{2}))?\s*$");
+
+    /// <summary>Часы зоны: «23–7», «7:30-10, 17–21». Отрезок через полночь можно; пустой отрезок и 25:00 нельзя.</summary>
+    public static bool TryParseHours(string text, out List<(int From, int To)> hours)
+    {
+        hours = new();
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        foreach (string part in text.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var m = Span.Match(part);
+            if (!m.Success || !TryMinute(m.Groups[1].Value, m.Groups[2].Value, out int from) || !TryMinute(m.Groups[3].Value, m.Groups[4].Value, out int to) || from == to)
+            {
+                hours.Clear();
+                return false;
+            }
+            hours.Add((from, to));
+        }
+        return hours.Count > 0;
+
+        static bool TryMinute(string hour, string min, out int minute)
+        {
+            int h = int.Parse(hour), m = min.Length > 0 ? int.Parse(min) : 0;
+            minute = (h * 60 + m) % (24 * 60);         // «24» и «0» – одна и та же полночь
+            return m < 60 && h * 60 + m <= 24 * 60;
+        }
+    }
+
+    /// <summary>Для поля ввода: «23–7», «7:30–10, 17–21», «22–24» (конец в полночь – «24», а не «0»).</summary>
+    public static string ShowHours(IEnumerable<(int From, int To)> hours) =>
+        string.Join(", ", hours.Select(h => Clock(h.From) + "–" + Clock(h.To == 0 ? 24 * 60 : h.To)));
+
+    private static string Clock(int minute) => minute % 60 == 0 ? (minute / 60).ToString(CultureInfo.InvariantCulture) : $"{minute / 60}:{minute % 60:00}";
+
+    /// <summary>Зоны для настроек: по строке на зону, «название|цена|часы».</summary>
+    public static string FormatZones(IEnumerable<TariffZone> zones) =>
+        string.Join("\n", zones.Select(z => CleanName(z.Name) + "|" + z.Price.ToString(CultureInfo.InvariantCulture) + "|" + ShowHours(z.Hours)));
+
+    /// <summary>Название зоны без «|» и переводов строки: ими разделены зоны в настройках.</summary>
+    public static string CleanName(string name) => Regex.Replace(name ?? "", @"[|\r\n]", " ").Trim();
+
+    /// <summary>Зоны из настроек; испорченная строка пропускается.</summary>
+    public static List<TariffZone> ParseZones(string text)
+    {
+        var zones = new List<TariffZone>();
+        foreach (string line in (text ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var f = line.Split('|');
+            if (f.Length == 3 && f[0].Trim().Length > 0 && TryParseTariff(f[1], out double price) && TryParseHours(f[2], out var hours))
+                zones.Add(new TariffZone { Name = f[0].Trim(), Price = price, Hours = hours });
+        }
+        return zones;
+    }
+
+    /// <summary>Пересекаются ли часы двух зон: тогда цена минуты была бы неоднозначной.</summary>
+    public static bool Overlap(IReadOnlyList<TariffZone> zones, out string first, out string second)
+    {
+        first = second = null;
+        for (int minute = 0; minute < 24 * 60; minute++)
+        {
+            var hit = zones.Where(z => z.Covers(minute)).Take(2).ToList();
+            if (hit.Count < 2) continue;
+            first = hit[0].Name;
+            second = hit[1].Name;
+            return true;
+        }
+        return false;
+    }
 
     /// <summary>Для поля ввода: «6,43».</summary>
     public static string Show(double v) => double.IsNaN(v) || v <= 0 ? "" : v.ToString(v % 1 == 0 ? "0" : "0.##", CultureInfo.CurrentCulture);
@@ -216,13 +325,20 @@ public static class PowerCost
     /// Время работы и простой — по статистике (пока программа запущена); если её нет, время игр — по сессиям, простой неизвестен.
     /// </summary>
     public static PowerReport Build(IReadOnlyList<FanMinute> minutes, IReadOnlyList<GameSession> sessions, string cpuName,
-                                    double tariff, double monitorW, DateTime now)
+                                    double tariff, double monitorW, DateTime now,
+                                    IReadOnlyList<TariffZone> zones = null, string tariffName = null)
     {
-        var r = new PowerReport { CpuName = cpuName ?? "", Tariff = tariff, MonitorW = monitorW };
+        var r = new PowerReport
+        {
+            CpuName = cpuName ?? "", Tariff = tariff, MonitorW = monitorW,
+            TariffName = string.IsNullOrWhiteSpace(tariffName) ? L.T("День") : tariffName,
+            Zones = zones?.ToList() ?? new(),
+        };
         r.Tdp = CpuTdp(cpuName, out r.TdpKnown);
 
         var mins = (minutes ?? Array.Empty<FanMinute>()).Where(m => m.T > now.AddDays(-UsageDays) && m.T <= now).ToList();
         var recent = (sessions ?? Array.Empty<GameSession>()).Where(s => s.End > now.AddDays(-GameDays) && s.End > s.Start).ToList();
+        var week = recent.Where(s => s.End > now.AddDays(-UsageDays)).ToList();
 
         // ---- время работы
         if (mins.Count > 0)
@@ -232,14 +348,10 @@ public static class PowerCost
             r.Idle.HoursPerDay = mins.Count(m => !m.Game) / 60.0 / r.Days;
             r.IdleKnown = true;
         }
-        else
+        else if (week.Count > 0)
         {
-            var week = recent.Where(s => s.End > now.AddDays(-UsageDays)).ToList();
-            if (week.Count > 0)
-            {
-                r.Days = Math.Clamp((int)(now.Date - week.Min(s => s.Start).Date).TotalDays + 1, 1, UsageDays);
-                r.Game.HoursPerDay = week.Sum(s => s.Duration.TotalHours) / r.Days;
-            }
+            r.Days = Math.Clamp((int)(now.Date - week.Min(s => s.Start).Date).TotalDays + 1, 1, UsageDays);
+            r.Game.HoursPerDay = week.Sum(s => s.Duration.TotalHours) / r.Days;
         }
 
         // ---- видеокарта и процессор в игре: сначала сессии (дольше история), потом статистика
@@ -263,6 +375,16 @@ public static class PowerCost
         Finish(r.Game, r.Tdp, monitorW);
         Finish(r.Idle, r.Tdp, monitorW);
 
+        // ---- цена: по тем же минутам, по которым посчитано время работы, каждая минута по цене своей зоны
+        var time = mins.Count > 0 ? mins.Select(m => (m.T, W: 1.0, m.Game)).ToList() : SessionMinutes(week).Select(x => (x.T, x.W, Game: true)).ToList();
+        r.Game.Price = AvgPrice(r, time.Where(x => x.Game).Select(x => (x.T, x.W)));
+        r.Idle.Price = AvgPrice(r, time.Where(x => !x.Game).Select(x => (x.T, x.W)));
+        double total = time.Sum(x => x.W);
+        if (r.HasZones && total > 0)
+            r.ZoneShares = new TariffZone[] { null }.Concat(r.Zones)
+                .Select(z => (z?.Name ?? r.TariffName, time.Where(x => r.ZoneAt(x.T) == z).Sum(x => x.W) / total))
+                .Where(z => z.Item2 > 0).ToList();
+
         // ---- по играм
         foreach (var g in recent.GroupBy(s => s.Game))
         {
@@ -277,10 +399,26 @@ public static class PowerCost
             var p = new PowerMode { GpuW = c.GpuW, CpuLoad = double.IsNaN(c.CpuLoad) ? GameCpuGuess : c.CpuLoad };
             Finish(p, r.Tdp, monitorW);
             c.TotalW = p.TotalW;
+            c.Price = AvgPrice(r, SessionMinutes(g));
             r.Games.Add(c);
         }
         r.Games = r.Games.OrderByDescending(c => c.Hours).ToList();
         return r;
+    }
+
+    /// <summary>Минуты сессий: начало минуты и её доля (последняя бывает неполной).</summary>
+    private static IEnumerable<(DateTime T, double W)> SessionMinutes(IEnumerable<GameSession> sessions)
+    {
+        foreach (var s in sessions)
+            for (var t = s.Start; t < s.End; t = t.AddMinutes(1))
+                yield return (t, Math.Min(1, (s.End - t).TotalMinutes));
+    }
+
+    /// <summary>Средняя цена киловатт-часа за эти минуты; если минут нет, основная цена.</summary>
+    private static double AvgPrice(PowerReport r, IEnumerable<(DateTime T, double W)> time)
+    {
+        double price = Weighted(time.Select(x => (r.PriceAt(x.T), x.W)));
+        return double.IsNaN(price) ? r.Tariff : price;
     }
 
     private static double Avg(IEnumerable<float> values)
@@ -294,7 +432,8 @@ public static class PowerCost
     public static PowerReport Current(PanelHost h)
     {
         var s = h?.Settings ?? new AppSettings();
-        return Build(FanControl.History(), h?.Sessions() ?? Array.Empty<GameSession>(), CpuName(h), Tariff(s), Monitor(s), DateTime.Now);
+        return Build(FanControl.History(), h?.Sessions() ?? Array.Empty<GameSession>(), CpuName(h), Tariff(s), Monitor(s), DateTime.Now,
+                     Zones(s), TariffName(s));
     }
 
     /// <summary>Сейчас: видеокарта по датчику, процессор — оценка по загрузке.</summary>
@@ -370,11 +509,43 @@ public static class PowerCost
         Check("расчёт: 3 дня по статистике, 2 ч игры и 4 ч простоя в сутки", r.Days == 3 && Math.Abs(r.Game.HoursPerDay - 2) < 1e-9 && Math.Abs(r.Idle.HoursPerDay - 4) < 1e-9);
         Check("расчёт: в игре 255,75 Вт (видеокарта измерена, процессор — оценка)", Math.Abs(r.Game.TotalW - 255.75) < 0.01 && r.Game.GpuMeasured && r.Game.LoadMeasured);
         Check("расчёт: без игр 78,65 Вт", Math.Abs(r.Idle.TotalW - 78.65) < 0.01 && r.Idle.GpuMeasured);
-        Check("расчёт: сутки 0,826 кВт·ч, 4,96 ₽; месяц ×30", Math.Abs(r.KwhDay - 0.82610) < 0.0001 && Math.Abs(r.Rub(r.KwhDay) - 4.9566) < 0.001 && r.HasForecast);
+        Check("расчёт: сутки 0,826 кВт·ч, 4,96 ₽; месяц ×30", Math.Abs(r.KwhDay - 0.82610) < 0.0001 && Math.Abs(r.RubDay - 4.9566) < 0.001 && r.HasForecast);
         var rm = Build(mins, Array.Empty<GameSession>(), "Intel(R) Core(TM) i5-12400F", 6, 30, now);
         Check("монитор 30 Вт прибавляется отдельно, без потерь блока питания", Math.Abs(rm.Game.TotalW - 285.75) < 0.01);
         var rn = Build(mins, Array.Empty<GameSession>(), "", double.NaN, 0, now);
-        Check("без тарифа — рубли не считаются, киловатт-часы есть", !rn.HasTariff && double.IsNaN(rn.Rub(1)) && rn.KwhDay > 0);
+        Check("без тарифа — рубли не считаются, киловатт-часы есть", !rn.HasTariff && double.IsNaN(rn.RubDay) && double.IsNaN(rn.Game.Price) && rn.KwhDay > 0);
+
+        // Зоны: ночь 23–7 по 3 ₽, пик 7–10 и 17–21 по 9 ₽, остальное по 6 ₽ (основная цена).
+        Check("часы: «23–7», «7:30-10, 17–21», «22-24» читаются; «0-24», «25-3», «7-7», «7:60-8», буквы, широкие цифры и пусто – отказ",
+            TryParseHours("23–7", out var h1) && h1.Count == 1 && h1[0] == (23 * 60, 7 * 60)
+            && TryParseHours("7:30-10, 17–21", out var h2) && h2.Count == 2 && h2[0] == (450, 600) && ShowHours(h2) == "7:30–10, 17–21"
+            && TryParseHours("22-24", out var h3) && h3[0] == (22 * 60, 0) && ShowHours(h3) == "22–24" && !TryParseHours("２３-７", out _)
+            && !TryParseHours("0-24", out _) && !TryParseHours("25-3", out _) && !TryParseHours("7-7", out _)
+            && !TryParseHours("7:60-8", out _) && !TryParseHours("abc", out _) && !TryParseHours("", out _) && !TryParseHours("23-7, x", out _));
+        var night = new TariffZone { Name = "Ночь", Price = 3, Hours = new() { (23 * 60, 7 * 60) } };
+        var peak = new TariffZone { Name = "Пик", Price = 9, Hours = new() { (7 * 60, 10 * 60), (17 * 60, 21 * 60) } };
+        var zones = new List<TariffZone> { night, peak };
+        var back = ParseZones(FormatZones(new[] { night, new TariffZone { Name = "Пик|2", Price = 9.5, Hours = peak.Hours } }));
+        Check("зоны: в настройках и обратно, «|» в названии не ломает строку",
+            back.Count == 2 && back[0].Name == "Ночь" && back[0].Price == 3 && back[0].Covers(0) && !back[0].Covers(7 * 60)
+            && back[1].Name == "Пик 2" && back[1].Price == 9.5 && back[1].Covers(18 * 60) && ParseZones("мусор\nбез|цены|23-7").Count == 0);
+        var early = new TariffZone { Name = "Утро", Price = 5, Hours = new() { (6 * 60, 8 * 60) } };
+        Check("зоны: пересечение «Ночь» 23–7 и «Утро» 6–8 найдено, «Ночь» и «Пик» встык – нет",
+            Overlap(new[] { night, early }, out string o1, out string o2) && o1 == "Ночь" && o2 == "Утро" && !Overlap(zones, out _, out _));
+        // Простой 9:00–13:00: час пика и три часа по основной цене, (9 + 3 × 6) / 4 = 6,75 ₽; игра 19–21 – вся в пике, 9 ₽.
+        var rz = Build(mins, Array.Empty<GameSession>(), "Intel(R) Core(TM) i5-12400F", 6, 0, now, zones, "День");
+        Check("зоны: игра по 9 ₽, простой в среднем 6,75 ₽, сутки 6,727 ₽",
+            Math.Abs(rz.Game.Price - 9) < 1e-9 && Math.Abs(rz.Idle.Price - 6.75) < 1e-9 && Math.Abs(rz.RubDay - (0.5115 * 9 + 0.3146 * 6.75)) < 0.001
+            && Math.Abs(rz.KwhDay - r.KwhDay) < 1e-9);
+        Check("зоны: время по зонам – день 50 %, пик 50 %, ночи нет",
+            rz.ZoneShares.Count == 2 && rz.ZoneShares[0] == ("День", 0.5) && rz.ZoneShares[1] == ("Пик", 0.5));
+        var rzBack = Build(mins, Array.Empty<GameSession>(), "", 6, 0, now, new List<TariffZone> { peak, night });
+        Check("зоны: порядок зон не меняет итог", Math.Abs(rzBack.RubDay - rz.RubDay) < 1e-9);
+        // Сессия 22:00–00:00: час по 6 ₽ и час ночи по 3 ₽.
+        var late = new List<GameSession> { new() { Game = "Deadlock", Start = now.Date.AddHours(-2), End = now.Date, AvgPowerW = 150, AvgCpu = 50 } };
+        var rl = Build(Array.Empty<FanMinute>(), late, "", 6, 0, now, zones);
+        Check("зоны: игра через 23:00 делится – в среднем 4,5 ₽, и в прогнозе, и по игре",
+            Math.Abs(rl.Games[0].Price - 4.5) < 1e-9 && Math.Abs(rl.Game.Price - 4.5) < 1e-9 && Math.Abs(rl.Games[0].Rub - rl.Games[0].Kwh * 4.5) < 1e-9);
 
         var sessions = new List<GameSession>
         {
