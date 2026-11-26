@@ -55,6 +55,11 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
     {
         loading = true;
         TariffBox.Text = PowerCost.Show(PowerCost.Tariff(host.Settings));
+        TariffNameBox.Text = PowerCost.TariffName(host.Settings);
+        ZoneList.Children.Clear();
+        zones.Clear();
+        foreach (var z in PowerCost.Zones(host.Settings)) AddZoneRow(z.Name, PowerCost.Show(z.Price), PowerCost.ShowHours(z.Hours));
+        savedZones = ZonesText();
         MonitorBox.Text = PowerCost.Show(PowerCost.Monitor(host.Settings));
         PsuBox.Text = PsuSaved();
         // Блок питания — только у настольного ПК: у ноутбука вместо него адаптер, и вывод о запасе не показывается.
@@ -81,10 +86,63 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
     {
         if (host == null) return;
         bool same = Norm(TariffBox.Text) == Norm(PowerCost.Show(PowerCost.Tariff(host.Settings)))
+                    && TariffNameBox.Text.Trim() == PowerCost.TariffName(host.Settings)
+                    && ZonesText() == savedZones
                     && Norm(MonitorBox.Text) == Norm(PowerCost.Show(PowerCost.Monitor(host.Settings)))
                     && Norm(PsuBox.Text) == Norm(PsuSaved());
         BtnSave.IsEnabled = !same;
         static string Norm(string s) => (s ?? "").Trim().Replace('.', ',');
+    }
+
+    // ================================================================== зоны тарифа
+    /// <summary>Строка зоны: название, цена, часы и «Убрать».</summary>
+    private sealed class ZoneRow
+    {
+        public TextBox Name, Price, Hours;
+        public bool Empty => Name.Text.Trim().Length == 0 && Price.Text.Trim().Length == 0 && Hours.Text.Trim().Length == 0;
+    }
+
+    private readonly List<ZoneRow> zones = new();
+    private string savedZones = "";
+
+    /// <summary>Что вписано в строки зон, для сравнения с сохранённым; пустые строки не считаются.</summary>
+    private string ZonesText() =>
+        string.Join("\n", zones.Where(z => !z.Empty).Select(z => z.Name.Text.Trim() + "|" + z.Price.Text.Trim().Replace('.', ',') + "|" + z.Hours.Text.Trim()));
+
+    private void AddZone_Click(object sender, RoutedEventArgs e)
+    {
+        AddZoneRow("", "", "");
+        zones[^1].Name.Focus();
+    }
+
+    private void AddZoneRow(string name, string price, string hours)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+        var z = new ZoneRow
+        {
+            Name = Box("TextField", 140, 20, name, 0),
+            Price = Box("Field", 96, 8, price, 10),
+            Hours = Box("TextField", 160, 40, hours, 10),
+        };
+        // Ширины и отступы – как в строке основной цены, чтобы колонки совпадали.
+        var unit = new TextBlock { Text = L.T("₽ за кВт·ч"), Style = (Style)FindResource("Caption"), Width = 74, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        var remove = new Button { Content = L.T("Убрать"), Style = (Style)FindResource("Link"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0) };
+        remove.Click += (_, _) => { zones.Remove(z); ZoneList.Children.Remove(row); UpdateSave(); };
+        row.Children.Add(z.Name);
+        row.Children.Add(z.Price);
+        row.Children.Add(unit);
+        row.Children.Add(z.Hours);
+        row.Children.Add(remove);
+        ZoneList.Children.Add(row);
+        zones.Add(z);
+    }
+
+    private TextBox Box(string style, double width, int maxLength, string text, double left)
+    {
+        var box = new TextBox { Style = (Style)FindResource(style), Width = width, MaxLength = maxLength, Text = text, Margin = new Thickness(left, 0, 0, 0) };
+        box.KeyDown += Box_KeyDown;
+        box.TextChanged += Box_TextChanged;
+        return box;
     }
 
     private void Box_TextChanged(object sender, TextChangedEventArgs e) { if (!loading) UpdateSave(); }
@@ -105,6 +163,48 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
             TariffBox.Focus();
             return;
         }
+        string name = TariffNameBox.Text.Trim();
+        var parsed = new List<TariffZone>();
+        foreach (var z in zones.Where(z => !z.Empty))
+        {
+            string zoneName = PowerCost.CleanName(z.Name.Text);
+            if (zoneName.Length == 0)
+            {
+                ShowResult(L.T("Впишите название зоны, например «Ночь» или «Пик»."), true);
+                z.Name.Focus();
+                return;
+            }
+            if (zoneName == (name.Length > 0 ? name : L.T("День")) || parsed.Any(p => p.Name == zoneName))
+            {
+                ShowResult(L.F("Название «{0}» уже занято: у каждой зоны должно быть своё.", zoneName), true);
+                z.Name.Focus();
+                return;
+            }
+            if (!PowerCost.TryParseTariff(z.Price.Text, out double price))
+            {
+                ShowResult(L.F("Цена зоны «{0}» не понята: впишите число от 0,1 до 100.", zoneName), true);
+                z.Price.Focus();
+                return;
+            }
+            if (!PowerCost.TryParseHours(z.Hours.Text, out var hours))
+            {
+                ShowResult(L.F("Часы зоны «{0}» не поняты: впишите, например, 23–7 или 7:30–10, 17–21.", zoneName), true);
+                z.Hours.Focus();
+                return;
+            }
+            parsed.Add(new TariffZone { Name = zoneName, Price = price, Hours = hours });
+        }
+        if (parsed.Count > 0 && double.IsNaN(tariff))
+        {
+            ShowResult(L.T("Впишите и основную цену: она действует в часы, не занятые зонами."), true);
+            TariffBox.Focus();
+            return;
+        }
+        if (PowerCost.Overlap(parsed, out string first, out string second))
+        {
+            ShowResult(L.F("Часы зон «{0}» и «{1}» пересекаются: у каждого часа должна быть одна цена.", first, second), true);
+            return;
+        }
         if (!PowerCost.TryParseMonitor(MonitorBox.Text, out double monitor))
         {
             ShowResult(L.T("Мощность монитора не понята: впишите число от 5 до 300 или оставьте поле пустым."), true);
@@ -118,6 +218,9 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
             return;
         }
         host.Settings.Set(PowerCost.KTariff, double.IsNaN(tariff) ? null : tariff.ToString(CultureInfo.InvariantCulture));
+        // Название по умолчанию не сохраняется: так оно остаётся «День» или «Day» при смене языка.
+        host.Settings.Set(PowerCost.KTariffName, name.Length == 0 || name == L.T("День") ? null : name);
+        host.Settings.Set(PowerCost.KZones, parsed.Count > 0 ? PowerCost.FormatZones(parsed) : null);
         host.Settings.Set(PowerCost.KMonitor, monitor > 0 ? monitor.ToString(CultureInfo.InvariantCulture) : null);
         host.Settings.Set(HardwareChecks.PsuKey, psu > 0 ? psu.ToString(CultureInfo.InvariantCulture) : null);
         host.Settings.Save();
@@ -126,7 +229,9 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         Blueprint.BlueprintLabels.Apply();
         LoadSaved();
         ShowResult(double.IsNaN(tariff) ? L.T("Тариф убран: расход показывается только в киловатт-часах.")
-                   : L.F("Сохранено: {0} ₽ за кВт·ч", PowerCost.Show(tariff)) + (monitor > 0 ? L.F(", монитор {0:0} Вт.", monitor) : L.T(", без монитора.")), false);
+                   : (parsed.Count == 0 ? L.F("Сохранено: {0} ₽ за кВт·ч", PowerCost.Show(tariff))
+                      : L.F("Сохранено: {0}", string.Join(", ", parsed.Select(z => z.Name + " " + Money(z.Price)).Prepend(PowerCost.TariffName(host.Settings) + " " + Money(tariff)))))
+                     + (monitor > 0 ? L.F(", монитор {0:0} Вт.", monitor) : L.T(", без монитора.")), false);
         Recalc();
     }
 
@@ -159,8 +264,8 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         // ---- вывод
         if (r.HasForecast && r.HasTariff)
             State.Text = gameMonth > 0
-                ? L.F("Около {0} ₽ в месяц, из них на игры — {1} ₽.", PowerCost.Money(r.Rub(month)), PowerCost.Money(r.Rub(gameMonth)))
-                : L.F("Около {0} ₽ в месяц. Игр за эти дни не было.", PowerCost.Money(r.Rub(month)));
+                ? L.F("Около {0} ₽ в месяц, из них на игры — {1} ₽.", PowerCost.Money(r.RubDay * 30), PowerCost.Money(g.RubPerDay * 30))
+                : L.F("Около {0} ₽ в месяц. Игр за эти дни не было.", PowerCost.Money(r.RubDay * 30));
         else if (r.HasForecast)
             State.Text = L.F("Около {0} кВт·ч в месяц. Впишите тариф, чтобы перевести это в рубли.", PowerCost.Kwh(month));
         else if (r.Games.Any(x => !double.IsNaN(x.TotalW)))
@@ -174,14 +279,17 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         ForecastEmpty.Text = L.T("Прогноз строится по тому, сколько часов в сутки работает компьютер и сколько из них идёт игра. Статистика копится, пока программа запущена, в том числе свёрнутая к часам.");
         if (r.HasForecast)
         {
-            Period(DayMain, DaySub, r, r.KwhDay, L.T("за сутки"));
-            Period(WeekMain, WeekSub, r, r.KwhDay * 7, L.T("за неделю"));
-            Period(MonthMain, MonthSub, r, month, L.T("за месяц"));
+            Period(DayMain, DaySub, r, 1, L.T("за сутки"));
+            Period(WeekMain, WeekSub, r, 7, L.T("за неделю"));
+            Period(MonthMain, MonthSub, r, 30, L.T("за месяц"));
             string days = Fmt.Plural(r.Days, "день", "дня", "дней");
             ForecastNote.Text = r.IdleKnown
                 ? L.F("Прогноз по средним за {0}: компьютер работал {1} в сутки, из них игры — {2}.", days, Hours(g.HoursPerDay + i.HoursPerDay), Hours(g.HoursPerDay))
                   + " " + L.T("Время, когда программа была закрыта, не учтено, поэтому настоящий расход может быть больше.")
                 : L.F("Время игр — по записанным сессиям за {0}. Сколько компьютер работает без игр, пока неизвестно: в прогнозе только игры.", days);
+            if (r.HasTariff && r.ZoneShares.Count > 0)
+                ForecastNote.Text += " " + L.F("Средняя цена с учётом зон: {0} за кВт·ч, время по зонам: {1}.", Money(r.RubDay / r.KwhDay),
+                                               string.Join(", ", r.ZoneShares.Select(z => L.F("{0} {1:0}" + L.Pick(Nb + "%", "%"), z.Name, z.Share * 100))));
 
             ModeRow(g, r, GameWhat, GameHours, GameW, GameKwh, GameRub);
             ModeRow(i, r, IdleWhat, IdleHours, IdleW, IdleKwh, IdleRub);
@@ -214,11 +322,11 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         {
             Game = c.Game,
             Count = Fmt.Plural(c.Sessions, "сессия", "сессии", "сессий") + " · " + Fmt.Duration(TimeSpan.FromHours(c.Hours))
-                    + (double.IsNaN(c.TotalW) ? "" : " · " + PowerCost.Kwh(c.Kwh) + KwhUnit + (r.HasTariff ? ", " + Money(r.Rub(c.Kwh)) : "")),
+                    + (double.IsNaN(c.TotalW) ? "" : " · " + PowerCost.Kwh(c.Kwh) + KwhUnit + (r.HasTariff ? ", " + Money(c.Rub) : "")),
             Gpu = double.IsNaN(c.GpuW) ? "—" : Watts(c.GpuW),
             Total = double.IsNaN(c.TotalW) ? "—" : Watts(c.TotalW),
             KwhHour = double.IsNaN(c.TotalW) ? "—" : PowerCost.Kwh(c.KwhPerHour),
-            RubHour = double.IsNaN(c.TotalW) || !r.HasTariff ? "—" : Money(r.Rub(c.KwhPerHour)),
+            RubHour = double.IsNaN(c.TotalW) || !r.HasTariff ? "—" : Money(c.RubPerHour),
         }).ToList();
         GamesBlock.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         GameList.ItemsSource = rows;
@@ -249,11 +357,12 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
 
     private static string Watts(double w) => L.F("{0:0} Вт", w);
 
-    private static void Period(NumberText main, TextBlock sub, PowerReport r, double kwh, string when)
+    private static void Period(NumberText main, TextBlock sub, PowerReport r, int days, string when)
     {
+        double kwh = r.KwhDay * days;
         if (r.HasTariff)
         {
-            double rub = r.Rub(kwh);
+            double rub = r.RubDay * days;
             main.Unit = Currency;
             main.Format = rub < 10 ? "0.00" : rub < 100 ? "0.0" : "0";
             main.Value = rub;
@@ -275,7 +384,7 @@ public partial class PowerCostPanel : UserControl, ISystemPanel
         hours.Text = double.IsNaN(p.HoursPerDay) ? "—" : Hours(p.HoursPerDay);
         w.Text = double.IsNaN(p.TotalW) ? "—" : Watts(p.TotalW);
         kwh.Text = PowerCost.Kwh(p.KwhPerDay);
-        rub.Text = r.HasTariff && !double.IsNaN(p.KwhPerDay) ? Money(r.Rub(p.KwhPerDay * 30)) : "—";
+        rub.Text = r.HasTariff && !double.IsNaN(p.KwhPerDay) ? Money(p.RubPerDay * 30) : "—";
     }
 
     private static string Hours(double h) => h <= 0 || double.IsNaN(h) ? L.T("0 мин") : Fmt.Duration(TimeSpan.FromHours(h));

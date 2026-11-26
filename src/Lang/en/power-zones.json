@@ -1,0 +1,18 @@
+{
+  "Есть в квитанции за свет и в личном кабинете поставщика. Если цена зависит от времени суток, добавьте зоны (например, ночь и пик) с их часами по времени этого компьютера. В остальные часы действует основная цена.": "It's on your electricity bill and in your supplier's online account. If the price depends on the time of day, add zones (for example, night and peak) with their hours in this PC's time. The main price applies at all other hours.",
+  "Зона": "Zone",
+  "Цена": "Price",
+  "Часы": "Hours",
+  "остальное время": "all other hours",
+  "Добавить зону": "Add zone",
+  "День": "Day",
+  "Убрать": "Remove",
+  "Впишите название зоны, например «Ночь» или «Пик».": "Enter a zone name, for example “Night” or “Peak”.",
+  "Название «{0}» уже занято: у каждой зоны должно быть своё.": "The name “{0}” is already taken: each zone needs its own.",
+  "Цена зоны «{0}» не понята: впишите число от 0,1 до 100.": "Couldn't read the price of “{0}”: enter a number from 0.1 to 100.",
+  "Часы зоны «{0}» не поняты: впишите, например, 23–7 или 7:30–10, 17–21.": "Couldn't read the hours of “{0}”: enter, for example, 23–7 or 7:30–10, 17–21.",
+  "Впишите и основную цену: она действует в часы, не занятые зонами.": "Enter the main price too: it applies at hours no zone covers.",
+  "Часы зон «{0}» и «{1}» пересекаются: у каждого часа должна быть одна цена.": "The hours of “{0}” and “{1}” overlap: each hour needs one price.",
+  "Сохранено: {0}": "Saved: {0}",
+  "Средняя цена с учётом зон: {0} за кВт·ч, время по зонам: {1}.": "Average price across zones: {0} per kWh; time by zone: {1}."
+}

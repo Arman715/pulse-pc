@@ -214,7 +214,6 @@
   "Сколько электричества берёт компьютер и во что это обходится. Видеокарту измеряет её собственный датчик, остальное — оценка по модели процессора и его загрузке. Программа ничего не меняет в системе.": "How much electricity the computer uses and what it costs. The graphics card is measured by its own sensor; the rest is estimated from the CPU model and its load. The app changes nothing in the system.",
   "ТАРИФ": "RATE",
   "Цена киловатт-часа": "Price per kilowatt-hour",
-  "Есть в квитанции за свет и в личном кабинете поставщика. Если тариф делится по времени суток, впишите дневной: играют обычно днём и вечером.": "It's on your electricity bill and in your supplier's online account. If the rate depends on the time of day, enter the daytime rate: people usually play during the day and evening.",
   "₽ за кВт·ч": "per kWh",
   "Монитор, если хотите его учесть": "Display, if you want to include it",
   "Монитор программа не измеряет и по умолчанию не считает. Обычно он берёт 20–40 Вт, точное число — на наклейке сзади или в паспорте. Пусто — без монитора.": "The app doesn't measure the display and doesn't count it by default. It usually draws 20–40 W; the exact figure is on the label on the back or in the manual. Leave empty to exclude it.",

@@ -36,6 +36,11 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Название и часы зоны тарифа: текст, а не число, поэтому прижат влево. -->
+        <Style x:Key="TextField" TargetType="TextBox" BasedOn="{StaticResource Field}">
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="FontFamily" Value="{StaticResource TextFont}"/>
+        </Style>
         <Style x:Key="Tip" TargetType="TextBlock" BasedOn="{StaticResource Body}">
             <Setter Property="Margin" Value="18,0,0,8"/>
         </Style>
@@ -105,21 +110,25 @@
         <local:TrackedText Source="ТАРИФ" Style="{StaticResource Label}" Margin="0,24,0,6"/>
         <Rectangle Style="{StaticResource Hairline}"/>
         <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
-            <Grid Margin="0,12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource RowTitle}" Text="Цена киловатт-часа"/>
-                    <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
-                               Text="Есть в квитанции за свет и в личном кабинете поставщика. Если тариф делится по времени суток, впишите дневной: играют обычно днём и вечером."/>
+            <StackPanel Margin="0,12">
+                <TextBlock Style="{StaticResource RowTitle}" Text="Цена киловатт-часа"/>
+                <TextBlock Style="{StaticResource Body}" Margin="0,2,0,0"
+                           Text="Есть в квитанции за свет и в личном кабинете поставщика. Если цена зависит от времени суток, добавьте зоны (например, ночь и пик) с их часами по времени этого компьютера. В остальные часы действует основная цена."/>
+                <!-- Колонки строк зон: название 140, цена 96 и подпись 74, часы 160 (строки зон собираются в коде). -->
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,4">
+                    <TextBlock Style="{StaticResource Caption}" Text="Зона" Width="150"/>
+                    <TextBlock Style="{StaticResource Caption}" Text="Цена" Width="190"/>
+                    <TextBlock Style="{StaticResource Caption}" Text="Часы"/>
                 </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="24,0,0,0">
-                    <TextBox x:Name="TariffBox" Style="{StaticResource Field}" Width="96" MaxLength="8" KeyDown="Box_KeyDown" TextChanged="Box_TextChanged"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBox x:Name="TariffNameBox" Style="{StaticResource TextField}" Width="140" MaxLength="20" KeyDown="Box_KeyDown" TextChanged="Box_TextChanged"/>
+                    <TextBox x:Name="TariffBox" Style="{StaticResource Field}" Width="96" MaxLength="8" Margin="10,0,0,0" KeyDown="Box_KeyDown" TextChanged="Box_TextChanged"/>
                     <TextBlock Style="{StaticResource Caption}" Text="₽ за кВт·ч" Width="74" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    <TextBlock Style="{StaticResource Caption}" Text="остальное время" VerticalAlignment="Center" Margin="10,0,0,0"/>
                 </StackPanel>
-            </Grid>
+                <StackPanel x:Name="ZoneList"/>
+                <Button Style="{StaticResource Link}" Content="Добавить зону" HorizontalAlignment="Left" Margin="0,10,0,0" Click="AddZone_Click"/>
+            </StackPanel>
         </Border>
         <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
             <Grid Margin="0,12">
